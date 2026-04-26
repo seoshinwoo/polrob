@@ -1,0 +1,5 @@
+<Solution>
+  <Project Path="polrob.Client/polrob.Client.csproj" />
+  <Project Path="polrob.Server/polrob.Server.csproj" />
+  <Project Path="polrob.Shared/polrob.Shared.csproj" />
+</Solution>
