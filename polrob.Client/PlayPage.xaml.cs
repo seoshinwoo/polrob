@@ -9,7 +9,11 @@ public partial class PlayPage : ContentPage
 {
     private float _playerX = -1;
     private float _playerY = -1;
-    private float _playerSpeed = 5f;
+    private float _playerSpeed = 7f;
+    private float _playerRadius = 50f;
+
+    // Shared Map
+    private Shared.Map _gameMap;
 
     // Joystick state
     private SKPoint _joystickCenter;
@@ -25,6 +29,10 @@ public partial class PlayPage : ContentPage
     {
         InitializeComponent();
 
+        _gameMap = new Shared.Map();
+        _playerX = _gameMap.Width / 2f;
+        _playerY = _gameMap.Height / 2f;
+
         _canvas = new SKCanvasView();
         _canvas.EnableTouchEvents = true;
         _canvas.Touch += Canvas_Touch;
@@ -33,7 +41,7 @@ public partial class PlayPage : ContentPage
 
         _timer = Dispatcher.CreateTimer();
         _timer.Interval = TimeSpan.FromMilliseconds(16); // ~60 FPS
-        _timer.Tick += (s, e) => 
+        _timer.Tick += (s, e) =>
         {
             UpdatePhysics();
             _canvas.InvalidateSurface();
@@ -106,10 +114,62 @@ public partial class PlayPage : ContentPage
                 var moveX = dx / _joystickRadius * _playerSpeed;
                 var moveY = dy / _joystickRadius * _playerSpeed;
 
-                _playerX += moveX;
-                _playerY += moveY;
+                var newX = _playerX + moveX;
+                var newY = _playerY + moveY;
+
+                // 맵 경계 충돌 처리
+                if (newX - _playerRadius < 0) newX = _playerRadius;
+                if (newX + _playerRadius > _gameMap.Width) newX = _gameMap.Width - _playerRadius;
+                if (newY - _playerRadius < 0) newY = _playerRadius;
+                if (newY + _playerRadius > _gameMap.Height) newY = _gameMap.Height - _playerRadius;
+
+                // 벽을 따라 미끄러지도록 X축, Y축 각각 충돌 검사
+                if (!IsColliding(newX, _playerY))
+                {
+                    _playerX = newX;
+                }
+
+                if (!IsColliding(_playerX, newY))
+                {
+                    _playerY = newY;
+                }
             }
         }
+    }
+
+    private bool IsColliding(float x, float y)
+    {
+        foreach (var obs in _gameMap.Obstacles)
+        {
+            if (obs.Type == "Rect")
+            {
+                var rect = new SKRect(obs.LeftTop.X, obs.LeftTop.Y, obs.RightBottom.X, obs.RightBottom.Y);
+
+                // 원의 중심점과 사각형 내 가장 가까운 점 찾기
+                float closestX = Math.Max(rect.Left, Math.Min(x, rect.Right));
+                float closestY = Math.Max(rect.Top, Math.Min(y, rect.Bottom));
+
+                float distanceX = x - closestX;
+                float distanceY = y - closestY;
+
+                if ((distanceX * distanceX) + (distanceY * distanceY) < (_playerRadius * _playerRadius))
+                {
+                    return true;
+                }
+            }
+            else if (obs.Type == "Circle")
+            {
+                float dx = x - obs.CenterX.X;
+                float dy = y - obs.CenterX.Y;
+                float radiusSum = _playerRadius + obs.Radius;
+
+                if ((dx * dx) + (dy * dy) < (radiusSum * radiusSum))
+                {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     private void Canvas_PaintSurface(object? sender, SKPaintSurfaceEventArgs e)
@@ -118,25 +178,57 @@ public partial class PlayPage : ContentPage
         var width = e.Info.Width;
         var height = e.Info.Height;
 
-        if (_playerX < 0) _playerX = width / 2f;
-        if (_playerY < 0) _playerY = height / 2f;
-
         Draw(canvas, width, height);
     }
 
     private void Draw(SKCanvas canvas, int width, int height)
     {
-        canvas.Clear(SKColors.CornflowerBlue);
+        canvas.Clear(SKColors.DarkSlateGray);
 
-        // 플레이어
+        canvas.Save();
+
+        // 1. 카메라 설정 (World Space로 이동)
+        // 화면의 중심이 플레이어를 따라다니게 캔버스를 이동시킴
+        canvas.Translate(width / 2f - _playerX, height / 2f - _playerY);
+
+        // 2. 월드 렌더링
+        using (var mapPaint = new SKPaint { Color = SKColors.LightGray, Style = SKPaintStyle.Stroke, StrokeWidth = 10 })
+        {
+            canvas.DrawRect(0, 0, _gameMap.Width, _gameMap.Height, mapPaint);
+        }
+
+        // 장애물 렌더링
+        using (var obsPaint = new SKPaint { Color = SKColors.Black, Style = SKPaintStyle.Fill })
+        {
+            foreach (var obs in _gameMap.Obstacles)
+            {
+                if (obs.Type == "Rect")
+                {
+                    // 좌측상단 ~ 우측하단을 사용해 사각형을 그림
+                    var rect = new SKRect(obs.LeftTop.X, obs.LeftTop.Y, obs.RightBottom.X, obs.RightBottom.Y);
+                    canvas.DrawRect(rect, obsPaint);
+                }
+                else if (obs.Type == "Circle")
+                {
+                    canvas.DrawCircle(obs.CenterX.X, obs.CenterX.Y, obs.Radius, obsPaint);
+                }
+            }
+        }
+
+        // 플레이어 렌더링
         using var paint = new SKPaint
         {
             Color = SKColors.Red,
             IsAntialias = true,
             Style = SKPaintStyle.Fill
         };
-        canvas.DrawCircle(_playerX, _playerY, 50, paint);
+        canvas.DrawCircle(_playerX, _playerY, _playerRadius, paint);
 
+        // 멀티플레이어라면 여기서 상대방들의 X, Y 좌표값을 통해 추가로 DrawCircle 등을 해주면 됩니다.
+
+        canvas.Restore();
+
+        // 3. UI 오버레이 렌더링 코드는 카메라 복구 후에 그림
         // 조이스틱
         if (_activeTouchId != -1)
         {
@@ -159,7 +251,7 @@ public partial class PlayPage : ContentPage
             // 기본 상태 (고정된 위치에 조이스틱 그리기 - 좌측 하단)
             var defaultCenterX = _joystickRadius + 50f;
             var defaultCenterY = height - _joystickRadius - 50f;
-            
+
             // 초기화 전이면 그리지 않거나 기본값 설정
             if (height > 0)
             {
@@ -170,10 +262,10 @@ public partial class PlayPage : ContentPage
                     Style = SKPaintStyle.Fill
                 };
                 canvas.DrawCircle(defaultCenterX, defaultCenterY, _joystickRadius, joystickPaint);
-                
+
                 joystickPaint.Color = new SKColor(255, 255, 255, 100);
                 canvas.DrawCircle(defaultCenterX, defaultCenterY, _thumbRadius, joystickPaint);
-                
+
                 // 터치를 놓았을 때 화면 하단에 고정된 위치부터 시작하게 하려면
                 // _joystickCenter를 터치 시 재설정하지 않고 고정 위치를 사용하도록 변경할 수 있음. 
                 // 여기서는 터치한 곳 위치에 조이스틱이 뜨도록 (Floating Joystick) 구현함.
