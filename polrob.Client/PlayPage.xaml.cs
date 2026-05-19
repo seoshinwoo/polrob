@@ -11,6 +11,7 @@ public partial class PlayPage : ContentPage
     private float _playerY = -1;
     private float _playerSpeed = 7f;
     private float _playerRadius = 50f;
+    private float _playerAngle = 0f; // 캐릭터가 바라보는 각도
 
     // Shared Map
     private Shared.Map _gameMap;
@@ -24,6 +25,14 @@ public partial class PlayPage : ContentPage
 
     private readonly IDispatcherTimer _timer;
     private SKCanvasView _canvas;
+
+    private SKBitmap? _playerIdleBitmap;
+    private SKBitmap?[] _playerRunBitmaps = new SKBitmap?[8];
+    // 부자연스러운 애니메이션과 진동을 막기 위해 좌우대칭을 맞춘 프레임 시퀀스 구성 (오른쪽이 두 번 흔들리는 문제 해결)
+    private int[] _runFramePattern = { 0, 1, 2, 3, 5, 6, 7, 1 };
+    private int _currentRunFrameIndex = 0;
+    private float _animationTimer = 0f;
+    private bool _isMoving = false;
 
     public PlayPage()
     {
@@ -47,6 +56,31 @@ public partial class PlayPage : ContentPage
             _canvas.InvalidateSurface();
         };
         _timer.Start();
+    }
+
+    protected override async void OnAppearing()
+    {
+        base.OnAppearing();
+        await LoadAssetsAsync();
+    }
+
+    private async Task LoadAssetsAsync()
+    {
+        try
+        {
+            using var stream = await FileSystem.OpenAppPackageFileAsync("char_police.png");
+            _playerIdleBitmap = SKBitmap.Decode(stream);
+
+            for (int i = 0; i < 8; i++)
+            {
+                using var runStream = await FileSystem.OpenAppPackageFileAsync($"char_police_run_{i + 1}.png");
+                _playerRunBitmaps[i] = SKBitmap.Decode(runStream);
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Failed to load image: {ex}");
+        }
     }
 
     private void Canvas_Touch(object? sender, SKTouchEventArgs e)
@@ -103,6 +137,7 @@ public partial class PlayPage : ContentPage
 
     private void UpdatePhysics()
     {
+        _isMoving = false;
         if (_activeTouchId != -1)
         {
             var dx = _joystickThumb.X - _joystickCenter.X;
@@ -113,6 +148,15 @@ public partial class PlayPage : ContentPage
             {
                 var moveX = dx / _joystickRadius * _playerSpeed;
                 var moveY = dy / _joystickRadius * _playerSpeed;
+
+                // 조이스틱이 아주 약간이라도 움직이면 캐릭터가 바라보는 각도를 갱신
+                if (Math.Abs(dx) > 0.1f || Math.Abs(dy) > 0.1f)
+                {
+                    _isMoving = true;
+                    // Atan2 결과를 Degree로 변환. 원본 이미지가 아래쪽을 보고 있으므로 90도를 빼서 보정
+                    float angleRadians = (float)Math.Atan2(dy, dx);
+                    _playerAngle = (angleRadians * 180f / (float)Math.PI) - 90f;
+                }
 
                 var newX = _playerX + moveX;
                 var newY = _playerY + moveY;
@@ -134,6 +178,21 @@ public partial class PlayPage : ContentPage
                     _playerY = newY;
                 }
             }
+        }
+
+        if (_isMoving)
+        {
+            _animationTimer += 0.016f; // approx 16ms per frame
+            if (_animationTimer >= 0.1f) // 100ms per animation frame
+            {
+                _animationTimer -= 0.1f;
+                _currentRunFrameIndex = (_currentRunFrameIndex + 1) % _runFramePattern.Length;
+            }
+        }
+        else
+        {
+            _currentRunFrameIndex = 0;
+            _animationTimer = 0f;
         }
     }
 
@@ -216,13 +275,49 @@ public partial class PlayPage : ContentPage
         }
 
         // 플레이어 렌더링
-        using var paint = new SKPaint
+        SKBitmap? currentBitmap = _isMoving ? _playerRunBitmaps[_runFramePattern[_currentRunFrameIndex]] : _playerIdleBitmap;
+
+        if (currentBitmap != null)
         {
-            Color = SKColors.Red,
-            IsAntialias = true,
-            Style = SKPaintStyle.Fill
-        };
-        canvas.DrawCircle(_playerX, _playerY, _playerRadius, paint);
+            canvas.Save();
+            canvas.Translate(_playerX, _playerY);
+            canvas.RotateDegrees(_playerAngle);
+
+            float drawRadius = _playerRadius * 2f; // 100f (기본 렌더링 범위: 200x200)
+
+            if (!_isMoving || currentBitmap == _playerIdleBitmap)
+            {
+                // Idle 이미지 (1024x1024)는 여백이 많으므로 200x200 박스에 렌더링합니다.
+                var destRect = new SKRect(-drawRadius, -drawRadius, drawRadius, drawRadius);
+                canvas.DrawBitmap(currentBitmap, destRect);
+            }
+            else
+            {
+                // Run 이미지들은 여백 없이 타이트하게 크롭되어 있습니다. (약 280x315 크기)
+                // 200x200에 꽉 채우면 여백이 없어 원래 캐릭터보다 엄청 커 보이고, 전처럼 줄이면 너무 작아집니다.
+                // Idle 이미지 안의 실제 캐릭터 비율과 눈대중으로 일치하도록 맞춰줍니다.
+                float targetHeight = drawRadius * 1.35f; // 가만히 있을 때와 시각적으로 비슷한 높이 지정
+                float scale = targetHeight / currentBitmap.Height;
+                float scaledWidth = currentBitmap.Width * scale;
+                float scaledHeight = currentBitmap.Height * scale;
+
+                // 각각의 크롭된 이미지를 항상 중심 기준으로 그려 진동(Jitter)을 방지합니다.
+                var destRect = new SKRect(-scaledWidth / 2f, -scaledHeight / 2f, scaledWidth / 2f, scaledHeight / 2f);
+                canvas.DrawBitmap(currentBitmap, destRect);
+            }
+
+            canvas.Restore();
+        }
+        else
+        {
+            using var paint = new SKPaint
+            {
+                Color = SKColors.Red,
+                IsAntialias = true,
+                Style = SKPaintStyle.Fill
+            };
+            canvas.DrawCircle(_playerX, _playerY, _playerRadius, paint);
+        }
 
         // 멀티플레이어라면 여기서 상대방들의 X, Y 좌표값을 통해 추가로 DrawCircle 등을 해주면 됩니다.
 
