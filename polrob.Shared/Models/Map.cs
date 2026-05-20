@@ -2,12 +2,12 @@ using System.Drawing;
 
 namespace polrob.Shared;
 
-public class Map
+public class GameMap
 {
     public float Width = 3000;
     public float Height = 4500;
     public List<Obstacle> Obstacles = new();
-    public Map()
+    public GameMap()
     {
         Obstacles.Add(new Obstacle() { Type = "Rect", LeftTop = new PointF(500f, 1800f), LeftBottom = new PointF(500f, 3000f), RightTop = new PointF(800f, 1800f), RightBottom = new PointF(800f, 3000f) });
         Obstacles.Add(new Obstacle() { Type = "Rect", LeftTop = new PointF(1600f, 3300f), LeftBottom = new PointF(1600f, 4200f), RightTop = new PointF(2500f, 3300f), RightBottom = new PointF(2500f, 4200f) });

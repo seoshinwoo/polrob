@@ -2,19 +2,18 @@ using Microsoft.Maui.Devices;
 using SkiaSharp;
 using SkiaSharp.Views.Maui;
 using SkiaSharp.Views.Maui.Controls;
+using polrob.Shared;
+using polrob.Client.Network;
 
 namespace polrob.Client;
 
 public partial class PlayPage : ContentPage
 {
-    private float _playerX = -1;
-    private float _playerY = -1;
-    private float _playerSpeed = 7f;
-    private float _playerRadius = 50f;
-    private float _playerAngle = 0f; // 캐릭터가 바라보는 각도
+    private Player _player;
+    private Dictionary<string, Player> _players = new();
 
     // Shared Map
-    private Shared.Map _gameMap;
+    private GameMap _gameMap;
 
     // Joystick state
     private SKPoint _joystickCenter;
@@ -25,6 +24,8 @@ public partial class PlayPage : ContentPage
 
     private readonly IDispatcherTimer _timer;
     private SKCanvasView _canvas;
+    private GameNetworkClient? _networkClient;
+    private DateTime _lastSyncTime = DateTime.MinValue;
 
     private SKBitmap? _playerIdleBitmap;
     private SKBitmap?[] _playerRunBitmaps = new SKBitmap?[8];
@@ -32,15 +33,25 @@ public partial class PlayPage : ContentPage
     private int[] _runFramePattern = { 0, 1, 2, 3, 5, 6, 7, 1 };
     private int _currentRunFrameIndex = 0;
     private float _animationTimer = 0f;
-    private bool _isMoving = false;
 
     public PlayPage()
     {
         InitializeComponent();
 
-        _gameMap = new Shared.Map();
-        _playerX = _gameMap.Width / 2f;
-        _playerY = _gameMap.Height / 2f;
+        _gameMap = new GameMap();
+
+        _player = new Player
+        {
+            Id = Guid.NewGuid().ToString(),
+            X = _gameMap.Width / 2f,
+            Y = _gameMap.Height / 2f,
+            Speed = 7f,
+            Radius = 50f,
+            Role = PlayerRole.Police,
+            Angle = 0f,
+            IsMoving = false
+        };
+        _players.Add(_player.Id, _player);
 
         _canvas = new SKCanvasView();
         _canvas.EnableTouchEvents = true;
@@ -62,6 +73,57 @@ public partial class PlayPage : ContentPage
     {
         base.OnAppearing();
         await LoadAssetsAsync();
+        await InitializeNetworkAsync();
+    }
+
+    private string GetServerIpAddress()
+    {
+        return DeviceInfo.Platform == DevicePlatform.Android ? "10.0.2.2" : "127.0.0.1";
+    }
+
+    private async Task InitializeNetworkAsync()
+    {
+        _networkClient = new GameNetworkClient();
+
+        _networkClient.OnInitialStateReceived += (players) =>
+        {
+            _players.Clear();
+            foreach (var p in players)
+            {
+                _players[p.Id] = p;
+            }
+            _players[_player.Id] = _player;
+        };
+
+        _networkClient.OnPlayerJoined += (p) =>
+        {
+            if (p.Id != _player.Id) _players[p.Id] = p;
+        };
+
+        _networkClient.OnPlayerMoved += (p) =>
+        {
+            if (p.Id != _player.Id && _players.ContainsKey(p.Id))
+            {
+                _players[p.Id].X = p.X;
+                _players[p.Id].Y = p.Y;
+                _players[p.Id].Angle = p.Angle;
+                _players[p.Id].IsMoving = p.IsMoving;
+            }
+        };
+
+        _networkClient.OnPlayerLeft += (playerId) =>
+        {
+            _players.Remove(playerId);
+        };
+
+        try
+        {
+            await _networkClient.ConnectAsync(GetServerIpAddress(), _player);
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Network Connection Error: {ex}");
+        }
     }
 
     private async Task LoadAssetsAsync()
@@ -137,7 +199,7 @@ public partial class PlayPage : ContentPage
 
     private void UpdatePhysics()
     {
-        _isMoving = false;
+        _player.IsMoving = false;
         if (_activeTouchId != -1)
         {
             var dx = _joystickThumb.X - _joystickCenter.X;
@@ -146,41 +208,41 @@ public partial class PlayPage : ContentPage
             // 이동 방향 계산
             if (_joystickRadius > 0)
             {
-                var moveX = dx / _joystickRadius * _playerSpeed;
-                var moveY = dy / _joystickRadius * _playerSpeed;
+                var moveX = dx / _joystickRadius * _player.Speed;
+                var moveY = dy / _joystickRadius * _player.Speed;
 
                 // 조이스틱이 아주 약간이라도 움직이면 캐릭터가 바라보는 각도를 갱신
                 if (Math.Abs(dx) > 0.1f || Math.Abs(dy) > 0.1f)
                 {
-                    _isMoving = true;
+                    _player.IsMoving = true;
                     // Atan2 결과를 Degree로 변환. 원본 이미지가 아래쪽을 보고 있으므로 90도를 빼서 보정
                     float angleRadians = (float)Math.Atan2(dy, dx);
-                    _playerAngle = (angleRadians * 180f / (float)Math.PI) - 90f;
+                    _player.Angle = (angleRadians * 180f / (float)Math.PI) - 90f;
                 }
 
-                var newX = _playerX + moveX;
-                var newY = _playerY + moveY;
+                var newX = _player.X + moveX;
+                var newY = _player.Y + moveY;
 
                 // 맵 경계 충돌 처리
-                if (newX - _playerRadius < 0) newX = _playerRadius;
-                if (newX + _playerRadius > _gameMap.Width) newX = _gameMap.Width - _playerRadius;
-                if (newY - _playerRadius < 0) newY = _playerRadius;
-                if (newY + _playerRadius > _gameMap.Height) newY = _gameMap.Height - _playerRadius;
+                if (newX - _player.Radius < 0) newX = _player.Radius;
+                if (newX + _player.Radius > _gameMap.Width) newX = _gameMap.Width - _player.Radius;
+                if (newY - _player.Radius < 0) newY = _player.Radius;
+                if (newY + _player.Radius > _gameMap.Height) newY = _gameMap.Height - _player.Radius;
 
                 // 벽을 따라 미끄러지도록 X축, Y축 각각 충돌 검사
-                if (!IsColliding(newX, _playerY))
+                if (!IsColliding(newX, _player.Y, _player.Radius))
                 {
-                    _playerX = newX;
+                    _player.X = newX;
                 }
 
-                if (!IsColliding(_playerX, newY))
+                if (!IsColliding(_player.X, newY, _player.Radius))
                 {
-                    _playerY = newY;
+                    _player.Y = newY;
                 }
             }
         }
 
-        if (_isMoving)
+        if (_player.IsMoving)
         {
             _animationTimer += 0.016f; // approx 16ms per frame
             if (_animationTimer >= 0.1f) // 100ms per animation frame
@@ -194,9 +256,23 @@ public partial class PlayPage : ContentPage
             _currentRunFrameIndex = 0;
             _animationTimer = 0f;
         }
+
+        // Sync with server via UDP
+        if (_networkClient != null)
+        {
+            if (_player.IsMoving || (DateTime.Now - _lastSyncTime).TotalMilliseconds > 100)
+            {
+                // Sync around 20 times a second
+                if ((DateTime.Now - _lastSyncTime).TotalMilliseconds > 50)
+                {
+                    _networkClient.SendMoveUdp(_player);
+                    _lastSyncTime = DateTime.Now;
+                }
+            }
+        }
     }
 
-    private bool IsColliding(float x, float y)
+    private bool IsColliding(float x, float y, float radius)
     {
         foreach (var obs in _gameMap.Obstacles)
         {
@@ -211,7 +287,7 @@ public partial class PlayPage : ContentPage
                 float distanceX = x - closestX;
                 float distanceY = y - closestY;
 
-                if ((distanceX * distanceX) + (distanceY * distanceY) < (_playerRadius * _playerRadius))
+                if ((distanceX * distanceX) + (distanceY * distanceY) < (radius * radius))
                 {
                     return true;
                 }
@@ -220,7 +296,7 @@ public partial class PlayPage : ContentPage
             {
                 float dx = x - obs.CenterX.X;
                 float dy = y - obs.CenterX.Y;
-                float radiusSum = _playerRadius + obs.Radius;
+                float radiusSum = radius + obs.Radius;
 
                 if ((dx * dx) + (dy * dy) < (radiusSum * radiusSum))
                 {
@@ -248,7 +324,7 @@ public partial class PlayPage : ContentPage
 
         // 1. 카메라 설정 (World Space로 이동)
         // 화면의 중심이 플레이어를 따라다니게 캔버스를 이동시킴
-        canvas.Translate(width / 2f - _playerX, height / 2f - _playerY);
+        canvas.Translate(width / 2f - _player.X, height / 2f - _player.Y);
 
         // 2. 월드 렌더링
         using (var mapPaint = new SKPaint { Color = SKColors.LightGray, Style = SKPaintStyle.Stroke, StrokeWidth = 10 })
@@ -274,52 +350,53 @@ public partial class PlayPage : ContentPage
             }
         }
 
-        // 플레이어 렌더링
-        SKBitmap? currentBitmap = _isMoving ? _playerRunBitmaps[_runFramePattern[_currentRunFrameIndex]] : _playerIdleBitmap;
-
-        if (currentBitmap != null)
+        foreach (var player in _players.Values)
         {
-            canvas.Save();
-            canvas.Translate(_playerX, _playerY);
-            canvas.RotateDegrees(_playerAngle);
+            // 플레이어 렌더링
+            SKBitmap? currentBitmap = player.IsMoving ? _playerRunBitmaps[_runFramePattern[_currentRunFrameIndex]] : _playerIdleBitmap;
 
-            float drawRadius = _playerRadius * 2f; // 100f (기본 렌더링 범위: 200x200)
-
-            if (!_isMoving || currentBitmap == _playerIdleBitmap)
+            if (currentBitmap != null)
             {
-                // Idle 이미지 (1024x1024)는 여백이 많으므로 200x200 박스에 렌더링합니다.
-                var destRect = new SKRect(-drawRadius, -drawRadius, drawRadius, drawRadius);
-                canvas.DrawBitmap(currentBitmap, destRect);
+                canvas.Save();
+                canvas.Translate(player.X, player.Y);
+                canvas.RotateDegrees(player.Angle);
+
+                float drawRadius = player.Radius * 2f; // 100f (기본 렌더링 범위: 200x200)
+
+                if (!player.IsMoving || currentBitmap == _playerIdleBitmap)
+                {
+                    // Idle 이미지 (1024x1024)는 여백이 많으므로 200x200 박스에 렌더링합니다.
+                    var destRect = new SKRect(-drawRadius, -drawRadius, drawRadius, drawRadius);
+                    canvas.DrawBitmap(currentBitmap, destRect);
+                }
+                else
+                {
+                    // Run 이미지들은 여백 없이 타이트하게 크롭되어 있습니다. (약 280x315 크기)
+                    // 200x200에 꽉 채우면 여백이 없어 원래 캐릭터보다 엄청 커 보이고, 전처럼 줄이면 너무 작아집니다.
+                    // Idle 이미지 안의 실제 캐릭터 비율과 눈대중으로 일치하도록 맞춰줍니다.
+                    float targetHeight = drawRadius * 1.35f; // 가만히 있을 때와 시각적으로 비슷한 높이 지정
+                    float scale = targetHeight / currentBitmap.Height;
+                    float scaledWidth = currentBitmap.Width * scale;
+                    float scaledHeight = currentBitmap.Height * scale;
+
+                    // 각각의 크롭된 이미지를 항상 중심 기준으로 그려 진동(Jitter)을 방지합니다.
+                    var destRect = new SKRect(-scaledWidth / 2f, -scaledHeight / 2f, scaledWidth / 2f, scaledHeight / 2f);
+                    canvas.DrawBitmap(currentBitmap, destRect);
+                }
+
+                canvas.Restore();
             }
             else
             {
-                // Run 이미지들은 여백 없이 타이트하게 크롭되어 있습니다. (약 280x315 크기)
-                // 200x200에 꽉 채우면 여백이 없어 원래 캐릭터보다 엄청 커 보이고, 전처럼 줄이면 너무 작아집니다.
-                // Idle 이미지 안의 실제 캐릭터 비율과 눈대중으로 일치하도록 맞춰줍니다.
-                float targetHeight = drawRadius * 1.35f; // 가만히 있을 때와 시각적으로 비슷한 높이 지정
-                float scale = targetHeight / currentBitmap.Height;
-                float scaledWidth = currentBitmap.Width * scale;
-                float scaledHeight = currentBitmap.Height * scale;
-
-                // 각각의 크롭된 이미지를 항상 중심 기준으로 그려 진동(Jitter)을 방지합니다.
-                var destRect = new SKRect(-scaledWidth / 2f, -scaledHeight / 2f, scaledWidth / 2f, scaledHeight / 2f);
-                canvas.DrawBitmap(currentBitmap, destRect);
+                using var paint = new SKPaint
+                {
+                    Color = player.Role == PlayerRole.Police ? SKColors.Blue : SKColors.Red,
+                    IsAntialias = true,
+                    Style = SKPaintStyle.Fill
+                };
+                canvas.DrawCircle(player.X, player.Y, player.Radius, paint);
             }
-
-            canvas.Restore();
         }
-        else
-        {
-            using var paint = new SKPaint
-            {
-                Color = SKColors.Red,
-                IsAntialias = true,
-                Style = SKPaintStyle.Fill
-            };
-            canvas.DrawCircle(_playerX, _playerY, _playerRadius, paint);
-        }
-
-        // 멀티플레이어라면 여기서 상대방들의 X, Y 좌표값을 통해 추가로 DrawCircle 등을 해주면 됩니다.
 
         canvas.Restore();
 
