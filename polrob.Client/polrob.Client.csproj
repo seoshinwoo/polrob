@@ -1,8 +1,10 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
 	<PropertyGroup>
-                <!-- <TargetFrameworks>net10.0-android</TargetFrameworks> -->
-                <TargetFrameworks Condition="!$([MSBuild]::IsOSPlatform('linux'))">net10.0-ios;</TargetFrameworks>
+		<TargetFrameworks Condition="!$([MSBuild]::IsOSPlatform('linux'))">net10.0-android;net10.0-ios</TargetFrameworks>
+		<!-- 타겟 플랫폼별로 런타임을 분리하여 Android 빌드 시 iOS 런타임이 섞여 들어가는 XA0035 에러를 방지합니다. -->
+		<RuntimeIdentifiers Condition="$(TargetFramework.Contains('-android'))">android-arm64;android-x64;android-arm;android-x86</RuntimeIdentifiers>
+		<RuntimeIdentifiers Condition="$(TargetFramework.Contains('-ios'))">ios-arm64;iossimulator-x64;iossimulator-arm64</RuntimeIdentifiers>
 
 		<!-- Note for MacCatalyst:
 		The default runtime is maccatalyst-x64, except in Release config, in which case the default is maccatalyst-x64;maccatalyst-arm64.

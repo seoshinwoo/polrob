@@ -6,8 +6,7 @@
             "type": "shell",
             "command": "xcrun simctl boot 1789F7CF-143A-4A63-AE0B-7EE0C446A7A9 || true && open -a Simulator && dotnet build polrob.Client/polrob.Client.csproj -f net10.0-ios && xcrun simctl install booted polrob.Client/bin/Debug/net10.0-ios/iossimulator-arm64/polrob.Client.app && xcrun simctl launch booted com.companyname.polrob.client",
             "group": {
-                "kind": "build",
-                "isDefault": true
+                "kind": "build"
             },
             "presentation": {
                 "reveal": "always",
