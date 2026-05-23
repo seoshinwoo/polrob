@@ -9,8 +9,13 @@ public partial class MainPage : ContentPage
 		InitializeComponent();
 	}
 
-	private async void OnCounterClicked(object? sender, EventArgs e)
+	private async void OnCreateClicked(object? sender, EventArgs e)
 	{
-		await Shell.Current.GoToAsync("PlayPage");
+		await Shell.Current.GoToAsync("GameCreate");
+	}
+
+	private async void OnJoinClicked(object? sender, EventArgs e)
+	{
+		await Shell.Current.GoToAsync("GameJoin");
 	}
 }

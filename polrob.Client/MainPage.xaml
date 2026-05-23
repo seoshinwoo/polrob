@@ -1,36 +1,74 @@
 ﻿<?xml version="1.0" encoding="utf-8" ?>
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
-             x:Class="polrob.Client.MainPage">
+             x:Class="polrob.Client.MainPage"
+             BackgroundColor="#555555"
+             Shell.NavBarIsVisible="False">
 
-    <ScrollView>
-        <VerticalStackLayout
-            Padding="30,0"
-            Spacing="25">
-            <Image
-                Source="dotnet_bot.png"
-                HeightRequest="185"
-                Aspect="AspectFit"
-                SemanticProperties.Description="dot net bot in a submarine number ten" />
+    <Grid>
+        <!-- Top Right Login Button -->
+        <Button Text="Login"
+                HorizontalOptions="End"
+                VerticalOptions="Start"
+                Margin="20"
+                CornerRadius="20"
+                FontAttributes="Bold"
+                FontSize="18"
+                TextColor="White"
+                Padding="30, 8"
+                BackgroundColor="#5984ef"/>
 
-            <Label
-                Text="Hello, ShinWoo!"
-                Style="{StaticResource Headline}"
-                SemanticProperties.HeadingLevel="Level1" />
+        <!-- Center content -->
+        <VerticalStackLayout HorizontalOptions="Center"
+                             VerticalOptions="Center"
+                             Spacing="60">
+            <Label Text="PolRob"
+                   FontSize="72"
+                   TextColor="White"
+                   FontFamily="OpenSansRegular"
+                   HorizontalOptions="Center"/>
 
-            <Label
-                Text="Welcome to &#10;.NET Multi-platform App UI"
-                Style="{StaticResource SubHeadline}"
-                SemanticProperties.HeadingLevel="Level2"
-                SemanticProperties.Description="Welcome to dot net Multi platform App U I" />
+            <HorizontalStackLayout Spacing="25"
+                                   HorizontalOptions="Center">
+                <Button Text="Create"
+                        FontAttributes="Bold"
+                        FontSize="24"
+                        TextColor="White"
+                        WidthRequest="150"
+                        HeightRequest="160"
+                        CornerRadius="25"
+                        Clicked="OnCreateClicked">
+                    <Button.Background>
+                        <LinearGradientBrush StartPoint="0,0"
+                                             EndPoint="0,1">
+                            <GradientStop Color="#1e3e96"
+                                          Offset="0.0"/>
+                            <GradientStop Color="#5e89f8"
+                                          Offset="1.0"/>
+                        </LinearGradientBrush>
+                    </Button.Background>
+                </Button>
 
-            <Button
-                x:Name="CounterBtn"
-                Text="GamePlay" 
-                SemanticProperties.Hint="Counts the number of times you click"
-                Clicked="OnCounterClicked"
-                HorizontalOptions="Fill" />
+                <Button Text="Join"
+                        FontAttributes="Bold"
+                        FontSize="24"
+                        TextColor="White"
+                        WidthRequest="150"
+                        HeightRequest="160"
+                        CornerRadius="25"
+                        Clicked="OnJoinClicked">
+                    <Button.Background>
+                        <LinearGradientBrush StartPoint="0,0"
+                                             EndPoint="0,1">
+                            <GradientStop Color="#32851a"
+                                          Offset="0.0"/>
+                            <GradientStop Color="#3dcd14"
+                                          Offset="1.0"/>
+                        </LinearGradientBrush>
+                    </Button.Background>
+                </Button>
+            </HorizontalStackLayout>
         </VerticalStackLayout>
-    </ScrollView>
+    </Grid>
 
 </ContentPage>
