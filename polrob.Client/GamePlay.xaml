@@ -1,11 +1,13 @@
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              xmlns:skia="clr-namespace:SkiaSharp.Views.Maui.Controls;assembly=SkiaSharp.Views.Maui.Controls"
-             x:Class="polrob.Client.PlayPage">
+             x:Class="polrob.Client.GamePlay"
+             Shell.NavBarIsVisible="False"
+             BackgroundColor="#555555">
 
     <Grid x:Name="Container">
         <!-- 런타임에서 SKGLView(기기) 또는 SKCanvasView(시뮬레이터) 를 추가합니다 -->
-        
+
         <!-- UI 오버레이 예시 (게임 화면 위에 그려짐) -->
         <!-- <Label Text="FPS: 60" 
                TextColor="White"

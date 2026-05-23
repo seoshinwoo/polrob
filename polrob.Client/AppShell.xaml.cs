@@ -5,7 +5,7 @@ public partial class AppShell : Shell
 	public AppShell()
 	{
 		InitializeComponent();
-		Routing.RegisterRoute("PlayPage", typeof(PlayPage));
+		Routing.RegisterRoute("GamePlay", typeof(GamePlay));
 		Routing.RegisterRoute("GameCreate", typeof(GameCreate));
 		Routing.RegisterRoute("GameJoin", typeof(GameJoin));
 		Routing.RegisterRoute("GameLobby", typeof(GameLobby));

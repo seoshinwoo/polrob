@@ -7,7 +7,7 @@ using polrob.Client.Network;
 
 namespace polrob.Client;
 
-public partial class PlayPage : ContentPage
+public partial class GamePlay : ContentPage
 {
     private Player _player;
     private Dictionary<string, Player> _players = new();
@@ -26,6 +26,9 @@ public partial class PlayPage : ContentPage
     private SKCanvasView _canvas;
     private GameNetworkClient? _networkClient;
     private DateTime _lastSyncTime = DateTime.MinValue;
+    private const float VisionRangePlayerSizeMultiplier = 2.5f;
+    private const float VisionConeAngleDegrees = 90f;
+    private const byte FogOpacity = 120;
 
     private SKBitmap? _playerIdleBitmap;
     private SKBitmap?[] _playerRunBitmaps = new SKBitmap?[8];
@@ -34,7 +37,7 @@ public partial class PlayPage : ContentPage
     private int _currentRunFrameIndex = 0;
     private float _animationTimer = 0f;
 
-    public PlayPage()
+    public GamePlay()
     {
         InitializeComponent();
 
@@ -318,7 +321,7 @@ public partial class PlayPage : ContentPage
 
     private void Draw(SKCanvas canvas, int width, int height)
     {
-        canvas.Clear(SKColors.DarkSlateGray);
+        canvas.Clear(SKColor.Parse("#555555"));
 
         canvas.Save();
 
@@ -333,7 +336,7 @@ public partial class PlayPage : ContentPage
         }
 
         // 장애물 렌더링
-        using (var obsPaint = new SKPaint { Color = SKColors.Black, Style = SKPaintStyle.Fill })
+        using (var obsPaint = new SKPaint { Color = SKColors.AliceBlue, Style = SKPaintStyle.Fill })
         {
             foreach (var obs in _gameMap.Obstacles)
             {
@@ -350,8 +353,15 @@ public partial class PlayPage : ContentPage
             }
         }
 
+        DrawVisionOverlay(canvas);
+
         foreach (var player in _players.Values)
         {
+            if (!ShouldDrawPlayer(player))
+            {
+                continue;
+            }
+
             // 플레이어 렌더링
             SKBitmap? currentBitmap = player.IsMoving ? _playerRunBitmaps[_runFramePattern[_currentRunFrameIndex]] : _playerIdleBitmap;
 
@@ -443,5 +453,116 @@ public partial class PlayPage : ContentPage
                 // 여기서는 터치한 곳 위치에 조이스틱이 뜨도록 (Floating Joystick) 구현함.
             }
         }
+    }
+
+    private void DrawVisionOverlay(SKCanvas canvas)
+    {
+        using var fogPaint = new SKPaint
+        {
+            Color = new SKColor(0, 0, 0, FogOpacity),
+            Style = SKPaintStyle.Fill
+        };
+
+        using var clearPaint = new SKPaint
+        {
+            BlendMode = SKBlendMode.Clear,
+            IsAntialias = true,
+            Style = SKPaintStyle.Fill
+        };
+
+        using var visionPath = CreateVisionPath(_player);
+
+        canvas.SaveLayer();
+        canvas.DrawRect(0, 0, _gameMap.Width, _gameMap.Height, fogPaint);
+        canvas.DrawPath(visionPath, clearPaint);
+        canvas.Restore();
+    }
+
+    private bool ShouldDrawPlayer(Player player)
+    {
+        if (player.Id == _player.Id)
+        {
+            return true;
+        }
+
+        if (player.Role == _player.Role)
+        {
+            return true;
+        }
+
+        return IsPointInVision(player.X, player.Y);
+    }
+
+    private bool IsPointInVision(float x, float y)
+    {
+        float dx = x - _player.X;
+        float dy = y - _player.Y;
+        float distanceSquared = dx * dx + dy * dy;
+        float visionRange = GetVisionRange(_player);
+
+        if (distanceSquared > visionRange * visionRange)
+        {
+            return false;
+        }
+
+        float targetAngle = NormalizeDegrees((float)(Math.Atan2(dy, dx) * 180f / Math.PI));
+        float facingAngle = GetFacingAngle(_player);
+        float angleDifference = Math.Abs(ShortestAngleDifference(facingAngle, targetAngle));
+
+        return angleDifference <= VisionConeAngleDegrees / 2f;
+    }
+
+    private SKPath CreateVisionPath(Player player)
+    {
+        float visionRange = GetVisionRange(player);
+        float startAngle = GetFacingAngle(player) - VisionConeAngleDegrees / 2f;
+
+        var path = new SKPath();
+        var arcBounds = new SKRect(
+            player.X - visionRange,
+            player.Y - visionRange,
+            player.X + visionRange,
+            player.Y + visionRange);
+
+        path.MoveTo(player.X, player.Y);
+        path.LineTo(
+            player.X + MathF.Cos(DegreesToRadians(startAngle)) * visionRange,
+            player.Y + MathF.Sin(DegreesToRadians(startAngle)) * visionRange);
+        path.ArcTo(arcBounds, startAngle, VisionConeAngleDegrees, false);
+        path.Close();
+
+        return path;
+    }
+
+    private static float GetVisionRange(Player player)
+    {
+        return player.Radius * 2f * VisionRangePlayerSizeMultiplier;
+    }
+
+    private static float GetFacingAngle(Player player)
+    {
+        return NormalizeDegrees(player.Angle + 90f);
+    }
+
+    private static float DegreesToRadians(float degrees)
+    {
+        return degrees * MathF.PI / 180f;
+    }
+
+    private static float NormalizeDegrees(float degrees)
+    {
+        degrees %= 360f;
+        if (degrees < 0)
+        {
+            degrees += 360f;
+        }
+
+        return degrees;
+    }
+
+    private static float ShortestAngleDifference(float fromDegrees, float toDegrees)
+    {
+        float difference = NormalizeDegrees(toDegrees - fromDegrees);
+        return difference > 180f ? difference - 360f : difference;
     }
 }
