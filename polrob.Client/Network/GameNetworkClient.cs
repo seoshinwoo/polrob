@@ -27,8 +27,8 @@ public class GameNetworkClient
         _reader = new BinaryReader(stream);
         _writer = new BinaryWriter(stream);
 
-        _udpClient = new UdpClient();
-        _serverUdpEndpoint = new IPEndPoint(IPAddress.Parse(ipAddress), 7778);
+        _udpClient = new UdpClient(ipAddress.Contains(":") ? AddressFamily.InterNetworkV6 : AddressFamily.InterNetwork);
+        _udpClient.Connect(IPAddress.Parse(ipAddress), 7778);
 
         _ = Task.Run(ReceiveTcpLoop);
         _ = Task.Run(ReceiveUdpLoop);
@@ -52,7 +52,7 @@ public class GameNetworkClient
         if (_udpClient == null) return;
         string json = JsonSerializer.Serialize(player);
         byte[] bytes = System.Text.Encoding.UTF8.GetBytes(json);
-        _udpClient.SendAsync(bytes, bytes.Length, _serverUdpEndpoint);
+        _udpClient.SendAsync(bytes, bytes.Length);
     }
 
     private void ReceiveTcpLoop()
@@ -92,9 +92,9 @@ public class GameNetworkClient
 
     private async Task ReceiveUdpLoop()
     {
-        try
+        while (true)
         {
-            while (true)
+            try
             {
                 var result = await _udpClient.ReceiveAsync();
                 string json = System.Text.Encoding.UTF8.GetString(result.Buffer);
@@ -108,10 +108,10 @@ public class GameNetworkClient
                     });
                 }
             }
-        }
-        catch (Exception ex)
-        {
-            System.Diagnostics.Debug.WriteLine($"UDP Receive error: {ex.Message}");
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"UDP Receive error: {ex.Message}");
+            }
         }
     }
 }

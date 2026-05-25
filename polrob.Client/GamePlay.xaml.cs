@@ -1,3 +1,4 @@
+using System.Linq;
 using Microsoft.Maui.Devices;
 using SkiaSharp;
 using SkiaSharp.Views.Maui;
@@ -60,7 +61,9 @@ public partial class GamePlay : ContentPage
         _canvas.EnableTouchEvents = true;
         _canvas.Touch += Canvas_Touch;
         _canvas.PaintSurface += Canvas_PaintSurface;
-        Container.Children.Add(_canvas);
+
+        // Canvas를 가장 뒤(Index 0)에 배치하여 XAML에 정의된 Label 등 UI보다 뒤에 그려지도록 합니다.
+        Container.Children.Insert(0, _canvas);
 
         _timer = Dispatcher.CreateTimer();
         _timer.Interval = TimeSpan.FromMilliseconds(16); // ~60 FPS
@@ -68,6 +71,7 @@ public partial class GamePlay : ContentPage
         {
             UpdatePhysics();
             _canvas.InvalidateSurface();
+            UpdatePlayerCoordsUI();
         };
         _timer.Start();
     }
@@ -81,26 +85,31 @@ public partial class GamePlay : ContentPage
 
     private string GetServerIpAddress()
     {
-        return DeviceInfo.Platform == DevicePlatform.Android ? "10.0.2.2" : "127.0.0.1";
+        // return DeviceInfo.Platform == DevicePlatform.Android ? "10.0.2.2" : "127.0.0.1";
+        return DeviceInfo.Platform == DevicePlatform.Android ? "10.0.2.2" : "192.0.0.2";
     }
 
     private async Task InitializeNetworkAsync()
     {
         _networkClient = new GameNetworkClient();
 
-        _networkClient.OnInitialStateReceived += (players) =>
+        _networkClient.OnInitialStateReceived += async (players) =>
         {
             _players.Clear();
             foreach (var p in players)
             {
                 _players[p.Id] = p;
             }
-            _players[_player.Id] = _player;
+            // _players[_player.Id] = _player;
+            _player = _players[_player.Id]; // Test
+            await LoadAssetsAsync(); // Test
+            UpdatePlayerCount();
         };
 
         _networkClient.OnPlayerJoined += (p) =>
         {
             if (p.Id != _player.Id) _players[p.Id] = p;
+            UpdatePlayerCount();
         };
 
         _networkClient.OnPlayerMoved += (p) =>
@@ -117,6 +126,7 @@ public partial class GamePlay : ContentPage
         _networkClient.OnPlayerLeft += (playerId) =>
         {
             _players.Remove(playerId);
+            UpdatePlayerCount();
         };
 
         try
@@ -129,16 +139,36 @@ public partial class GamePlay : ContentPage
         }
     }
 
+    private void UpdatePlayerCount()
+    {
+        MainThread.BeginInvokeOnMainThread(() =>
+        {
+            PlayerCountLabel.Text = $"Players: {_players.Count}";
+            UpdatePlayerCoordsUI();
+        });
+    }
+
+    private void UpdatePlayerCoordsUI()
+    {
+        MainThread.BeginInvokeOnMainThread(() =>
+        {
+            var coords = string.Join("\n", _players.Values.Select(p =>
+                $"{(p.Id == _player.Id ? "(Me) " : "")}{p.Id[..Math.Min(4, p.Id.Length)]}: {p.X:F0}, {p.Y:F0}"));
+            PlayerCoordsLabel.Text = coords;
+        });
+    }
+
     private async Task LoadAssetsAsync()
     {
         try
         {
-            using var stream = await FileSystem.OpenAppPackageFileAsync("char_police.png");
+            var role = _player.Role == PlayerRole.Police ? "police" : "robber";
+            using var stream = await FileSystem.OpenAppPackageFileAsync($"char_{role}.png");
             _playerIdleBitmap = SKBitmap.Decode(stream);
 
             for (int i = 0; i < 8; i++)
             {
-                using var runStream = await FileSystem.OpenAppPackageFileAsync($"char_police_run_{i + 1}.png");
+                using var runStream = await FileSystem.OpenAppPackageFileAsync($"char_{role}_run_{i + 1}.png");
                 _playerRunBitmaps[i] = SKBitmap.Decode(runStream);
             }
         }
@@ -245,19 +275,12 @@ public partial class GamePlay : ContentPage
             }
         }
 
-        if (_player.IsMoving)
+        // Run global animation timer for all moving players
+        _animationTimer += 0.016f; // approx 16ms per frame
+        if (_animationTimer >= 0.1f) // 100ms per animation frame
         {
-            _animationTimer += 0.016f; // approx 16ms per frame
-            if (_animationTimer >= 0.1f) // 100ms per animation frame
-            {
-                _animationTimer -= 0.1f;
-                _currentRunFrameIndex = (_currentRunFrameIndex + 1) % _runFramePattern.Length;
-            }
-        }
-        else
-        {
-            _currentRunFrameIndex = 0;
-            _animationTimer = 0f;
+            _animationTimer -= 0.1f;
+            _currentRunFrameIndex = (_currentRunFrameIndex + 1) % _runFramePattern.Length;
         }
 
         // Sync with server via UDP

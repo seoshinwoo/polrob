@@ -9,11 +9,20 @@
         <!-- 런타임에서 SKGLView(기기) 또는 SKCanvasView(시뮬레이터) 를 추가합니다 -->
 
         <!-- UI 오버레이 예시 (게임 화면 위에 그려짐) -->
-        <!-- <Label Text="FPS: 60" 
-               TextColor="White"
-               HorizontalOptions="Start" 
-               VerticalOptions="Start" 
-               Margin="10" /> -->
+        <VerticalStackLayout HorizontalOptions="End"
+                VerticalOptions="Start"
+                Margin="20"
+                InputTransparent="True">
+            <Label x:Name="PlayerCountLabel"
+                   Text="Players: 1"
+                   TextColor="White"
+                   FontAttributes="Bold"
+                   FontSize="16"/>
+            <Label x:Name="PlayerCoordsLabel"
+                   Text=""
+                   TextColor="White"
+                   FontSize="12"/>
+        </VerticalStackLayout>
     </Grid>
 
 </ContentPage>

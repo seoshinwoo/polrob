@@ -69,6 +69,7 @@ public class GameNetworkServer : BackgroundService
                     if (player != null)
                     {
                         playerId = player.Id;
+                        player.Role = _sessions.Count() == 0 ? PlayerRole.Police : PlayerRole.Robber; // Test
                         _sessions[playerId] = new PlayerSession { Client = client, Writer = writer, PlayerState = player };
 
                         Console.WriteLine($"Player Connected [TCP]: {playerId}");
@@ -76,9 +77,11 @@ public class GameNetworkServer : BackgroundService
                         // Send all current players to the new player
                         var allPlayers = _sessions.Values.Select(s => s.PlayerState).ToList();
                         SendTcp(writer, 4, JsonSerializer.Serialize(allPlayers));
+                        Console.WriteLine($"{allPlayers.Count}명에게 플레이어 초기화!!");
 
                         // Broadcast new player join to others
-                        BroadcastTcp(2, json, playerId);
+                        BroadcastTcp(2, JsonSerializer.Serialize(player), playerId);
+                        Console.WriteLine($"{allPlayers.Count}명에게 브로드캐스트!!");
                     }
                 }
             }
