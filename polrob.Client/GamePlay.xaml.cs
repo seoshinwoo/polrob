@@ -31,8 +31,13 @@ public partial class GamePlay : ContentPage
     private const float VisionConeAngleDegrees = 90f;
     private const byte FogOpacity = 120;
 
-    private SKBitmap? _playerIdleBitmap;
-    private SKBitmap?[] _playerRunBitmaps = new SKBitmap?[8];
+    // private SKBitmap? _playerIdleBitmap;
+    // private SKBitmap?[] _playerRunBitmaps = new SKBitmap?[8];
+    private SKBitmap? _policeIdleBitmap;
+    private SKBitmap?[] _policeRunBitmaps = new SKBitmap?[8];
+    private SKBitmap? _robberIdleBitmap;
+    private SKBitmap?[] _robberRunBitmaps = new SKBitmap?[8];
+
     // 부자연스러운 애니메이션과 진동을 막기 위해 좌우대칭을 맞춘 프레임 시퀀스 구성 (오른쪽이 두 번 흔들리는 문제 해결)
     private int[] _runFramePattern = { 0, 1, 2, 3, 5, 6, 7, 1 };
     private int _currentRunFrameIndex = 0;
@@ -85,8 +90,8 @@ public partial class GamePlay : ContentPage
 
     private string GetServerIpAddress()
     {
-        // return DeviceInfo.Platform == DevicePlatform.Android ? "10.0.2.2" : "127.0.0.1";
-        return DeviceInfo.Platform == DevicePlatform.Android ? "10.0.2.2" : "192.0.0.2";
+        return DeviceInfo.Platform == DevicePlatform.Android ? "10.0.2.2" : "127.0.0.1";
+        // return DeviceInfo.Platform == DevicePlatform.Android ? "10.0.2.2" : "192.0.0.2";
     }
 
     private async Task InitializeNetworkAsync()
@@ -162,14 +167,19 @@ public partial class GamePlay : ContentPage
     {
         try
         {
-            var role = _player.Role == PlayerRole.Police ? "police" : "robber";
-            using var stream = await FileSystem.OpenAppPackageFileAsync($"char_{role}.png");
-            _playerIdleBitmap = SKBitmap.Decode(stream);
+            using var policeStream = await FileSystem.OpenAppPackageFileAsync($"char_police.png");
+            _policeIdleBitmap = SKBitmap.Decode(policeStream);
+
+            using var robberStream = await FileSystem.OpenAppPackageFileAsync($"char_robber.png");
+            _robberIdleBitmap = SKBitmap.Decode(robberStream);
 
             for (int i = 0; i < 8; i++)
             {
-                using var runStream = await FileSystem.OpenAppPackageFileAsync($"char_{role}_run_{i + 1}.png");
-                _playerRunBitmaps[i] = SKBitmap.Decode(runStream);
+                using var policeRunStream = await FileSystem.OpenAppPackageFileAsync($"char_police_run_{i + 1}.png");
+                _policeRunBitmaps[i] = SKBitmap.Decode(policeRunStream);
+
+                using var robberRunStream = await FileSystem.OpenAppPackageFileAsync($"char_robber_run_{i + 1}.png");
+                _robberRunBitmaps[i] = SKBitmap.Decode(robberRunStream);
             }
         }
         catch (Exception ex)
@@ -386,7 +396,15 @@ public partial class GamePlay : ContentPage
             }
 
             // 플레이어 렌더링
-            SKBitmap? currentBitmap = player.IsMoving ? _playerRunBitmaps[_runFramePattern[_currentRunFrameIndex]] : _playerIdleBitmap;
+            SKBitmap? currentBitmap = null;
+            if (player.Role == PlayerRole.Police)
+            {
+                currentBitmap = player.IsMoving ? _policeRunBitmaps[_runFramePattern[_currentRunFrameIndex]] : _policeIdleBitmap;
+            }
+            else if (player.Role == PlayerRole.Robber)
+            {
+                currentBitmap = player.IsMoving ? _robberRunBitmaps[_runFramePattern[_currentRunFrameIndex]] : _robberIdleBitmap;
+            }
 
             if (currentBitmap != null)
             {
@@ -396,7 +414,7 @@ public partial class GamePlay : ContentPage
 
                 float drawRadius = player.Radius * 2f; // 100f (기본 렌더링 범위: 200x200)
 
-                if (!player.IsMoving || currentBitmap == _playerIdleBitmap)
+                if (!player.IsMoving || currentBitmap == _policeIdleBitmap || currentBitmap == _robberIdleBitmap)
                 {
                     // Idle 이미지 (1024x1024)는 여백이 많으므로 200x200 박스에 렌더링합니다.
                     var destRect = new SKRect(-drawRadius, -drawRadius, drawRadius, drawRadius);
