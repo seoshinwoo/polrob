@@ -37,6 +37,8 @@ public partial class GamePlay : ContentPage
     private SKBitmap?[] _policeRunBitmaps = new SKBitmap?[8];
     private SKBitmap? _robberIdleBitmap;
     private SKBitmap?[] _robberRunBitmaps = new SKBitmap?[8];
+    private SKBitmap? _policeStationBitmap;
+    private SKBitmap? _jailBitmap;
 
     // 부자연스러운 애니메이션과 진동을 막기 위해 좌우대칭을 맞춘 프레임 시퀀스 구성 (오른쪽이 두 번 흔들리는 문제 해결)
     private int[] _runFramePattern = { 0, 1, 2, 3, 5, 6, 7, 1 };
@@ -172,6 +174,12 @@ public partial class GamePlay : ContentPage
 
             using var robberStream = await FileSystem.OpenAppPackageFileAsync($"char_robber.png");
             _robberIdleBitmap = SKBitmap.Decode(robberStream);
+
+            using var policeStationStream = await FileSystem.OpenAppPackageFileAsync($"police_station.png");
+            _policeStationBitmap = SKBitmap.Decode(policeStationStream);
+
+            using var jailStream = await FileSystem.OpenAppPackageFileAsync($"jail.png");
+            _jailBitmap = SKBitmap.Decode(jailStream);
 
             for (int i = 0; i < 8; i++)
             {
@@ -368,6 +376,8 @@ public partial class GamePlay : ContentPage
             canvas.DrawRect(0, 0, _gameMap.Width, _gameMap.Height, mapPaint);
         }
 
+        DrawBuildings(canvas);
+
         // 장애물 렌더링
         using (var obsPaint = new SKPaint { Color = SKColors.AliceBlue, Style = SKPaintStyle.Fill })
         {
@@ -388,6 +398,57 @@ public partial class GamePlay : ContentPage
 
         DrawVisionOverlay(canvas);
 
+        DrawPlayers(canvas);
+
+        canvas.Restore();
+
+        // 3. UI 오버레이 렌더링 코드는 카메라 복구 후에 그림
+        // 조이스틱
+        if (_activeTouchId != -1)
+        {
+            using var joystickPaint = new SKPaint
+            {
+                Color = new SKColor(255, 255, 255, 100), // 반투명 흰색
+                IsAntialias = true,
+                Style = SKPaintStyle.Fill
+            };
+
+            // 배경
+            canvas.DrawCircle(_joystickCenter.X, _joystickCenter.Y, _joystickRadius, joystickPaint);
+
+            // 썸(Thumb)
+            joystickPaint.Color = new SKColor(255, 255, 255, 180);
+            canvas.DrawCircle(_joystickThumb.X, _joystickThumb.Y, _thumbRadius, joystickPaint);
+        }
+        else
+        {
+            // 기본 상태 (고정된 위치에 조이스틱 그리기 - 좌측 하단)
+            var defaultCenterX = _joystickRadius + 50f;
+            var defaultCenterY = height - _joystickRadius - 50f;
+
+            // 초기화 전이면 그리지 않거나 기본값 설정
+            if (height > 0)
+            {
+                using var joystickPaint = new SKPaint
+                {
+                    Color = new SKColor(255, 255, 255, 50), // 더 연한 반투명
+                    IsAntialias = true,
+                    Style = SKPaintStyle.Fill
+                };
+                canvas.DrawCircle(defaultCenterX, defaultCenterY, _joystickRadius, joystickPaint);
+
+                joystickPaint.Color = new SKColor(255, 255, 255, 100);
+                canvas.DrawCircle(defaultCenterX, defaultCenterY, _thumbRadius, joystickPaint);
+
+                // 터치를 놓았을 때 화면 하단에 고정된 위치부터 시작하게 하려면
+                // _joystickCenter를 터치 시 재설정하지 않고 고정 위치를 사용하도록 변경할 수 있음. 
+                // 여기서는 터치한 곳 위치에 조이스틱이 뜨도록 (Floating Joystick) 구현함.
+            }
+        }
+    }
+
+    private void DrawPlayers(SKCanvas canvas)
+    {
         foreach (var player in _players.Values)
         {
             if (!ShouldDrawPlayer(player))
@@ -448,50 +509,28 @@ public partial class GamePlay : ContentPage
                 canvas.DrawCircle(player.X, player.Y, player.Radius, paint);
             }
         }
+    }
 
-        canvas.Restore();
-
-        // 3. UI 오버레이 렌더링 코드는 카메라 복구 후에 그림
-        // 조이스틱
-        if (_activeTouchId != -1)
+    private void DrawBuildings(SKCanvas canvas)
+    {
+        foreach (var building in _gameMap.Buildings)
         {
-            using var joystickPaint = new SKPaint
+            var rect = new SKRect(
+                building.LeftTop.X,
+                building.LeftTop.Y,
+                building.RightBottom.X,
+                building.RightBottom.Y);
+
+            var bitmap = building.Type switch
             {
-                Color = new SKColor(255, 255, 255, 100), // 반투명 흰색
-                IsAntialias = true,
-                Style = SKPaintStyle.Fill
+                "PoliceStation" => _policeStationBitmap,
+                "Jail" => _jailBitmap,
+                _ => null
             };
 
-            // 배경
-            canvas.DrawCircle(_joystickCenter.X, _joystickCenter.Y, _joystickRadius, joystickPaint);
-
-            // 썸(Thumb)
-            joystickPaint.Color = new SKColor(255, 255, 255, 180);
-            canvas.DrawCircle(_joystickThumb.X, _joystickThumb.Y, _thumbRadius, joystickPaint);
-        }
-        else
-        {
-            // 기본 상태 (고정된 위치에 조이스틱 그리기 - 좌측 하단)
-            var defaultCenterX = _joystickRadius + 50f;
-            var defaultCenterY = height - _joystickRadius - 50f;
-
-            // 초기화 전이면 그리지 않거나 기본값 설정
-            if (height > 0)
+            if (bitmap != null)
             {
-                using var joystickPaint = new SKPaint
-                {
-                    Color = new SKColor(255, 255, 255, 50), // 더 연한 반투명
-                    IsAntialias = true,
-                    Style = SKPaintStyle.Fill
-                };
-                canvas.DrawCircle(defaultCenterX, defaultCenterY, _joystickRadius, joystickPaint);
-
-                joystickPaint.Color = new SKColor(255, 255, 255, 100);
-                canvas.DrawCircle(defaultCenterX, defaultCenterY, _thumbRadius, joystickPaint);
-
-                // 터치를 놓았을 때 화면 하단에 고정된 위치부터 시작하게 하려면
-                // _joystickCenter를 터치 시 재설정하지 않고 고정 위치를 사용하도록 변경할 수 있음. 
-                // 여기서는 터치한 곳 위치에 조이스틱이 뜨도록 (Floating Joystick) 구현함.
+                canvas.DrawBitmap(bitmap, rect);
             }
         }
     }
