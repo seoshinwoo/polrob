@@ -90,8 +90,8 @@ public partial class GamePlay : ContentPage
 
     private string GetServerIpAddress()
     {
-        return DeviceInfo.Platform == DevicePlatform.Android ? "10.0.2.2" : "127.0.0.1";
-        // return DeviceInfo.Platform == DevicePlatform.Android ? "10.0.2.2" : "192.0.0.2";
+        // 실제 기기(안드로이드, 아이폰)와 시뮬레이터 모두 맥북의 핫스팟 IP(현재 192.168.0.238)를 바라보도록 통일합니다.
+        return "192.168.0.238";
     }
 
     private async Task InitializeNetworkAsync()
