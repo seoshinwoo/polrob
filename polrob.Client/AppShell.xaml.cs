@@ -9,5 +9,6 @@ public partial class AppShell : Shell
 		Routing.RegisterRoute("GameCreate", typeof(GameCreate));
 		Routing.RegisterRoute("GameJoin", typeof(GameJoin));
 		Routing.RegisterRoute("GameLobby", typeof(GameLobby));
+		Routing.RegisterRoute("GameOver", typeof(GameOver));
 	}
 }

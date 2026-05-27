@@ -17,6 +17,8 @@ public class GameNetworkClient
     public event Action<string>? OnPlayerLeft;
     public event Action<Player>? OnPlayerMoved;
     public event Action<string, string>? OnPlayerArrested;
+    public event Action<JailBreakSync>? OnPlayerJailBroken;
+    public event Action<GameStateSync>? OnGameStateReceived;
 
     public async Task ConnectAsync(string ipAddress, Player localPlayer)
     {
@@ -51,6 +53,11 @@ public class GameNetworkClient
     public void SendArrest(string policeId, string robberId)
     {
         SendTcp(5, $"{policeId},{robberId}");
+    }
+
+    public void SendJailBreakRequest(string rescuerId)
+    {
+        SendTcp(7, rescuerId);
     }
 
     public void SendMoveUdp(Player player)
@@ -95,6 +102,16 @@ public class GameNetworkClient
                         {
                             OnPlayerArrested?.Invoke(ids[0], ids[1]);
                         }
+                    }
+                    else if (type == 6) // GameStateSync
+                    {
+                        var syncData = JsonSerializer.Deserialize<GameStateSync>(json);
+                        if (syncData != null) OnGameStateReceived?.Invoke(syncData);
+                    }
+                    else if (type == 7) // JailBreakSync
+                    {
+                        var syncData = JsonSerializer.Deserialize<JailBreakSync>(json);
+                        if (syncData != null) OnPlayerJailBroken?.Invoke(syncData);
                     }
                 });
             }

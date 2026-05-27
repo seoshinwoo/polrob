@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="polrob.Client.GameOver"
+             BackgroundColor="#555555"
+             Shell.NavBarIsVisible="False">
+
+    <Grid RowDefinitions="Auto, *, Auto">
+
+        <!-- Top Left Home Button -->
+        <Frame Grid.Row="0"
+               HorizontalOptions="Start"
+               VerticalOptions="Start"
+               Margin="20"
+               Padding="12,10"
+               BackgroundColor="#76d859"
+               CornerRadius="15"
+               BorderColor="Transparent"
+               HasShadow="False">
+            <Frame.GestureRecognizers>
+                <TapGestureRecognizer Tapped="OnHomeClicked"/>
+            </Frame.GestureRecognizers>
+            <Path Data="M10,20V14H14V20H19V12H22L12,3L2,12H5V20H10Z"
+                  Fill="Black"
+                  Aspect="Uniform"
+                  WidthRequest="35"
+                  HeightRequest="35"/>
+        </Frame>
+
+        <!-- Center Text -->
+        <Label Grid.Row="1"
+               Text="Game End"
+               FontSize="46"
+               FontAttributes="Bold"
+               TextColor="White"
+               HorizontalOptions="Center"
+               VerticalOptions="Center"/>
+
+        <!-- Bottom Play Again Button -->
+        <Button Grid.Row="2"
+                Text="Play Again"
+                FontAttributes="Bold"
+                FontSize="24"
+                TextColor="Black"
+                BackgroundColor="#e2a8ec"
+                HeightRequest="80"
+                CornerRadius="20"
+                Margin="30,40,30,80"
+                Clicked="OnPlayAgainClicked"/>
+    </Grid>
+
+</ContentPage>

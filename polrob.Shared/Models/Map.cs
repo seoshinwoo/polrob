@@ -4,8 +4,8 @@ namespace polrob.Shared;
 
 public class GameMap
 {
-    public float Width = 3000;
-    public float Height = 4500;
+    public float Width = 5000;
+    public float Height = 7500;
     public float BuildingSize = 1000f;
     public List<Obstacle> Obstacles = new();
     public List<MapBuilding> Buildings = new();
@@ -33,8 +33,8 @@ public class GameMap
         Buildings.Add(PoliceStation);
         Buildings.Add(Jail);
 
-        Obstacles.Add(new Obstacle() { Type = "Rect", LeftTop = new PointF(500f, 1800f), LeftBottom = new PointF(500f, 3000f), RightTop = new PointF(800f, 1800f), RightBottom = new PointF(800f, 3000f) });
-        Obstacles.Add(new Obstacle() { Type = "Rect", LeftTop = new PointF(1600f, 3300f), LeftBottom = new PointF(1600f, 4200f), RightTop = new PointF(2500f, 3300f), RightBottom = new PointF(2500f, 4200f) });
+        // Obstacles.Add(new Obstacle() { Type = "Rect", LeftTop = new PointF(500f, 1800f), LeftBottom = new PointF(500f, 3000f), RightTop = new PointF(800f, 1800f), RightBottom = new PointF(800f, 3000f) });
+        // Obstacles.Add(new Obstacle() { Type = "Rect", LeftTop = new PointF(1600f, 3300f), LeftBottom = new PointF(1600f, 4200f), RightTop = new PointF(2500f, 3300f), RightBottom = new PointF(2500f, 4200f) });
         Obstacles.Add(new Obstacle() { Type = "Circle", CenterX = new PointF(1800f, 900f), Radius = 150f });
         Obstacles.Add(new Obstacle() { Type = "Circle", CenterX = new PointF(1600f, 1400f), Radius = 150f });
         Obstacles.Add(new Obstacle() { Type = "Circle", CenterX = new PointF(2200f, 1200f), Radius = 150f });

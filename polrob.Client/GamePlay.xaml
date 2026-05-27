@@ -9,20 +9,37 @@
         <!-- 런타임에서 SKGLView(기기) 또는 SKCanvasView(시뮬레이터) 를 추가합니다 -->
 
         <!-- UI 오버레이 예시 (게임 화면 위에 그려짐) -->
-        <VerticalStackLayout HorizontalOptions="End"
-                VerticalOptions="Start"
-                Margin="20"
-                InputTransparent="True">
-            <Label x:Name="PlayerCountLabel"
-                   Text="Players: 1"
-                   TextColor="White"
-                   FontAttributes="Bold"
-                   FontSize="16"/>
-            <Label x:Name="PlayerCoordsLabel"
-                   Text=""
-                   TextColor="White"
-                   FontSize="12"/>
-        </VerticalStackLayout>
+        <!-- 타이머 레이블 (중앙 상단) -->
+        <Label x:Name="TimerLabel"
+               Text="Timer : 300"
+               TextColor="White"
+               FontAttributes="Bold"
+               FontSize="32"
+               HorizontalOptions="Center"
+               VerticalOptions="Start"
+               Margin="0, 20, 0, 0"
+               InputTransparent="True"/>
+
+        <!-- 감옥 현황 레이블 (우측 상단) -->
+        <Label x:Name="JailLabel"
+               Text="Jail : 0/0"
+               TextColor="White"
+               FontAttributes="Bold"
+               FontSize="16"
+               HorizontalOptions="End"
+               VerticalOptions="Start"
+               Margin="0, 20, 20, 0"
+               InputTransparent="True"/>
+
+        <!-- 화면 중앙 메세지 (카운트다운 등) -->
+        <Label x:Name="CenterMessageLabel"
+               Text=""
+               TextColor="White"
+               FontAttributes="Bold"
+               FontSize="64"
+               HorizontalOptions="Center"
+               VerticalOptions="Center"
+               InputTransparent="True"/>
     </Grid>
 
 </ContentPage>

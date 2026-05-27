@@ -29,9 +29,14 @@ public partial class GamePlay : ContentPage
     private SKCanvasView _canvas;
     private GameNetworkClient? _networkClient;
     private DateTime _lastSyncTime = DateTime.MinValue;
+    private int _gamePhase = 0; // 0=Wait, 1=Countdown, 2=Play, 3=End
+    private int _remainingTime = 300;
+    private bool _isGameOverTransitioning = false;
     private const float VisionRangePlayerSizeMultiplier = 2.5f;
     private const float VisionConeAngleDegrees = 90f;
     private const byte FogOpacity = 120;
+    private const double JailBreakDurationSeconds = 3d;
+    private const float JailBreakRemoteContactTolerance = 20f;
 
     // private SKBitmap? _playerIdleBitmap;
     // private SKBitmap?[] _playerRunBitmaps = new SKBitmap?[8];
@@ -53,6 +58,9 @@ public partial class GamePlay : ContentPage
     private int[] _runFramePattern = { 0, 1, 2, 3, 5, 6, 7, 1 };
     private int _currentRunFrameIndex = 0;
     private float _animationTimer = 0f;
+    private bool _isInitialized = false;
+    private Dictionary<string, DateTime> _jailBreakStartedAtByRescuer = new();
+    private Dictionary<string, float> _jailBreakProgressByRescuer = new();
 
     public GamePlay()
     {
@@ -87,7 +95,7 @@ public partial class GamePlay : ContentPage
         {
             UpdatePhysics();
             _canvas.InvalidateSurface();
-            UpdatePlayerCoordsUI();
+            UpdateUI();
         };
         _timer.Start();
     }
@@ -101,8 +109,10 @@ public partial class GamePlay : ContentPage
 
     private string GetServerIpAddress()
     {
-        // 실제 기기(안드로이드, 아이폰)와 시뮬레이터 모두 맥북의 핫스팟 IP(현재 192.168.0.238)를 바라보도록 통일합니다.
-        return "192.168.0.238";
+        // 시뮬레이터 2개 테스트를 위해 localhost(127.0.0.1)를 사용합니다.
+        // 실제 기기(안드로이드, 아이폰) 연결 시에는 현재 로컬 IP(예: 192.0.0.2 등)로 변경해야 합니다.
+        // 집 와이파이 : 192.168.0.238
+        return "127.0.0.1";
     }
 
     private async Task InitializeNetworkAsync()
@@ -119,13 +129,12 @@ public partial class GamePlay : ContentPage
             // _players[_player.Id] = _player;
             _player = _players[_player.Id]; // Test
             await LoadAssetsAsync(); // Test
-            UpdatePlayerCount();
+            _isInitialized = true;
         };
 
         _networkClient.OnPlayerJoined += (p) =>
         {
             if (p.Id != _player.Id) _players[p.Id] = p;
-            UpdatePlayerCount();
         };
 
         _networkClient.OnPlayerMoved += (p) =>
@@ -142,7 +151,6 @@ public partial class GamePlay : ContentPage
         _networkClient.OnPlayerLeft += (playerId) =>
         {
             _players.Remove(playerId);
-            UpdatePlayerCount();
         };
 
         _networkClient.OnPlayerArrested += (policeId, robberId) =>
@@ -150,6 +158,54 @@ public partial class GamePlay : ContentPage
             MainThread.BeginInvokeOnMainThread(() =>
             {
                 TriggerArrestVisuals(policeId, robberId);
+            });
+        };
+
+        _networkClient.OnPlayerJailBroken += (syncData) =>
+        {
+            MainThread.BeginInvokeOnMainThread(() =>
+            {
+                ApplyJailBreak(syncData);
+            });
+        };
+
+        _networkClient.OnGameStateReceived += (syncData) =>
+        {
+            MainThread.BeginInvokeOnMainThread(async () =>
+            {
+                _gamePhase = syncData.Phase;
+                _remainingTime = syncData.GameTime;
+
+                if (_gamePhase == 1)
+                {
+                    CenterMessageLabel.Text = syncData.CountdownTime > 0 ? syncData.CountdownTime.ToString() : "Start";
+                }
+                else if (_gamePhase == 2)
+                {
+                    if (CenterMessageLabel.Text == "Start" || int.TryParse(CenterMessageLabel.Text, out _))
+                    {
+                        CenterMessageLabel.Text = "";
+                    }
+                    TimerLabel.Text = $"Timer : {_remainingTime}";
+                }
+                else if (_gamePhase == 3)
+                {
+                    if (!_isGameOverTransitioning)
+                    {
+                        _isGameOverTransitioning = true;
+
+                        TimerLabel.IsVisible = false;
+                        TimerLabel.Text = "";
+
+                        CenterMessageLabel.Text = "GameOver";
+                        CenterMessageLabel.TextColor = Colors.Red;
+                        CenterMessageLabel.VerticalOptions = LayoutOptions.Start;
+                        CenterMessageLabel.Margin = new Thickness(0, 20, 0, 0);
+
+                        await Task.Delay(3000);
+                        await Shell.Current.GoToAsync("GameOver");
+                    }
+                }
             });
         };
 
@@ -163,22 +219,22 @@ public partial class GamePlay : ContentPage
         }
     }
 
-    private void UpdatePlayerCount()
+    private void UpdateUI()
     {
         MainThread.BeginInvokeOnMainThread(() =>
         {
-            PlayerCountLabel.Text = $"Players: {_players.Count}";
-            UpdatePlayerCoordsUI();
-        });
-    }
+            if (_gameMap?.Jail != null)
+            {
+                var robbers = _players.Values.Where(p => p.Role == PlayerRole.Robber).ToList();
+                int totalRobbers = robbers.Count;
+                int jailedRobbers = robbers.Count(p =>
+                    p.X >= _gameMap.Jail.LeftTop.X &&
+                    p.X <= _gameMap.Jail.RightBottom.X &&
+                    p.Y >= _gameMap.Jail.LeftTop.Y &&
+                    p.Y <= _gameMap.Jail.RightBottom.Y);
 
-    private void UpdatePlayerCoordsUI()
-    {
-        MainThread.BeginInvokeOnMainThread(() =>
-        {
-            var coords = string.Join("\n", _players.Values.Select(p =>
-                $"{(p.Id == _player.Id ? "(Me) " : "")}{p.Id[..Math.Min(4, p.Id.Length)]}: {p.X:F0}, {p.Y:F0}"));
-            PlayerCoordsLabel.Text = coords;
+                JailLabel.Text = $"Jail : {jailedRobbers}/{totalRobbers}";
+            }
         });
     }
 
@@ -221,6 +277,12 @@ public partial class GamePlay : ContentPage
 
     private void Canvas_Touch(object? sender, SKTouchEventArgs e)
     {
+        if (_gamePhase < 2)
+        {
+            e.Handled = true;
+            return;
+        }
+
         switch (e.ActionType)
         {
             case SKTouchAction.Pressed:
@@ -273,10 +335,18 @@ public partial class GamePlay : ContentPage
 
     private void UpdatePhysics()
     {
+        if (!_isInitialized || _gamePhase < 2)
+        {
+            _player.IsMoving = false;
+            return;
+        }
+
         _player.IsMoving = false;
 
         // 체포 상태이면 이동 불가
         bool isArrestedOrArresting = _arrestVisualTimers.TryGetValue(_player.Id, out var freezeEnd) && DateTime.Now < freezeEnd;
+
+        bool isTouchingJailForBreak = false;
 
         if (_activeTouchId != -1 && !isArrestedOrArresting)
         {
@@ -308,17 +378,23 @@ public partial class GamePlay : ContentPage
                 if (newY + _player.Radius > _gameMap.Height) newY = _gameMap.Height - _player.Radius;
 
                 // 벽을 따라 미끄러지도록 X축, Y축 각각 충돌 검사
+                bool isCollidingWithJailX = IsCollidingWithJail(newX, _player.Y, _player.Radius);
                 if (!IsColliding(newX, _player.Y, _player.Radius))
                 {
                     _player.X = newX;
                 }
 
+                bool isCollidingWithJailY = IsCollidingWithJail(_player.X, newY, _player.Radius);
                 if (!IsColliding(_player.X, newY, _player.Radius))
                 {
                     _player.Y = newY;
                 }
+
+                isTouchingJailForBreak = isCollidingWithJailX || isCollidingWithJailY;
             }
         }
+
+        UpdateJailBreakProgress(isTouchingJailForBreak);
 
         // Run global animation timer for all moving players
         _animationTimer += 0.016f; // approx 16ms per frame
@@ -372,16 +448,13 @@ public partial class GamePlay : ContentPage
 
     private bool IsColliding(float x, float y, float radius)
     {
-        // 건물(경찰서, 감옥) 충돌 처리
+        // 건물(감옥) 충돌 처리 (경찰서는 통과 가능)
         foreach (var building in _gameMap.Buildings)
         {
-            float closestX = Math.Max(building.LeftTop.X, Math.Min(x, building.RightBottom.X));
-            float closestY = Math.Max(building.LeftTop.Y, Math.Min(y, building.RightBottom.Y));
+            if (building.Type != "Jail")
+                continue;
 
-            float distanceX = x - closestX;
-            float distanceY = y - closestY;
-
-            if ((distanceX * distanceX) + (distanceY * distanceY) < (radius * radius))
+            if (IsCircleCollidingWithBuilding(x, y, radius, building))
             {
                 return true;
             }
@@ -418,6 +491,104 @@ public partial class GamePlay : ContentPage
             }
         }
         return false;
+    }
+
+    private bool IsCollidingWithJail(float x, float y, float radius)
+    {
+        return IsCircleCollidingWithBuilding(x, y, radius, _gameMap.Jail);
+    }
+
+    private bool IsNearJailForBreak(Player player)
+    {
+        var jail = _gameMap.Jail;
+        float closestX = Math.Max(jail.LeftTop.X, Math.Min(player.X, jail.RightBottom.X));
+        float closestY = Math.Max(jail.LeftTop.Y, Math.Min(player.Y, jail.RightBottom.Y));
+        float distanceX = player.X - closestX;
+        float distanceY = player.Y - closestY;
+        float allowedDistance = player.Radius + JailBreakRemoteContactTolerance;
+
+        return (distanceX * distanceX) + (distanceY * distanceY) <= allowedDistance * allowedDistance;
+    }
+
+    private static bool IsCircleCollidingWithBuilding(float x, float y, float radius, MapBuilding building)
+    {
+        float closestX = Math.Max(building.LeftTop.X, Math.Min(x, building.RightBottom.X));
+        float closestY = Math.Max(building.LeftTop.Y, Math.Min(y, building.RightBottom.Y));
+
+        float distanceX = x - closestX;
+        float distanceY = y - closestY;
+
+        return (distanceX * distanceX) + (distanceY * distanceY) < (radius * radius);
+    }
+
+    private void UpdateJailBreakProgress(bool isLocalTouchingJailForBreak)
+    {
+        if (_player.Role != PlayerRole.Robber)
+        {
+            ResetJailBreakProgress();
+            return;
+        }
+
+        int jailedRobberCount = _players.Values.Count(p => p.Role == PlayerRole.Robber && IsInJail(p.X, p.Y));
+        if (jailedRobberCount == 0)
+        {
+            ResetJailBreakProgress();
+            return;
+        }
+
+        var activeRescuers = new List<Player>();
+        if (!IsInJail(_player.X, _player.Y) && isLocalTouchingJailForBreak)
+        {
+            activeRescuers.Add(_player);
+        }
+
+        activeRescuers.AddRange(_players.Values
+            .Where(p => p.Id != _player.Id &&
+                        p.Role == PlayerRole.Robber &&
+                        p.IsMoving &&
+                        !IsInJail(p.X, p.Y) &&
+                        IsNearJailForBreak(p))
+            .OrderBy(p => p.Id));
+        activeRescuers = activeRescuers.Take(jailedRobberCount).ToList();
+
+        if (activeRescuers.Count == 0)
+        {
+            ResetJailBreakProgress();
+            return;
+        }
+
+        var now = DateTime.Now;
+        var activeRescuerIds = activeRescuers.Select(p => p.Id).ToHashSet();
+        foreach (var rescuerId in _jailBreakStartedAtByRescuer.Keys.Where(id => !activeRescuerIds.Contains(id)).ToList())
+        {
+            _jailBreakStartedAtByRescuer.Remove(rescuerId);
+            _jailBreakProgressByRescuer.Remove(rescuerId);
+        }
+
+        foreach (var rescuer in activeRescuers)
+        {
+            if (!_jailBreakStartedAtByRescuer.TryGetValue(rescuer.Id, out var startedAt))
+            {
+                startedAt = now;
+                _jailBreakStartedAtByRescuer[rescuer.Id] = startedAt;
+            }
+
+            double elapsedSeconds = (now - startedAt).TotalSeconds;
+            _jailBreakProgressByRescuer[rescuer.Id] = Math.Clamp((float)(elapsedSeconds / JailBreakDurationSeconds), 0f, 1f);
+
+            if (rescuer.Id == _player.Id && elapsedSeconds >= JailBreakDurationSeconds)
+            {
+                _networkClient?.SendJailBreakRequest(_player.Id);
+                ResetJailBreakProgress();
+                return;
+            }
+        }
+    }
+
+    private void ResetJailBreakProgress()
+    {
+        _jailBreakStartedAtByRescuer.Clear();
+        _jailBreakProgressByRescuer.Clear();
     }
 
     private void Canvas_PaintSurface(object? sender, SKPaintSurfaceEventArgs e)
@@ -466,6 +637,8 @@ public partial class GamePlay : ContentPage
         }
 
         DrawVisionOverlay(canvas);
+
+        DrawJailBreakProgressBar(canvas);
 
         DrawPlayers(canvas);
 
@@ -626,6 +799,65 @@ public partial class GamePlay : ContentPage
         }
     }
 
+    private void DrawJailBreakProgressBar(SKCanvas canvas)
+    {
+        if (_player.Role != PlayerRole.Robber || _jailBreakProgressByRescuer.Count == 0)
+        {
+            return;
+        }
+
+        var jail = _gameMap.Jail;
+        float barWidth = Math.Min(jail.Width * 0.8f, 520f);
+        float barHeight = 28f;
+        float barGap = 10f;
+        float barX = jail.Center.X - barWidth / 2f;
+        float cornerRadius = 8f;
+        var progressValues = _jailBreakProgressByRescuer
+            .Where(kv => kv.Value > 0f)
+            .OrderBy(kv => kv.Key)
+            .Select(kv => kv.Value)
+            .ToList();
+
+        if (progressValues.Count == 0)
+        {
+            return;
+        }
+
+        float totalHeight = (progressValues.Count * barHeight) + ((progressValues.Count - 1) * barGap);
+        float firstBarY = jail.LeftTop.Y - 24f - totalHeight;
+
+        using var backgroundPaint = new SKPaint
+        {
+            Color = new SKColor(0, 0, 0, 150),
+            IsAntialias = true,
+            Style = SKPaintStyle.Fill
+        };
+        using var fillPaint = new SKPaint
+        {
+            Color = SKColors.Gold,
+            IsAntialias = true,
+            Style = SKPaintStyle.Fill
+        };
+        using var borderPaint = new SKPaint
+        {
+            Color = SKColors.White,
+            IsAntialias = true,
+            Style = SKPaintStyle.Stroke,
+            StrokeWidth = 4f
+        };
+
+        for (int i = 0; i < progressValues.Count; i++)
+        {
+            float barY = firstBarY + (i * (barHeight + barGap));
+            var backgroundRect = new SKRect(barX, barY, barX + barWidth, barY + barHeight);
+            var fillRect = new SKRect(barX, barY, barX + (barWidth * progressValues[i]), barY + barHeight);
+
+            canvas.DrawRoundRect(backgroundRect, cornerRadius, cornerRadius, backgroundPaint);
+            canvas.DrawRoundRect(fillRect, cornerRadius, cornerRadius, fillPaint);
+            canvas.DrawRoundRect(backgroundRect, cornerRadius, cornerRadius, borderPaint);
+        }
+    }
+
     private void DrawVisionOverlay(SKCanvas canvas)
     {
         using var fogPaint = new SKPaint
@@ -755,6 +987,35 @@ public partial class GamePlay : ContentPage
         return difference > 180f ? difference - 360f : difference;
     }
 
+    private void ApplyJailBreak(JailBreakSync syncData)
+    {
+        if (!_players.TryGetValue(syncData.RobberId, out var robber))
+        {
+            return;
+        }
+
+        robber.X = syncData.X;
+        robber.Y = syncData.Y;
+        robber.Angle = 0f;
+        robber.IsMoving = false;
+
+        _arrestVisualTimers.Remove(syncData.RobberId);
+        _detectedRobbers.Remove(syncData.RobberId);
+
+        if (_player.Id == syncData.RobberId)
+        {
+            _activeTouchId = -1;
+            _player.X = syncData.X;
+            _player.Y = syncData.Y;
+            _player.Angle = 0f;
+            _player.IsMoving = false;
+            _networkClient?.SendMoveUdp(_player);
+        }
+
+        ResetJailBreakProgress();
+        _canvas.InvalidateSurface();
+    }
+
     private void TriggerArrestVisuals(string policeId, string robberId)
     {
         var endTime = DateTime.Now.AddSeconds(2);
@@ -775,8 +1036,19 @@ public partial class GamePlay : ContentPage
                 MainThread.BeginInvokeOnMainThread(() =>
                 {
                     var jailCenter = _gameMap.Jail.Center;
-                    _player.X = jailCenter.X;
-                    _player.Y = jailCenter.Y;
+
+                    var allRobbers = _players.Values.Where(p => p.Role == PlayerRole.Robber).OrderBy(p => p.Id).ToList();
+                    int myIndex = allRobbers.FindIndex(p => p.Id == _player.Id);
+                    if (myIndex == -1) myIndex = 0;
+
+                    float gap = 150f;
+                    float offsetX = (myIndex % 2 == 0) ? -gap / 2f : gap / 2f;
+                    float offsetY = (myIndex < 2) ? -gap / 2f : gap / 2f;
+
+                    _player.X = jailCenter.X + offsetX;
+                    _player.Y = jailCenter.Y + offsetY;
+
+                    _player.Angle = 0f; // 초기 각도(아래 방향)로 설정
                     _player.IsMoving = false;
                     _networkClient?.SendMoveUdp(_player);
                 });
