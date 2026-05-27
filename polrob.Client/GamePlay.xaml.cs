@@ -12,6 +12,8 @@ public partial class GamePlay : ContentPage
 {
     private Player _player;
     private Dictionary<string, Player> _players = new();
+    // 감지된(현재 시야에 들어와 처리된) 도둑 목록
+    private HashSet<string> _detectedRobbers = new();
 
     // Shared Map
     private GameMap _gameMap;
@@ -35,10 +37,17 @@ public partial class GamePlay : ContentPage
     // private SKBitmap?[] _playerRunBitmaps = new SKBitmap?[8];
     private SKBitmap? _policeIdleBitmap;
     private SKBitmap?[] _policeRunBitmaps = new SKBitmap?[8];
+    private SKBitmap? _policeArrestBitmap;
     private SKBitmap? _robberIdleBitmap;
     private SKBitmap?[] _robberRunBitmaps = new SKBitmap?[8];
+    private SKBitmap? _robberSurrendBitmap;
     private SKBitmap? _policeStationBitmap;
     private SKBitmap? _jailBitmap;
+
+    // 체포 상태 만료 시간 기록 (2초 유지용)
+    private Dictionary<string, DateTime> _arrestVisualTimers = new();
+    // 화면 중앙 체포 텍스트 표시 목표 시간
+    private DateTime _showArrestedTextUntil = DateTime.MinValue;
 
     // 부자연스러운 애니메이션과 진동을 막기 위해 좌우대칭을 맞춘 프레임 시퀀스 구성 (오른쪽이 두 번 흔들리는 문제 해결)
     private int[] _runFramePattern = { 0, 1, 2, 3, 5, 6, 7, 1 };
@@ -136,6 +145,14 @@ public partial class GamePlay : ContentPage
             UpdatePlayerCount();
         };
 
+        _networkClient.OnPlayerArrested += (policeId, robberId) =>
+        {
+            MainThread.BeginInvokeOnMainThread(() =>
+            {
+                TriggerArrestVisuals(policeId, robberId);
+            });
+        };
+
         try
         {
             await _networkClient.ConnectAsync(GetServerIpAddress(), _player);
@@ -174,6 +191,12 @@ public partial class GamePlay : ContentPage
 
             using var robberStream = await FileSystem.OpenAppPackageFileAsync($"char_robber.png");
             _robberIdleBitmap = SKBitmap.Decode(robberStream);
+
+            using var policeArrestStream = await FileSystem.OpenAppPackageFileAsync($"char_police_arrest.png");
+            _policeArrestBitmap = SKBitmap.Decode(policeArrestStream);
+
+            using var robberSurrendStream = await FileSystem.OpenAppPackageFileAsync($"char_robber-surrend.png");
+            _robberSurrendBitmap = SKBitmap.Decode(robberSurrendStream);
 
             using var policeStationStream = await FileSystem.OpenAppPackageFileAsync($"police_station.png");
             _policeStationBitmap = SKBitmap.Decode(policeStationStream);
@@ -251,7 +274,11 @@ public partial class GamePlay : ContentPage
     private void UpdatePhysics()
     {
         _player.IsMoving = false;
-        if (_activeTouchId != -1)
+
+        // 체포 상태이면 이동 불가
+        bool isArrestedOrArresting = _arrestVisualTimers.TryGetValue(_player.Id, out var freezeEnd) && DateTime.Now < freezeEnd;
+
+        if (_activeTouchId != -1 && !isArrestedOrArresting)
         {
             var dx = _joystickThumb.X - _joystickCenter.X;
             var dy = _joystickThumb.Y - _joystickCenter.Y;
@@ -314,10 +341,52 @@ public partial class GamePlay : ContentPage
                 }
             }
         }
+
+        // 감지 처리: 로컬 플레이어가 경찰이면 다른 플레이어들(도둑)을 시야 검사하여
+        // 새로 감지된 경우 핸들러를 호출합니다.
+        if (_player.Role == PlayerRole.Police)
+        {
+            foreach (var kv in _players)
+            {
+                var other = kv.Value;
+                if (other.Id == _player.Id) continue;
+                if (other.Role != PlayerRole.Robber) continue;
+
+                bool inVision = IsPointInVision(other.X, other.Y);
+                bool inJail = IsInJail(other.X, other.Y);
+
+                // 감옥 밖에서 시야에 들어왔을 때 새로 발각 처리
+                if (inVision && !inJail && !_detectedRobbers.Contains(other.Id))
+                {
+                    _detectedRobbers.Add(other.Id);
+                    HandleRobberDetected(other);
+                }
+                else if ((!inVision || inJail) && _detectedRobbers.Contains(other.Id))
+                {
+                    // 시야에서 벗어나거나 기 체포(감옥 안) 상태가 되면 감지 상태 해제
+                    _detectedRobbers.Remove(other.Id);
+                }
+            }
+        }
     }
 
     private bool IsColliding(float x, float y, float radius)
     {
+        // 건물(경찰서, 감옥) 충돌 처리
+        foreach (var building in _gameMap.Buildings)
+        {
+            float closestX = Math.Max(building.LeftTop.X, Math.Min(x, building.RightBottom.X));
+            float closestY = Math.Max(building.LeftTop.Y, Math.Min(y, building.RightBottom.Y));
+
+            float distanceX = x - closestX;
+            float distanceY = y - closestY;
+
+            if ((distanceX * distanceX) + (distanceY * distanceY) < (radius * radius))
+            {
+                return true;
+            }
+        }
+
         foreach (var obs in _gameMap.Obstacles)
         {
             if (obs.Type == "Rect")
@@ -403,6 +472,22 @@ public partial class GamePlay : ContentPage
         canvas.Restore();
 
         // 3. UI 오버레이 렌더링 코드는 카메라 복구 후에 그림
+
+        if (DateTime.Now < _showArrestedTextUntil)
+        {
+            using var font = new SKFont(SKTypeface.FromFamilyName("Arial", SKFontStyleWeight.Bold, SKFontStyleWidth.Normal, SKFontStyleSlant.Upright), 120);
+            using var textPaint = new SKPaint
+            {
+                Color = SKColors.Red,
+                IsAntialias = true,
+            };
+            string text = "Arrested";
+            var textBounds = new SKRect();
+            font.MeasureText(text, out textBounds);
+            // 중앙에서 위쪽으로 배치 (캐릭터를 가리지 않도록 Y축 상향 이동)
+            canvas.DrawText(text, (width - textBounds.Width) / 2f, (height + textBounds.Height) / 2f - 250f, SKTextAlign.Left, font, textPaint);
+        }
+
         // 조이스틱
         if (_activeTouchId != -1)
         {
@@ -458,7 +543,13 @@ public partial class GamePlay : ContentPage
 
             // 플레이어 렌더링
             SKBitmap? currentBitmap = null;
-            if (player.Role == PlayerRole.Police)
+            bool isArrested = _arrestVisualTimers.TryGetValue(player.Id, out var arrestEnd) && DateTime.Now < arrestEnd;
+
+            if (isArrested)
+            {
+                currentBitmap = player.Role == PlayerRole.Police ? _policeArrestBitmap : _robberSurrendBitmap;
+            }
+            else if (player.Role == PlayerRole.Police)
             {
                 currentBitmap = player.IsMoving ? _policeRunBitmaps[_runFramePattern[_currentRunFrameIndex]] : _policeIdleBitmap;
             }
@@ -475,7 +566,7 @@ public partial class GamePlay : ContentPage
 
                 float drawRadius = player.Radius * 2f; // 100f (기본 렌더링 범위: 200x200)
 
-                if (!player.IsMoving || currentBitmap == _policeIdleBitmap || currentBitmap == _robberIdleBitmap)
+                if (isArrested || !player.IsMoving || currentBitmap == _policeIdleBitmap || currentBitmap == _robberIdleBitmap)
                 {
                     // Idle 이미지 (1024x1024)는 여백이 많으므로 200x200 박스에 렌더링합니다.
                     var destRect = new SKRect(-drawRadius, -drawRadius, drawRadius, drawRadius);
@@ -558,6 +649,13 @@ public partial class GamePlay : ContentPage
         canvas.Restore();
     }
 
+    private bool IsInJail(float x, float y)
+    {
+        var jail = _gameMap.Jail;
+        return x >= jail.LeftTop.X && x <= jail.RightBottom.X &&
+               y >= jail.LeftTop.Y && y <= jail.RightBottom.Y;
+    }
+
     private bool ShouldDrawPlayer(Player player)
     {
         if (player.Id == _player.Id)
@@ -566,6 +664,17 @@ public partial class GamePlay : ContentPage
         }
 
         if (player.Role == _player.Role)
+        {
+            return true;
+        }
+
+        if (player.Role == PlayerRole.Robber && IsInJail(player.X, player.Y))
+        {
+            return true;
+        }
+
+        // 체포 연출 중인 플레이어(경찰이든 도둑이든)는 양쪽 시야에 모두 무조건 표시됨
+        if (_arrestVisualTimers.TryGetValue(player.Id, out var arrestEnd) && DateTime.Now < arrestEnd)
         {
             return true;
         }
@@ -644,5 +753,53 @@ public partial class GamePlay : ContentPage
     {
         float difference = NormalizeDegrees(toDegrees - fromDegrees);
         return difference > 180f ? difference - 360f : difference;
+    }
+
+    private void TriggerArrestVisuals(string policeId, string robberId)
+    {
+        var endTime = DateTime.Now.AddSeconds(2);
+        _arrestVisualTimers[policeId] = endTime;
+        _arrestVisualTimers[robberId] = endTime;
+
+        if (_player.Id == policeId || _player.Id == robberId)
+        {
+            _showArrestedTextUntil = endTime;
+        }
+
+        // 자신이 도둑일 경우 2초 뒤 감옥으로 자동 이동 처리
+        if (_player.Id == robberId)
+        {
+            Task.Run(async () =>
+            {
+                await Task.Delay(2000);
+                MainThread.BeginInvokeOnMainThread(() =>
+                {
+                    var jailCenter = _gameMap.Jail.Center;
+                    _player.X = jailCenter.X;
+                    _player.Y = jailCenter.Y;
+                    _player.IsMoving = false;
+                    _networkClient?.SendMoveUdp(_player);
+                });
+            });
+        }
+    }
+
+    private async void HandleRobberDetected(Player robber)
+    {
+        // 중복 감지 방지 (이미 체포 중이면 스킵)
+        if (_arrestVisualTimers.TryGetValue(robber.Id, out var time) && DateTime.Now < time)
+            return;
+
+        // 다른 클라이언트들에게 알림
+        _networkClient?.SendArrest(_player.Id, robber.Id);
+
+        // 로컬에서 이미지 변경 및 텍스트 표시
+        TriggerArrestVisuals(_player.Id, robber.Id);
+
+        // 화면 갱신
+        MainThread.BeginInvokeOnMainThread(() =>
+        {
+            _canvas.InvalidateSurface();
+        });
     }
 }

@@ -7,16 +7,16 @@ namespace polrob.Client.Network;
 
 public class GameNetworkClient
 {
-    private TcpClient _tcpClient;
-    private UdpClient _udpClient;
-    private BinaryReader _reader;
-    private BinaryWriter _writer;
-    private IPEndPoint _serverUdpEndpoint;
+    private TcpClient? _tcpClient;
+    private UdpClient? _udpClient;
+    private BinaryReader? _reader;
+    private BinaryWriter? _writer;
 
     public event Action<List<Player>>? OnInitialStateReceived;
     public event Action<Player>? OnPlayerJoined;
     public event Action<string>? OnPlayerLeft;
     public event Action<Player>? OnPlayerMoved;
+    public event Action<string, string>? OnPlayerArrested;
 
     public async Task ConnectAsync(string ipAddress, Player localPlayer)
     {
@@ -39,12 +39,18 @@ public class GameNetworkClient
 
     private void SendTcp(byte type, string payload)
     {
+        if (_writer == null) return;
         lock (_writer)
         {
             _writer.Write(payload.Length + 1);
             _writer.Write(type);
             _writer.Write(payload);
         }
+    }
+
+    public void SendArrest(string policeId, string robberId)
+    {
+        SendTcp(5, $"{policeId},{robberId}");
     }
 
     public void SendMoveUdp(Player player)
@@ -57,6 +63,7 @@ public class GameNetworkClient
 
     private void ReceiveTcpLoop()
     {
+        if (_reader == null) return;
         try
         {
             while (true)
@@ -81,6 +88,14 @@ public class GameNetworkClient
                     {
                         OnPlayerLeft?.Invoke(json);
                     }
+                    else if (type == 5) // Arrested
+                    {
+                        var ids = json.Split(',');
+                        if (ids.Length == 2)
+                        {
+                            OnPlayerArrested?.Invoke(ids[0], ids[1]);
+                        }
+                    }
                 });
             }
         }
@@ -92,6 +107,7 @@ public class GameNetworkClient
 
     private async Task ReceiveUdpLoop()
     {
+        if (_udpClient == null) return;
         while (true)
         {
             try

@@ -57,7 +57,7 @@ public class GameNetworkServer : BackgroundService
             {
                 // Simple binary protocol frame:
                 // [Int32 Payload Length]
-                // [Byte Packet Type: 1=Join, 2=Joined, 3=Left, 4=InitialState]
+                // [Byte Packet Type: 1=Join, 2=Joined, 3=Left, 4=InitialState, 5=Arrested]
                 // [String JSON Payload]
                 int length = reader.ReadInt32();
                 byte type = reader.ReadByte();
@@ -70,6 +70,15 @@ public class GameNetworkServer : BackgroundService
                     {
                         playerId = player.Id;
                         player.Role = _sessions.Count() == 0 ? PlayerRole.Police : PlayerRole.Robber; // Test
+
+                        // 경찰은 경찰서 앞에 스폰
+                        if (player.Role == PlayerRole.Police)
+                        {
+                            var map = new GameMap();
+                            player.X = map.PoliceStation.Center.X;
+                            player.Y = map.PoliceStation.RightBottom.Y + 200f;
+                        }
+
                         _sessions[playerId] = new PlayerSession { Client = client, Writer = writer, PlayerState = player };
 
                         Console.WriteLine($"Player Connected [TCP]: {playerId}");
@@ -83,6 +92,11 @@ public class GameNetworkServer : BackgroundService
                         BroadcastTcp(2, JsonSerializer.Serialize(player), playerId);
                         Console.WriteLine($"{allPlayers.Count}명에게 브로드캐스트!!");
                     }
+                }
+                else if (type == 5) // Arrest Request
+                {
+                    // Relay the arrest event to everyone
+                    BroadcastTcp(5, json, null);
                 }
             }
         }

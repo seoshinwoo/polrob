@@ -26,8 +26,8 @@ public class GameMap
         {
             Type = "Jail",
             ImageFileName = "jail.png",
-            LeftTop = new PointF(PoliceStation.RightBottom.X + Width / 12f, 0f),
-            RightBottom = new PointF(PoliceStation.RightBottom.X + Width / 12f + BuildingSize, BuildingSize)
+            LeftTop = new PointF(PoliceStation.RightBottom.X + Width / 12f, 150f),
+            RightBottom = new PointF(PoliceStation.RightBottom.X + Width / 12f + 700f, 850f)
         };
 
         Buildings.Add(PoliceStation);
