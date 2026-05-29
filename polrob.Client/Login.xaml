@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="polrob.Client.Login"
+             Title="Login">
+
+    <VerticalStackLayout Padding="24"
+            Spacing="20"
+            HorizontalOptions="Center"
+            VerticalOptions="Center">
+        <Label Text="PolRob 로그인"
+                FontSize="28"
+                HorizontalOptions="Center"/>
+
+        <Button x:Name="SignInButton"
+                Text="Sign in with Microsoft"
+                Clicked="OnSignInClicked"
+                HorizontalOptions="Fill"/>
+
+        <Label x:Name="StatusLabel"
+               Text=""
+               FontSize="14"
+               HorizontalOptions="Center"
+               TextColor="Gray"/>
+
+    </VerticalStackLayout>
+
+</ContentPage>

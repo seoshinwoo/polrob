@@ -5,6 +5,7 @@ var builder = WebApplication.CreateBuilder(args);
 // Add services to the container.
 builder.Services.AddOpenApi();
 builder.Services.AddHostedService<GameNetworkServer>(); // Add Custom raw TCP/UDP server
+builder.Services.AddControllers();
 
 var app = builder.Build();
 
@@ -15,5 +16,7 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+
+app.MapControllers();
 
 app.Run();
