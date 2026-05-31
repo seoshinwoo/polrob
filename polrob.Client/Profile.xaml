@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="polrob.Client.Profile"
+             BackgroundColor="#555555"
+             Shell.NavBarIsVisible="False">
+
+    <Grid RowDefinitions="Auto,*"
+          Padding="0">
+        <Frame Grid.Row="0"
+               HorizontalOptions="Start"
+               VerticalOptions="Start"
+               Margin="20"
+               Padding="12,10"
+               BackgroundColor="#76d859"
+               CornerRadius="15"
+               BorderColor="Transparent"
+               HasShadow="False">
+            <Frame.GestureRecognizers>
+                <TapGestureRecognizer Tapped="OnBackClicked"/>
+            </Frame.GestureRecognizers>
+            <Path Data="M20,11H7.83L13.42,5.41L12,4L4,12L12,20L13.42,18.59L7.83,13H20V11Z"
+                  Fill="Black"
+                  Aspect="Uniform"
+                  WidthRequest="35"
+                  HeightRequest="35"/>
+        </Frame>
+
+        <VerticalStackLayout Grid.Row="1"
+                             Spacing="18"
+                             WidthRequest="320"
+                             MaximumWidthRequest="380"
+                             HorizontalOptions="Center"
+                             VerticalOptions="Center">
+            <Label Text="Profile"
+                   FontSize="46"
+                   FontAttributes="Bold"
+                   TextColor="White"
+                   HorizontalOptions="Center"/>
+
+            <VerticalStackLayout Spacing="8"
+                                 Margin="0,12,0,14">
+                <Label Text="닉네임"
+                       FontSize="14"
+                       FontAttributes="Bold"
+                       TextColor="#d7d7d7"/>
+                <Label x:Name="DisplayNameLabel"
+                       Text=""
+                       FontSize="28"
+                       FontAttributes="Bold"
+                       TextColor="White"/>
+
+                <Label Text="아이디"
+                       FontSize="14"
+                       FontAttributes="Bold"
+                       TextColor="#d7d7d7"
+                       Margin="0,12,0,0"/>
+                <Label x:Name="LoginIdLabel"
+                       Text=""
+                       FontSize="20"
+                       TextColor="White"/>
+            </VerticalStackLayout>
+
+            <Button Text="Logout"
+                    FontAttributes="Bold"
+                    FontSize="20"
+                    TextColor="White"
+                    BackgroundColor="#d64a4a"
+                    HeightRequest="56"
+                    CornerRadius="18"
+                    Clicked="OnLogoutClicked"/>
+        </VerticalStackLayout>
+    </Grid>
+
+</ContentPage>

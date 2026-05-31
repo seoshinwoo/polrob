@@ -32,6 +32,21 @@
                   HeightRequest="35"/>
         </Frame>
 
+        <Button x:Name="ProfileButton"
+                Grid.Row="0"
+                Text=""
+                HorizontalOptions="End"
+                VerticalOptions="Start"
+                Margin="20"
+                CornerRadius="20"
+                FontAttributes="Bold"
+                FontSize="18"
+                TextColor="Black"
+                Padding="24,8"
+                BackgroundColor="#76d859"
+                IsVisible="False"
+                Clicked="OnProfileClicked"/>
+
         <!-- Center Text -->
         <Label Grid.Row="1"
                Text="Create Room"

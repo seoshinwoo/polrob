@@ -7,10 +7,22 @@ public partial class GameCreate : ContentPage
         InitializeComponent();
     }
 
+    protected override async void OnAppearing()
+    {
+        base.OnAppearing();
+        await AuthSession.LoadAsync();
+        UpdateAuthHeader();
+    }
+
     private async void OnHomeClicked(object sender, EventArgs e)
     {
         // 명시적으로 animate 파라미터를 true로 설정하여 부드러운 전환을 유도하거나, Navigation.PopAsync 사용
         await Shell.Current.GoToAsync("..", true);
+    }
+
+    private async void OnProfileClicked(object sender, EventArgs e)
+    {
+        await Shell.Current.GoToAsync("Profile");
     }
 
     private void OnRandomClicked(object sender, EventArgs e)
@@ -21,5 +33,11 @@ public partial class GameCreate : ContentPage
     private async void OnCustomClicked(object sender, EventArgs e)
     {
         await Shell.Current.GoToAsync("GameLobby");
+    }
+
+    private void UpdateAuthHeader()
+    {
+        ProfileButton.IsVisible = AuthSession.IsLoggedIn;
+        ProfileButton.Text = AuthSession.DisplayName ?? string.Empty;
     }
 }

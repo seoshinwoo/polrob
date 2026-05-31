@@ -1,96 +1,161 @@
-using System;
-using Microsoft.Identity.Client;
 using System.Net.Http.Json;
-using System.Text.Json.Serialization;
-using Microsoft.Maui.Controls;
 using Microsoft.Maui.Storage;
 
 namespace polrob.Client;
 
 public partial class Login : ContentPage
 {
-    // TODO: replace with your actual client id from App Registration
-    private const string ClientId = "msalb3505f2d-66d8-48c2-a59f-953bcc54ae2b://auth";
-    // TODO: replace with your server auth endpoint
-    private const string ServerAuthUrl = "https://localhost:5001/auth/login";
+    private readonly HttpClient _httpClient = new()
+    {
+        BaseAddress = new Uri(AuthSession.ApiBaseUrl)
+    };
+
+    private bool _isSignUpMode;
 
     public Login()
     {
         InitializeComponent();
+        SetMode(isSignUpMode: false);
     }
 
-    private async void OnSignInClicked(object sender, EventArgs e)
+    private async void OnHomeClicked(object? sender, EventArgs e)
     {
-        SignInButton.IsEnabled = false;
-        StatusLabel.Text = "Signing in...";
+        await Shell.Current.GoToAsync("//MainPage");
+    }
 
+    private void OnSignInClicked(object? sender, EventArgs e)
+    {
+        SetMode(isSignUpMode: false);
+    }
+
+    private void OnSignUpClicked(object? sender, EventArgs e)
+    {
+        SetMode(isSignUpMode: true);
+    }
+
+    private async void OnContinueClicked(object? sender, EventArgs e)
+    {
+        StatusLabel.Text = string.Empty;
+
+        if (_isSignUpMode)
+        {
+            await SignUpAsync();
+        }
+        else
+        {
+            await LoginAsync();
+        }
+    }
+
+    private void SetMode(bool isSignUpMode)
+    {
+        _isSignUpMode = isSignUpMode;
+        DisplayNameEntry.IsVisible = isSignUpMode;
+        ConfirmPasswordEntry.IsVisible = isSignUpMode;
+
+        ContinueButton.Text = isSignUpMode ? "Sign Up" : "Login";
+        StatusLabel.Text = string.Empty;
+
+        SignInButton.Opacity = isSignUpMode ? 0.65 : 1;
+        SignUpButton.Opacity = isSignUpMode ? 1 : 0.65;
+    }
+
+    private async Task SignUpAsync()
+    {
+        var displayName = DisplayNameEntry.Text?.Trim() ?? string.Empty;
+        var loginId = LoginIdEntry.Text?.Trim() ?? string.Empty;
+        var password = PasswordEntry.Text ?? string.Empty;
+        var confirmPassword = ConfirmPasswordEntry.Text ?? string.Empty;
+
+        if (string.IsNullOrWhiteSpace(displayName))
+        {
+            ShowStatus("닉네임을 입력해주세요.", isError: true);
+            return;
+        }
+
+        if (password != confirmPassword)
+        {
+            ShowStatus("비밀번호 확인이 일치하지 않습니다.", isError: true);
+            return;
+        }
+
+        await SendAuthRequestAsync("auth/signup", new SignUpRequest(loginId, displayName, password));
+    }
+
+    private async Task LoginAsync()
+    {
+        var loginId = LoginIdEntry.Text?.Trim() ?? string.Empty;
+        var password = PasswordEntry.Text ?? string.Empty;
+
+        await SendAuthRequestAsync("auth/login", new LoginRequest(loginId, password));
+    }
+
+    private async Task SendAuthRequestAsync<TRequest>(string route, TRequest request)
+    {
         try
         {
-            var app = PublicClientApplicationBuilder
-                .Create(ClientId)
-                .WithRedirectUri($"msal{ClientId}://auth")
-                .Build();
+            SetBusy(true);
 
-            string[] scopes = new[] { "openid", "profile" };
-
-            var result = await app.AcquireTokenInteractive(scopes).ExecuteAsync();
-
-            string token = result.AccessToken ?? result.IdToken ?? string.Empty;
-            if (string.IsNullOrEmpty(token))
+            var response = await _httpClient.PostAsJsonAsync(route, request);
+            if (!response.IsSuccessStatusCode)
             {
-                StatusLabel.Text = "No token received.";
+                ShowStatus(await ReadErrorMessageAsync(response), isError: true);
                 return;
             }
 
-            StatusLabel.Text = "Sending token to server...";
-
-            using var http = new HttpClient();
-            var payload = new { token };
-            var res = await http.PostAsJsonAsync(ServerAuthUrl, payload);
-
-            if (!res.IsSuccessStatusCode)
+            var loginResponse = await response.Content.ReadFromJsonAsync<LoginResponse>();
+            if (loginResponse is null)
             {
-                var text = await res.Content.ReadAsStringAsync();
-                StatusLabel.Text = $"Server rejected token: {res.StatusCode} - {text}";
+                ShowStatus("서버 응답을 읽을 수 없습니다.", isError: true);
                 return;
             }
 
-            var loginResp = await res.Content.ReadFromJsonAsync<LoginResponse>();
-            if (loginResp == null || string.IsNullOrEmpty(loginResp.SessionToken))
-            {
-                StatusLabel.Text = "Invalid server response.";
-                return;
-            }
+            await AuthSession.SetLoggedInAsync(
+                loginResponse.SessionToken,
+                loginResponse.PlayerId,
+                loginResponse.LoginId,
+                loginResponse.DisplayName);
 
-            // Store session token (example: Preferences) and navigate
-            Preferences.Set("sessionToken", loginResp.SessionToken);
-            Preferences.Set("playerId", loginResp.PlayerId ?? string.Empty);
-
-            StatusLabel.Text = "Login successful.";
-
-            // Navigate to main page or game lobby
+            ShowStatus($"{loginResponse.DisplayName}님, 환영합니다.", isError: false);
             await Shell.Current.GoToAsync("//MainPage");
         }
-        catch (MsalException mex)
+        catch (HttpRequestException)
         {
-            StatusLabel.Text = $"MSAL error: {mex.Message}";
+            ShowStatus("서버에 연결할 수 없습니다. polrob.Server가 실행 중인지 확인해주세요.", isError: true);
         }
         catch (Exception ex)
         {
-            StatusLabel.Text = $"Error: {ex.Message}";
+            ShowStatus($"로그인 처리 중 오류가 발생했습니다: {ex.Message}", isError: true);
         }
         finally
         {
-            SignInButton.IsEnabled = true;
+            SetBusy(false);
         }
     }
 
-    private class LoginResponse
+    private static async Task<string> ReadErrorMessageAsync(HttpResponseMessage response)
     {
-        [JsonPropertyName("sessionToken")]
-        public string? SessionToken { get; set; }
-
-        [JsonPropertyName("playerId")]
-        public string? PlayerId { get; set; }
+        var message = await response.Content.ReadAsStringAsync();
+        return string.IsNullOrWhiteSpace(message)
+            ? $"요청이 실패했습니다. ({(int)response.StatusCode})"
+            : message.Trim('"');
     }
+
+    private void SetBusy(bool isBusy)
+    {
+        ContinueButton.IsEnabled = !isBusy;
+        SignInButton.IsEnabled = !isBusy;
+        SignUpButton.IsEnabled = !isBusy;
+        ContinueButton.Text = isBusy ? "처리 중..." : (_isSignUpMode ? "Sign Up" : "Login");
+    }
+
+    private void ShowStatus(string message, bool isError)
+    {
+        StatusLabel.Text = message;
+        StatusLabel.TextColor = isError ? Color.FromArgb("#ffb1b1") : Color.FromArgb("#76d859");
+    }
+
+    private sealed record SignUpRequest(string LoginId, string DisplayName, string Password);
+    private sealed record LoginRequest(string LoginId, string Password);
+    private sealed record LoginResponse(string SessionToken, string PlayerId, string LoginId, string DisplayName);
 }

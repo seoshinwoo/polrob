@@ -1,9 +1,5 @@
-using Microsoft.AspNetCore.Mvc;
-using Microsoft.IdentityModel.Protocols.OpenIdConnect;
-using Microsoft.IdentityModel.Protocols;
-using Microsoft.IdentityModel.Tokens;
-using System.IdentityModel.Tokens.Jwt;
 using System.Collections.Concurrent;
+using Microsoft.AspNetCore.Mvc;
 
 namespace polrob.Server.Controllers;
 
@@ -11,87 +7,79 @@ namespace polrob.Server.Controllers;
 [Route("auth")]
 public class AuthController : ControllerBase
 {
-    // Simple in-memory session store for demo. Replace with Redis/DB in production.
     private static readonly ConcurrentDictionary<string, (string PlayerId, DateTime Expires)> Sessions = new();
 
-    private readonly IConfiguration _config;
+    private readonly LoginDbService _loginDbService;
 
-    public AuthController(IConfiguration config)
+    public AuthController(LoginDbService loginDbService)
     {
-        _config = config;
+        _loginDbService = loginDbService;
     }
 
-    public record LoginRequest(string token);
-    public record LoginResponse(string sessionToken, string playerId);
+    public record SignUpRequest(string LoginId, string DisplayName, string Password);
+    public record LoginRequest(string LoginId, string Password);
+    public record LoginResponse(string SessionToken, string PlayerId, string LoginId, string DisplayName);
+    public record LogoutRequest(string SessionToken);
+
+    [HttpPost("signup")]
+    public async Task<IActionResult> SignUp([FromBody] SignUpRequest req)
+    {
+        if (req is null)
+        {
+            return BadRequest("회원가입 정보를 입력해주세요.");
+        }
+
+        var validationError = ValidateCredentials(req.LoginId, req.Password, req.DisplayName);
+        if (validationError is not null)
+        {
+            return BadRequest(validationError);
+        }
+
+        var user = await _loginDbService.CreateUserAsync(req.LoginId, req.DisplayName, req.Password);
+        if (user is null)
+        {
+            return Conflict("이미 사용 중인 아이디입니다.");
+        }
+
+        return Ok(CreateLoginResponse(user));
+    }
 
     [HttpPost("login")]
     public async Task<IActionResult> Login([FromBody] LoginRequest req)
     {
-        if (req == null || string.IsNullOrEmpty(req.token))
-            return BadRequest("missing token");
-
-        // Read tenant and clientId from configuration (set in appsettings or environment)
-        var tenant = _config["AzureAd:TenantId"] ?? _config["AzureAd:Tenant"] ?? "common";
-        var clientId = _config["AzureAd:ClientId"] ?? _config["AzureAd:Client"];
-
-        var metadataAddress = $"https://login.microsoftonline.com/{tenant}/v2.0/.well-known/openid-configuration";
-
-        var configManager = new ConfigurationManager<OpenIdConnectConfiguration>(metadataAddress, new OpenIdConnectConfigurationRetriever());
-        OpenIdConnectConfiguration oidcConfig;
-        try
+        if (req is null || string.IsNullOrWhiteSpace(req.LoginId) || string.IsNullOrWhiteSpace(req.Password))
         {
-            oidcConfig = await configManager.GetConfigurationAsync(CancellationToken.None);
-        }
-        catch (Exception ex)
-        {
-            return StatusCode(500, $"failed to get OIDC configuration: {ex.Message}");
+            return BadRequest("아이디와 비밀번호를 입력해주세요.");
         }
 
-        var tokenHandler = new JwtSecurityTokenHandler();
-        var validationParameters = new TokenValidationParameters
+        var user = await _loginDbService.ValidateUserAsync(req.LoginId, req.Password);
+        if (user is null)
         {
-            ValidateIssuerSigningKey = true,
-            IssuerSigningKeys = oidcConfig.SigningKeys,
-            ValidateIssuer = true,
-            ValidIssuers = new[] { oidcConfig.Issuer },
-            ValidateAudience = true,
-            ValidAudience = clientId ?? string.Empty,
-            ValidateLifetime = true,
-            ClockSkew = TimeSpan.FromMinutes(2)
-        };
-
-        try
-        {
-            var principal = tokenHandler.ValidateToken(req.token, validationParameters, out var validatedToken);
-
-            var sub = principal.FindFirst("sub")?.Value ?? principal.FindFirst("oid")?.Value;
-            if (string.IsNullOrEmpty(sub))
-                return BadRequest("token missing subject claim");
-
-            // Map subject to player id. In production look up/create user record in DB.
-            var playerId = "player-" + sub;
-
-            // Issue server session token (simple GUID) and store mapping
-            var sessionId = Guid.NewGuid().ToString("N");
-            Sessions[sessionId] = (playerId, DateTime.UtcNow.AddHours(12));
-
-            return Ok(new LoginResponse(sessionId, playerId));
+            return Unauthorized("아이디 또는 비밀번호가 올바르지 않습니다.");
         }
-        catch (SecurityTokenException stex)
-        {
-            return Unauthorized(stex.Message);
-        }
-        catch (Exception ex)
-        {
-            return StatusCode(500, ex.Message);
-        }
+
+        return Ok(CreateLoginResponse(user));
     }
 
-    // Optional helper to validate a session token (used by game server)
+    [HttpPost("logout")]
+    public IActionResult Logout([FromBody] LogoutRequest req)
+    {
+        if (req is not null && !string.IsNullOrWhiteSpace(req.SessionToken))
+        {
+            Sessions.TryRemove(req.SessionToken, out _);
+        }
+
+        return NoContent();
+    }
+
     public static bool ValidateSession(string sessionToken, out string? playerId)
     {
         playerId = null;
-        if (string.IsNullOrEmpty(sessionToken)) return false;
+        if (string.IsNullOrEmpty(sessionToken))
+        {
+            return false;
+        }
+
         if (Sessions.TryGetValue(sessionToken, out var entry))
         {
             if (entry.Expires < DateTime.UtcNow)
@@ -99,9 +87,64 @@ public class AuthController : ControllerBase
                 Sessions.TryRemove(sessionToken, out _);
                 return false;
             }
+
             playerId = entry.PlayerId;
             return true;
         }
+
         return false;
+    }
+
+    private static string? ValidateCredentials(string loginId, string password, string displayName)
+    {
+        if (string.IsNullOrWhiteSpace(displayName))
+        {
+            return "닉네임을 입력해주세요.";
+        }
+
+        if (displayName.Trim().Length is < 2 or > 24)
+        {
+            return "닉네임은 2자 이상 24자 이하로 입력해주세요.";
+        }
+
+        if (string.IsNullOrWhiteSpace(loginId))
+        {
+            return "아이디를 입력해주세요.";
+        }
+
+        var trimmedLoginId = loginId.Trim();
+        if (trimmedLoginId.Length is < 4 or > 20)
+        {
+            return "아이디는 4자 이상 20자 이하로 입력해주세요.";
+        }
+
+        if (!trimmedLoginId.All(IsAllowedLoginIdCharacter))
+        {
+            return "아이디는 영문, 숫자, 밑줄, 하이픈만 사용할 수 있습니다.";
+        }
+
+        if (string.IsNullOrWhiteSpace(password) || password.Length < 8)
+        {
+            return "비밀번호는 8자 이상이어야 합니다.";
+        }
+
+        return null;
+    }
+
+    private static bool IsAllowedLoginIdCharacter(char ch)
+    {
+        return ch is >= 'a' and <= 'z'
+            or >= 'A' and <= 'Z'
+            or >= '0' and <= '9'
+            or '_'
+            or '-';
+    }
+
+    private static LoginResponse CreateLoginResponse(LoginUser user)
+    {
+        var sessionId = Guid.NewGuid().ToString("N");
+        Sessions[sessionId] = (user.UserId, DateTime.UtcNow.AddHours(12));
+
+        return new LoginResponse(sessionId, user.UserId, user.LoginId, user.DisplayName);
     }
 }

@@ -2,27 +2,159 @@
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              x:Class="polrob.Client.Login"
-             Title="Login">
+             BackgroundColor="#555555"
+             Shell.NavBarIsVisible="False">
 
-    <VerticalStackLayout Padding="24"
-            Spacing="20"
-            HorizontalOptions="Center"
-            VerticalOptions="Center">
-        <Label Text="PolRob 로그인"
-                FontSize="28"
-                HorizontalOptions="Center"/>
+    <Grid Padding="0">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
 
-        <Button x:Name="SignInButton"
-                Text="Sign in with Microsoft"
-                Clicked="OnSignInClicked"
-                HorizontalOptions="Fill"/>
+        <Frame Grid.Row="0"
+               HorizontalOptions="Start"
+               VerticalOptions="Start"
+               Margin="20"
+               Padding="12,10"
+               BackgroundColor="#76d859"
+               CornerRadius="15"
+               BorderColor="Transparent"
+               HasShadow="False">
+            <Frame.GestureRecognizers>
+                <TapGestureRecognizer Tapped="OnHomeClicked"/>
+            </Frame.GestureRecognizers>
+            <Path Data="M10,20V14H14V20H19V12H22L12,3L2,12H5V20H10Z"
+                  Fill="Black"
+                  Aspect="Uniform"
+                  WidthRequest="35"
+                  HeightRequest="35"/>
+        </Frame>
 
-        <Label x:Name="StatusLabel"
-               Text=""
-               FontSize="14"
-               HorizontalOptions="Center"
-               TextColor="Gray"/>
+        <ScrollView Grid.Row="1">
+            <VerticalStackLayout Spacing="28"
+                                 HorizontalOptions="Center"
+                                 VerticalOptions="Center"
+                                 Padding="24,16">
+            <VerticalStackLayout Spacing="8"
+                                 HorizontalOptions="Center">
+                <Label Text="PolRob"
+                       FontSize="64"
+                       TextColor="White"
+                       FontFamily="OpenSansRegular"
+                       HorizontalOptions="Center"/>
 
-    </VerticalStackLayout>
+                <Label Text="계정으로 게임에 들어가기"
+                       FontSize="20"
+                       FontAttributes="Bold"
+                       TextColor="#d7d7d7"
+                       HorizontalOptions="Center"/>
+            </VerticalStackLayout>
+
+            <Grid ColumnDefinitions="*,*"
+                  ColumnSpacing="25"
+                  HorizontalOptions="Center">
+                <Button x:Name="SignInButton"
+                        Grid.Column="0"
+                        Text="Login"
+                        FontAttributes="Bold"
+                        FontSize="24"
+                        TextColor="White"
+                        WidthRequest="150"
+                        HeightRequest="150"
+                        CornerRadius="25"
+                        Clicked="OnSignInClicked">
+                    <Button.Background>
+                        <LinearGradientBrush StartPoint="0,0"
+                                             EndPoint="0,1">
+                            <GradientStop Color="#1e3e96"
+                                          Offset="0.0"/>
+                            <GradientStop Color="#5e89f8"
+                                          Offset="1.0"/>
+                        </LinearGradientBrush>
+                    </Button.Background>
+                </Button>
+
+                <Button x:Name="SignUpButton"
+                        Grid.Column="1"
+                        Text="Sign Up"
+                        FontAttributes="Bold"
+                        FontSize="24"
+                        TextColor="Black"
+                        BackgroundColor="#f9d955"
+                        WidthRequest="150"
+                        HeightRequest="150"
+                        CornerRadius="25"
+                        Clicked="OnSignUpClicked"/>
+            </Grid>
+
+            <VerticalStackLayout x:Name="FormPanel"
+                                 Spacing="12"
+                                 WidthRequest="320"
+                                 MaximumWidthRequest="360">
+                <Entry x:Name="DisplayNameEntry"
+                       Placeholder="닉네임"
+                       FontSize="17"
+                       TextColor="White"
+                       PlaceholderColor="#cfcfcf"
+                       BackgroundColor="#666666"
+                       HeightRequest="50"/>
+
+                <Entry x:Name="LoginIdEntry"
+                       Placeholder="아이디"
+                       FontSize="17"
+                       TextColor="White"
+                       PlaceholderColor="#cfcfcf"
+                       BackgroundColor="#666666"
+                       HeightRequest="50"/>
+
+                <Entry x:Name="PasswordEntry"
+                       Placeholder="비밀번호"
+                       IsPassword="True"
+                       FontSize="17"
+                       TextColor="White"
+                       PlaceholderColor="#cfcfcf"
+                       BackgroundColor="#666666"
+                       HeightRequest="50"/>
+
+                <Entry x:Name="ConfirmPasswordEntry"
+                       Placeholder="비밀번호 확인"
+                       IsPassword="True"
+                       FontSize="17"
+                       TextColor="White"
+                       PlaceholderColor="#cfcfcf"
+                       BackgroundColor="#666666"
+                       HeightRequest="50"/>
+            </VerticalStackLayout>
+
+            <Button x:Name="ContinueButton"
+                    Text="Login"
+                    FontAttributes="Bold"
+                    FontSize="20"
+                    TextColor="Black"
+                    BackgroundColor="#76d859"
+                    WidthRequest="320"
+                    HeightRequest="56"
+                    CornerRadius="18"
+                    Clicked="OnContinueClicked"/>
+
+            <Label x:Name="StatusLabel"
+                   Text=""
+                   FontSize="15"
+                   FontAttributes="Bold"
+                   HorizontalTextAlignment="Center"
+                   HorizontalOptions="Center"
+                   MaximumWidthRequest="340"
+                   TextColor="#d7d7d7"/>
+            </VerticalStackLayout>
+        </ScrollView>
+
+        <Label Grid.Row="2"
+               Text="아이디와 비밀번호로 계속"
+               Margin="24,0,24,26"
+               FontSize="13"
+               HorizontalTextAlignment="Center"
+               TextColor="#bdbdbd"/>
+    </Grid>
 
 </ContentPage>

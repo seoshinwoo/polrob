@@ -70,7 +70,7 @@ public partial class GamePlay : ContentPage
 
         _player = new Player
         {
-            Id = Guid.NewGuid().ToString(),
+            Id = AuthSession.PlayerId ?? Preferences.Get("playerId", null) ?? Guid.NewGuid().ToString(),
             X = _gameMap.Width / 2f,
             Y = _gameMap.Height / 2f,
             Speed = 7f,
@@ -103,6 +103,14 @@ public partial class GamePlay : ContentPage
     protected override async void OnAppearing()
     {
         base.OnAppearing();
+        await AuthSession.LoadAsync();
+        if (!string.IsNullOrWhiteSpace(AuthSession.PlayerId) && _player.Id != AuthSession.PlayerId)
+        {
+            _players.Remove(_player.Id);
+            _player.Id = AuthSession.PlayerId;
+            _players[_player.Id] = _player;
+        }
+
         await LoadAssetsAsync();
         await InitializeNetworkAsync();
     }

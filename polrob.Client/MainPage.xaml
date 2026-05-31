@@ -6,8 +6,8 @@
              Shell.NavBarIsVisible="False">
 
     <Grid>
-        <!-- Top Right Login Button -->
-        <Button Text="Login"
+        <Button x:Name="LoginButton"
+                Text="Login"
                 HorizontalOptions="End"
                 VerticalOptions="Start"
                 Margin="20"
@@ -16,7 +16,22 @@
                 FontSize="18"
                 TextColor="White"
                 Padding="30, 8"
-                BackgroundColor="#5984ef"/>
+                BackgroundColor="#5984ef"
+                Clicked="OnLoginClicked"/>
+
+        <Button x:Name="ProfileButton"
+                Text=""
+                HorizontalOptions="End"
+                VerticalOptions="Start"
+                Margin="20"
+                CornerRadius="20"
+                FontAttributes="Bold"
+                FontSize="18"
+                TextColor="Black"
+                Padding="24,8"
+                BackgroundColor="#76d859"
+                IsVisible="False"
+                Clicked="OnProfileClicked"/>
 
         <!-- Center content -->
         <VerticalStackLayout HorizontalOptions="Center"
