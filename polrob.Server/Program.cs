@@ -29,6 +29,7 @@ if (!cosmosDbConnString.Contains("AccountEndpoint=", StringComparison.OrdinalIgn
 }
 
 builder.Services.AddSingleton<LoginDbService>(sp => new LoginDbService(cosmosDbConnString));
+builder.Services.AddSingleton<GameRoomService>();
 
 var app = builder.Build();
 using (var scope = app.Services.CreateAsyncScope())

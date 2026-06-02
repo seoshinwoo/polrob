@@ -9,6 +9,7 @@ public enum PlayerRole
 public class Player
 {
     public string Id { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
     public float X { get; set; }
     public float Y { get; set; }
     public float Speed { get; set; } = 7f;
