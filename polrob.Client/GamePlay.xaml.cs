@@ -39,6 +39,8 @@ public partial class GamePlay : ContentPage
     private const byte FogOpacity = 120;
     private const double JailBreakDurationSeconds = 3d;
     private const float JailBreakRemoteContactTolerance = 20f;
+    private const float PlayerNameFontSize = 28f;
+    private const float PlayerNameMaxWidth = 180f;
 
     // private SKBitmap? _playerIdleBitmap;
     // private SKBitmap?[] _playerRunBitmaps = new SKBitmap?[8];
@@ -102,6 +104,7 @@ public partial class GamePlay : ContentPage
         _player = new Player
         {
             Id = AuthSession.PlayerId ?? Preferences.Get("playerId", null) ?? Guid.NewGuid().ToString(),
+            Name = GetLocalDisplayName(),
             RoomId = _roomId,
             X = _gameMap.Width / 2f,
             Y = _gameMap.Height / 2f,
@@ -144,6 +147,7 @@ public partial class GamePlay : ContentPage
         }
         _player.RoomId = _roomId;
         _player.Role = _selectedRole;
+        _player.Name = GetLocalDisplayName();
 
         await LoadAssetsAsync();
         await InitializeNetworkAsync();
@@ -187,6 +191,10 @@ public partial class GamePlay : ContentPage
                 _players[p.Id].Y = p.Y;
                 _players[p.Id].Angle = p.Angle;
                 _players[p.Id].IsMoving = p.IsMoving;
+                if (!string.IsNullOrWhiteSpace(p.Name))
+                {
+                    _players[p.Id].Name = p.Name;
+                }
             }
         };
 
@@ -814,7 +822,70 @@ public partial class GamePlay : ContentPage
                 };
                 canvas.DrawCircle(player.X, player.Y, player.Radius, paint);
             }
+
+            DrawPlayerName(canvas, player);
         }
+    }
+
+    private static string GetLocalDisplayName()
+    {
+        return AuthSession.DisplayName
+            ?? Preferences.Get("displayName", null)
+            ?? "Player";
+    }
+
+    private static void DrawPlayerName(SKCanvas canvas, Player player)
+    {
+        var name = string.IsNullOrWhiteSpace(player.Name) ? "Player" : player.Name.Trim();
+        using var typeface = SKTypeface.FromFamilyName(
+            "Arial",
+            SKFontStyleWeight.Bold,
+            SKFontStyleWidth.Normal,
+            SKFontStyleSlant.Upright);
+        using var font = new SKFont(typeface, PlayerNameFontSize);
+
+        name = FitTextToWidth(name, font, PlayerNameMaxWidth);
+
+        var y = player.Y - (player.Radius * 2.4f);
+
+        using var outlinePaint = new SKPaint
+        {
+            Color = new SKColor(0, 0, 0, 210),
+            IsAntialias = true,
+            Style = SKPaintStyle.Stroke,
+            StrokeWidth = 5f
+        };
+        using var fillPaint = new SKPaint
+        {
+            Color = SKColors.White,
+            IsAntialias = true,
+            Style = SKPaintStyle.Fill
+        };
+
+        canvas.DrawText(name, player.X, y, SKTextAlign.Center, font, outlinePaint);
+        canvas.DrawText(name, player.X, y, SKTextAlign.Center, font, fillPaint);
+    }
+
+    private static string FitTextToWidth(string text, SKFont font, float maxWidth)
+    {
+        if (font.MeasureText(text) <= maxWidth)
+        {
+            return text;
+        }
+
+        const string suffix = "...";
+        var maxLength = Math.Min(text.Length, 24);
+
+        for (var length = maxLength; length > 0; length--)
+        {
+            var candidate = text[..length] + suffix;
+            if (font.MeasureText(candidate) <= maxWidth)
+            {
+                return candidate;
+            }
+        }
+
+        return suffix;
     }
 
     private void DrawBuildings(SKCanvas canvas)
