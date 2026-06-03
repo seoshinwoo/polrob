@@ -23,6 +23,7 @@ public class GameRoomService
         {
             Id = user.UserId,
             Name = user.DisplayName,
+            RoomId = game.Id,
             Role = role
         };
 
@@ -84,6 +85,7 @@ public class GameRoomService
                             {
                                 Id = user.UserId,
                                 Name = user.DisplayName,
+                                RoomId = game.Id,
                                 Role = PlayerRole.Police
                             };
 
@@ -104,6 +106,7 @@ public class GameRoomService
                         {
                             Id = user.UserId,
                             Name = user.DisplayName,
+                            RoomId = game.Id,
                             Role = PlayerRole.Robber
                         };
 
@@ -181,6 +184,31 @@ public class GameRoomService
         }
     }
 
+    public ServerResponse StartGameIfMatched(string roomId)
+    {
+        lock (_roomLock)
+        {
+            var game = Games.FirstOrDefault(g => g.Id == roomId);
+            if (game == null)
+            {
+                return new ServerResponse
+                {
+                    Success = false,
+                    Message = "방을 찾을 수 없습니다.",
+                    RoomId = roomId
+                };
+            }
+
+            if (game.Players.Count < 6)
+            {
+                return CreateRoomStatusResponse(game);
+            }
+
+            game.IsOnGame = true;
+            return CreateRoomStatusResponse(game);
+        }
+    }
+
     private ServerResponse CreateRandomRoom(LoginUser user, PlayerRole role)
     {
         var game = new Game("random");
@@ -188,6 +216,7 @@ public class GameRoomService
         {
             Id = user.UserId,
             Name = user.DisplayName,
+            RoomId = game.Id,
             Role = role
         };
 

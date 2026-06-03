@@ -11,15 +11,12 @@ public class GameNetworkServer : BackgroundService
 {
     private readonly TcpListener _tcpListener;
     private readonly UdpClient _udpClient;
-    private readonly ConcurrentDictionary<string, PlayerSession> _sessions = new();
-    private readonly ConcurrentDictionary<string, DateTime> _jailEntryTimes = new();
+    private readonly ConcurrentDictionary<string, GameSession> _gameSessions = new();
+    private readonly ConcurrentDictionary<string, string> _playerRooms = new();
     private readonly GameMap _map = new();
 
-    private int _gamePhase = 0; // 0=Waiting, 1=Countdown, 2=Playing, 3=Ended
-    private int _countdownTime = 3;
-    private int _gameTime = 300;
     private Timer? _stateTimer;
-    private DateTime _lastJailBreakAt = DateTime.MinValue;
+    private const string DefaultRoomId = "default";
     private const float JailBreakReleaseOffset = 20f;
     private const float JailBreakContactTolerance = 90f;
     private const double JailBreakRequestCooldownSeconds = 3d;
@@ -42,68 +39,82 @@ public class GameNetworkServer : BackgroundService
 
         _ = Task.Run(() => AcceptTcpClientsAsync(stoppingToken), stoppingToken);
         _ = Task.Run(() => ReceiveUdpAsync(stoppingToken), stoppingToken);
+
+        await Task.CompletedTask;
+    }
+
+    public override void Dispose()
+    {
+        _stateTimer?.Dispose();
+        base.Dispose();
     }
 
     private void GameStateSyncCallback(object? state)
     {
-        lock (_sessions)
+        foreach (var sessionEntry in _gameSessions.ToArray())
         {
-            if (_sessions.Count == 0)
-            {
-                _gamePhase = 0;
-                _countdownTime = 3;
-                _gameTime = 300;
-                return; // wait for players
-            }
+            var roomId = sessionEntry.Key;
+            var gameSession = sessionEntry.Value;
 
-            if (_gamePhase == 0)
+            lock (gameSession.SyncRoot)
             {
-                _gamePhase = 1; // First player joined, start countdown
-                _countdownTime = 3;
-                _gameTime = 300;
-            }
-            else if (_gamePhase == 1) // Countdown phase
-            {
-                _countdownTime--;
-                if (_countdownTime < 0)
+                if (gameSession.Sessions.Count == 0)
                 {
-                    _gamePhase = 2; // Transition to Playing
-                    _countdownTime = 0;
+                    _gameSessions.TryRemove(roomId, out _);
+                    continue;
                 }
-            }
-            else if (_gamePhase == 2) // Playing phase
-            {
-                _gameTime--;
 
-                // Check if all robbers are caught
-                var robbers = _sessions.Values.Where(s => s.PlayerState.Role == PlayerRole.Robber).ToList();
-                bool allRobbersCaught = false;
-
-                if (robbers.Count > 0)
+                if (gameSession.GamePhase == 0)
                 {
-                    foreach (var robber in robbers)
+                    gameSession.GamePhase = 1; // First player joined, start countdown
+                    gameSession.CountdownTime = 3;
+                    gameSession.GameTime = 300;
+                }
+                else if (gameSession.GamePhase == 1)
+                {
+                    gameSession.CountdownTime--;
+                    if (gameSession.CountdownTime < 0)
                     {
-                        RefreshJailEntry(robber.PlayerState);
+                        gameSession.GamePhase = 2;
+                        gameSession.CountdownTime = 0;
+                    }
+                }
+                else if (gameSession.GamePhase == 2)
+                {
+                    gameSession.GameTime--;
+
+                    var robbers = gameSession.Sessions.Values
+                        .Where(s => s.PlayerState.Role == PlayerRole.Robber)
+                        .ToList();
+
+                    var allRobbersCaught = false;
+                    if (robbers.Count > 0)
+                    {
+                        foreach (var robber in robbers)
+                        {
+                            RefreshJailEntry(gameSession, robber.PlayerState);
+                        }
+
+                        allRobbersCaught = robbers.All(p => IsInJail(p.PlayerState));
                     }
 
-                    allRobbersCaught = robbers.All(p => IsInJail(p.PlayerState));
+                    if (gameSession.GameTime <= 0 || allRobbersCaught)
+                    {
+                        gameSession.GamePhase = 3;
+                        gameSession.GameTime = 0;
+                    }
                 }
 
-                if (_gameTime <= 0 || allRobbersCaught)
+                var syncData = new GameStateSync
                 {
-                    _gamePhase = 3; // Game ended
-                    _gameTime = 0;
-                }
+                    RoomId = roomId,
+                    Phase = gameSession.GamePhase,
+                    CountdownTime = gameSession.CountdownTime,
+                    GameTime = gameSession.GameTime
+                };
+
+                BroadcastTcp(gameSession, 6, JsonSerializer.Serialize(syncData), null);
             }
-
-            var syncData = new GameStateSync
-            {
-                Phase = _gamePhase,
-                CountdownTime = _countdownTime,
-                GameTime = _gameTime
-            };
-
-            BroadcastTcp(6, JsonSerializer.Serialize(syncData), null);
         }
     }
 
@@ -116,7 +127,10 @@ public class GameNetworkServer : BackgroundService
                 var client = await _tcpListener.AcceptTcpClientAsync(stoppingToken);
                 _ = Task.Run(() => HandleTcpClientAsync(client, stoppingToken), stoppingToken);
             }
-            catch { /* Ignore when cancelling */ }
+            catch
+            {
+                // Ignore when cancelling.
+            }
         }
     }
 
@@ -125,7 +139,9 @@ public class GameNetworkServer : BackgroundService
         using var stream = client.GetStream();
         using var reader = new BinaryReader(stream);
         using var writer = new BinaryWriter(stream);
+
         string? playerId = null;
+        string? roomId = null;
 
         try
         {
@@ -135,99 +151,131 @@ public class GameNetworkServer : BackgroundService
                 // [Int32 Payload Length]
                 // [Byte Packet Type: 1=Join, 2=Joined, 3=Left, 4=InitialState, 5=Arrested, 6=GameState, 7=JailBreak]
                 // [String JSON Payload]
-                int length = reader.ReadInt32();
-                byte type = reader.ReadByte();
-                string json = reader.ReadString();
+                _ = reader.ReadInt32();
+                var type = reader.ReadByte();
+                var json = reader.ReadString();
 
-                if (type == 1) // Join Request
+                if (type == 1)
                 {
                     var player = JsonSerializer.Deserialize<Player>(json);
-                    if (player != null)
+                    if (player == null)
                     {
-                        playerId = player.Id;
+                        continue;
+                    }
 
-                        lock (_sessions)
+                    playerId = player.Id;
+                    roomId = NormalizeRoomId(player.RoomId);
+                    player.RoomId = roomId;
+
+                    var gameSession = _gameSessions.GetOrAdd(roomId, _ => new GameSession());
+                    lock (gameSession.SyncRoot)
+                    {
+                        PositionPlayerForRoom(player, gameSession);
+                        gameSession.Sessions[playerId] = new PlayerSession
                         {
-                            player.Role = _sessions.Count() == 0 ? PlayerRole.Police : PlayerRole.Robber; // Test
-
-                            int policeCount = _sessions.Values.Count(s => s.PlayerState.Role == PlayerRole.Police);
-                            int robberCount = _sessions.Values.Count(s => s.PlayerState.Role == PlayerRole.Robber);
-
-                            float gap = 150f;
-
-                            if (player.Role == PlayerRole.Police)
-                            {
-                                int myIndex = policeCount;
-                                float startX = _map.PoliceStation.Center.X - (gap / 2f);
-                                player.X = startX + (myIndex * gap);
-                                player.Y = _map.PoliceStation.RightBottom.Y + 200f;
-                            }
-                            else if (player.Role == PlayerRole.Robber)
-                            {
-                                int myIndex = robberCount;
-                                float startX = (_map.Width / 2f) - (gap * 1.5f);
-                                player.X = startX + (myIndex * gap);
-                                player.Y = _map.Height / 2f;
-                            }
-
-                            _sessions[playerId] = new PlayerSession { Client = client, Writer = writer, PlayerState = player };
-                        }
-
-                        Console.WriteLine($"Player Connected [TCP]: {playerId}");
-
-                        // Send all current players to the new player
-                        var allPlayers = _sessions.Values.Select(s => s.PlayerState).ToList();
-                        SendTcp(writer, 4, JsonSerializer.Serialize(allPlayers));
-                        Console.WriteLine($"{allPlayers.Count}명에게 플레이어 초기화!!");
-
-                        // Send current game state right away
-                        var syncData = new GameStateSync
-                        {
-                            Phase = _gamePhase,
-                            CountdownTime = _countdownTime,
-                            GameTime = _gameTime
+                            Client = client,
+                            Writer = writer,
+                            PlayerState = player
                         };
-                        SendTcp(writer, 6, JsonSerializer.Serialize(syncData));
+                        _playerRooms[playerId] = roomId;
+                    }
 
-                        // Broadcast new player join to others
-                        BroadcastTcp(2, JsonSerializer.Serialize(player), playerId);
-                        Console.WriteLine($"{allPlayers.Count}명에게 브로드캐스트!!");
+                    Console.WriteLine($"Player Connected [TCP]: {playerId} / room {roomId}");
+
+                    var allPlayers = gameSession.Sessions.Values.Select(s => s.PlayerState).ToList();
+                    SendTcp(writer, 4, JsonSerializer.Serialize(allPlayers));
+                    Console.WriteLine($"{roomId} 방 {allPlayers.Count}명에게 플레이어 초기화!!");
+
+                    var syncData = new GameStateSync
+                    {
+                        RoomId = roomId,
+                        Phase = gameSession.GamePhase,
+                        CountdownTime = gameSession.CountdownTime,
+                        GameTime = gameSession.GameTime
+                    };
+                    SendTcp(writer, 6, JsonSerializer.Serialize(syncData));
+
+                    BroadcastTcp(gameSession, 2, JsonSerializer.Serialize(player), playerId);
+                    Console.WriteLine($"{roomId} 방에 플레이어 입장 브로드캐스트!!");
+                }
+                else if (type == 5)
+                {
+                    if (roomId != null && _gameSessions.TryGetValue(roomId, out var gameSession))
+                    {
+                        BroadcastTcp(gameSession, 5, json, null);
                     }
                 }
-                else if (type == 5) // Arrest Request
-                {
-                    // Relay the arrest event to everyone
-                    BroadcastTcp(5, json, null);
-                }
-                else if (type == 7) // JailBreak Request
+                else if (type == 7)
                 {
                     HandleJailBreakRequest(json);
                 }
             }
         }
-        catch { /* Disconnected */ }
+        catch
+        {
+            // Disconnected.
+        }
         finally
         {
-            if (playerId != null && _sessions.TryRemove(playerId, out _))
+            if (playerId != null && roomId != null && _gameSessions.TryGetValue(roomId, out var gameSession))
             {
-                _jailEntryTimes.TryRemove(playerId, out _);
-                Console.WriteLine($"Player Disconnected: {playerId}");
-                BroadcastTcp(3, playerId, null);
+                lock (gameSession.SyncRoot)
+                {
+                    if (gameSession.Sessions.TryRemove(playerId, out _))
+                    {
+                        gameSession.JailEntryTimes.TryRemove(playerId, out _);
+                        _playerRooms.TryRemove(playerId, out _);
+                        Console.WriteLine($"Player Disconnected: {playerId} / room {roomId}");
+                        BroadcastTcp(gameSession, 3, playerId, null);
+                    }
+
+                    if (gameSession.Sessions.Count == 0)
+                    {
+                        _gameSessions.TryRemove(roomId, out _);
+                    }
+                }
             }
+
             client.Close();
+        }
+    }
+
+    private void PositionPlayerForRoom(Player player, GameSession gameSession)
+    {
+        var policeCount = gameSession.Sessions.Values.Count(s => s.PlayerState.Role == PlayerRole.Police);
+        var robberCount = gameSession.Sessions.Values.Count(s => s.PlayerState.Role == PlayerRole.Robber);
+        const float gap = 150f;
+
+        if (player.Role == PlayerRole.Police)
+        {
+            var startX = _map.PoliceStation.Center.X - (gap / 2f);
+            player.X = startX + policeCount * gap;
+            player.Y = _map.PoliceStation.RightBottom.Y + 200f;
+        }
+        else
+        {
+            var startX = _map.Width / 2f - gap * 1.5f;
+            player.X = startX + robberCount * gap;
+            player.Y = _map.Height / 2f;
         }
     }
 
     private void HandleJailBreakRequest(string rescuerId)
     {
-        lock (_sessions)
+        if (!_playerRooms.TryGetValue(rescuerId, out var roomId)
+            || !_gameSessions.TryGetValue(roomId, out var gameSession))
         {
-            if (_gamePhase != 2)
+            return;
+        }
+
+        lock (gameSession.SyncRoot)
+        {
+            if (gameSession.GamePhase != 2)
             {
                 return;
             }
 
-            if (!_sessions.TryGetValue(rescuerId, out var rescuerSession))
+            if (!gameSession.Sessions.TryGetValue(rescuerId, out var rescuerSession))
             {
                 return;
             }
@@ -239,12 +287,12 @@ public class GameNetworkServer : BackgroundService
             }
 
             var now = DateTime.UtcNow;
-            if ((now - _lastJailBreakAt).TotalSeconds < JailBreakRequestCooldownSeconds)
+            if ((now - gameSession.LastJailBreakAt).TotalSeconds < JailBreakRequestCooldownSeconds)
             {
                 return;
             }
 
-            var activeRescuers = _sessions.Values
+            var activeRescuers = gameSession.Sessions.Values
                 .Select(s => s.PlayerState)
                 .Where(p => p.Role == PlayerRole.Robber &&
                             p.IsMoving &&
@@ -258,13 +306,13 @@ public class GameNetworkServer : BackgroundService
                 return;
             }
 
-            var targetSessions = _sessions.Values
+            var targetSessions = gameSession.Sessions.Values
                 .Where(s => s.PlayerState.Role == PlayerRole.Robber &&
                             IsInJail(s.PlayerState))
                 .Select(s => new
                 {
                     Session = s,
-                    EnteredAt = _jailEntryTimes.GetOrAdd(s.PlayerState.Id, now)
+                    EnteredAt = gameSession.JailEntryTimes.GetOrAdd(s.PlayerState.Id, now)
                 })
                 .OrderBy(s => s.EnteredAt)
                 .ThenBy(s => s.Session.PlayerState.Id)
@@ -276,9 +324,9 @@ public class GameNetworkServer : BackgroundService
                 return;
             }
 
-            _lastJailBreakAt = now;
+            gameSession.LastJailBreakAt = now;
 
-            for (int i = 0; i < targetSessions.Count; i++)
+            for (var i = 0; i < targetSessions.Count; i++)
             {
                 var target = targetSessions[i].Session.PlayerState;
                 var releasePosition = GetJailReleasePosition(target.Radius, i);
@@ -287,22 +335,23 @@ public class GameNetworkServer : BackgroundService
                 target.Y = releasePosition.Y;
                 target.Angle = 0f;
                 target.IsMoving = false;
-                _jailEntryTimes.TryRemove(target.Id, out _);
+                gameSession.JailEntryTimes.TryRemove(target.Id, out _);
 
                 var syncData = new JailBreakSync
                 {
+                    RoomId = roomId,
                     RescuerId = activeRescuers[Math.Min(i, activeRescuers.Count - 1)].Id,
                     RobberId = target.Id,
                     X = target.X,
                     Y = target.Y
                 };
 
-                BroadcastTcp(7, JsonSerializer.Serialize(syncData), null);
+                BroadcastTcp(gameSession, 7, JsonSerializer.Serialize(syncData), null);
             }
         }
     }
 
-    private void RefreshJailEntry(Player player)
+    private void RefreshJailEntry(GameSession gameSession, Player player)
     {
         if (player.Role != PlayerRole.Robber)
         {
@@ -311,11 +360,11 @@ public class GameNetworkServer : BackgroundService
 
         if (IsInJail(player))
         {
-            _jailEntryTimes.TryAdd(player.Id, DateTime.UtcNow);
+            gameSession.JailEntryTimes.TryAdd(player.Id, DateTime.UtcNow);
         }
         else
         {
-            _jailEntryTimes.TryRemove(player.Id, out _);
+            gameSession.JailEntryTimes.TryRemove(player.Id, out _);
         }
     }
 
@@ -329,19 +378,19 @@ public class GameNetworkServer : BackgroundService
 
     private bool IsTouchingOrNearJail(Player player)
     {
-        float closestX = Math.Max(_map.Jail.LeftTop.X, Math.Min(player.X, _map.Jail.RightBottom.X));
-        float closestY = Math.Max(_map.Jail.LeftTop.Y, Math.Min(player.Y, _map.Jail.RightBottom.Y));
-        float distanceX = player.X - closestX;
-        float distanceY = player.Y - closestY;
-        float allowedDistance = player.Radius + JailBreakContactTolerance;
+        var closestX = Math.Max(_map.Jail.LeftTop.X, Math.Min(player.X, _map.Jail.RightBottom.X));
+        var closestY = Math.Max(_map.Jail.LeftTop.Y, Math.Min(player.Y, _map.Jail.RightBottom.Y));
+        var distanceX = player.X - closestX;
+        var distanceY = player.Y - closestY;
+        var allowedDistance = player.Radius + JailBreakContactTolerance;
 
-        return (distanceX * distanceX) + (distanceY * distanceY) <= allowedDistance * allowedDistance;
+        return distanceX * distanceX + distanceY * distanceY <= allowedDistance * allowedDistance;
     }
 
     private (float X, float Y) GetJailReleasePosition(float radius, int releaseIndex)
     {
         var jail = _map.Jail;
-        float startY = jail.RightBottom.Y + radius + JailBreakReleaseOffset;
+        var startY = jail.RightBottom.Y + radius + JailBreakReleaseOffset;
         var candidates = new List<(float X, float Y)>();
         float[][] rowOffsets =
         {
@@ -349,14 +398,14 @@ public class GameNetworkServer : BackgroundService
             new[] { -jail.Width / 6f, jail.Width / 6f, -jail.Width / 3f, jail.Width / 3f, 0f }
         };
 
-        for (int row = 0; row < 5; row++)
+        for (var row = 0; row < 5; row++)
         {
-            float y = Math.Clamp(startY + (row * radius * 1.5f), radius, _map.Height - radius);
+            var y = Math.Clamp(startY + row * radius * 1.5f, radius, _map.Height - radius);
             var offsets = rowOffsets[row % rowOffsets.Length];
 
-            foreach (float offset in offsets)
+            foreach (var offset in offsets)
             {
-                float x = Math.Clamp(jail.Center.X + offset, radius, _map.Width - radius);
+                var x = Math.Clamp(jail.Center.X + offset, radius, _map.Width - radius);
                 if (!IsReleasePositionBlocked(x, y, radius))
                 {
                     candidates.Add((x, y));
@@ -383,23 +432,23 @@ public class GameNetworkServer : BackgroundService
         {
             if (obs.Type == "Rect")
             {
-                float closestX = Math.Max(obs.LeftTop.X, Math.Min(x, obs.RightBottom.X));
-                float closestY = Math.Max(obs.LeftTop.Y, Math.Min(y, obs.RightBottom.Y));
-                float distanceX = x - closestX;
-                float distanceY = y - closestY;
+                var closestX = Math.Max(obs.LeftTop.X, Math.Min(x, obs.RightBottom.X));
+                var closestY = Math.Max(obs.LeftTop.Y, Math.Min(y, obs.RightBottom.Y));
+                var distanceX = x - closestX;
+                var distanceY = y - closestY;
 
-                if ((distanceX * distanceX) + (distanceY * distanceY) < radius * radius)
+                if (distanceX * distanceX + distanceY * distanceY < radius * radius)
                 {
                     return true;
                 }
             }
             else if (obs.Type == "Circle")
             {
-                float dx = x - obs.CenterX.X;
-                float dy = y - obs.CenterX.Y;
-                float radiusSum = radius + obs.Radius;
+                var dx = x - obs.CenterX.X;
+                var dy = y - obs.CenterX.Y;
+                var radiusSum = radius + obs.Radius;
 
-                if ((dx * dx) + (dy * dy) < radiusSum * radiusSum)
+                if (dx * dx + dy * dy < radiusSum * radiusSum)
                 {
                     return true;
                 }
@@ -411,34 +460,41 @@ public class GameNetworkServer : BackgroundService
 
     private static bool IsCircleCollidingWithBuilding(float x, float y, float radius, MapBuilding building)
     {
-        float closestX = Math.Max(building.LeftTop.X, Math.Min(x, building.RightBottom.X));
-        float closestY = Math.Max(building.LeftTop.Y, Math.Min(y, building.RightBottom.Y));
-        float distanceX = x - closestX;
-        float distanceY = y - closestY;
+        var closestX = Math.Max(building.LeftTop.X, Math.Min(x, building.RightBottom.X));
+        var closestY = Math.Max(building.LeftTop.Y, Math.Min(y, building.RightBottom.Y));
+        var distanceX = x - closestX;
+        var distanceY = y - closestY;
 
-        return (distanceX * distanceX) + (distanceY * distanceY) < radius * radius;
+        return distanceX * distanceX + distanceY * distanceY < radius * radius;
     }
 
-    private void SendTcp(BinaryWriter writer, byte type, string payload)
+    private static void SendTcp(BinaryWriter writer, byte type, string payload)
     {
         lock (writer)
         {
-            writer.Write(payload.Length + 1); // Length doesn't strictly match byte count for string vs binary, but works as an indicator 
+            writer.Write(payload.Length + 1);
             writer.Write(type);
             writer.Write(payload);
         }
     }
 
-    private void BroadcastTcp(byte type, string payload, string? excludeId)
+    private static void BroadcastTcp(GameSession gameSession, byte type, string payload, string? excludeId)
     {
-        foreach (var kvp in _sessions)
+        foreach (var kvp in gameSession.Sessions)
         {
-            if (kvp.Key == excludeId) continue;
+            if (kvp.Key == excludeId)
+            {
+                continue;
+            }
+
             try
             {
                 SendTcp(kvp.Value.Writer, type, payload);
             }
-            catch { }
+            catch
+            {
+                // Dead TCP connections are cleaned up by their read loop.
+            }
         }
     }
 
@@ -449,44 +505,75 @@ public class GameNetworkServer : BackgroundService
             try
             {
                 var result = await _udpClient.ReceiveAsync(stoppingToken);
-                string json = System.Text.Encoding.UTF8.GetString(result.Buffer);
+                var json = System.Text.Encoding.UTF8.GetString(result.Buffer);
                 var player = JsonSerializer.Deserialize<Player>(json);
 
-                if (player != null && _sessions.TryGetValue(player.Id, out var session))
+                if (player == null || !_playerRooms.TryGetValue(player.Id, out var roomId))
                 {
-                    // Update server state 
+                    continue;
+                }
+
+                if (!_gameSessions.TryGetValue(roomId, out var gameSession)
+                    || !gameSession.Sessions.TryGetValue(player.Id, out var session))
+                {
+                    continue;
+                }
+
+                lock (gameSession.SyncRoot)
+                {
                     session.PlayerState.X = player.X;
                     session.PlayerState.Y = player.Y;
                     session.PlayerState.Angle = player.Angle;
                     session.PlayerState.IsMoving = player.IsMoving;
-                    RefreshJailEntry(session.PlayerState);
-
-                    // Register UDP endpoint to map TCP connection to UDP connection
-                    if (session.UdpEndPoint == null || !session.UdpEndPoint.Equals(result.RemoteEndPoint))
-                    {
-                        session.UdpEndPoint = result.RemoteEndPoint;
-                        Console.WriteLine($"UDP Endpoint registered for {player.Id}: {result.RemoteEndPoint}");
-                    }
-
-                    // Forward to other players via UDP for low latency
-                    BroadcastUdp(result.Buffer, player.Id);
+                    RefreshJailEntry(gameSession, session.PlayerState);
                 }
+
+                if (session.UdpEndPoint == null || !session.UdpEndPoint.Equals(result.RemoteEndPoint))
+                {
+                    session.UdpEndPoint = result.RemoteEndPoint;
+                    Console.WriteLine($"UDP Endpoint registered for {player.Id} / room {roomId}: {result.RemoteEndPoint}");
+                }
+
+                BroadcastUdp(gameSession, result.Buffer, player.Id);
             }
-            catch { }
+            catch
+            {
+                // Ignore malformed or late UDP packets.
+            }
         }
     }
 
-    private void BroadcastUdp(byte[] buffer, string excludeId)
+    private void BroadcastUdp(GameSession gameSession, byte[] buffer, string excludeId)
     {
-        foreach (var kvp in _sessions)
+        foreach (var kvp in gameSession.Sessions)
         {
-            if (kvp.Key == excludeId) continue;
+            if (kvp.Key == excludeId)
+            {
+                continue;
+            }
+
             if (kvp.Value.UdpEndPoint != null)
             {
                 _udpClient.SendAsync(buffer, buffer.Length, kvp.Value.UdpEndPoint);
             }
         }
     }
+
+    private static string NormalizeRoomId(string? roomId)
+    {
+        return string.IsNullOrWhiteSpace(roomId) ? DefaultRoomId : roomId;
+    }
+}
+
+public class GameSession
+{
+    public object SyncRoot { get; } = new();
+    public ConcurrentDictionary<string, PlayerSession> Sessions { get; } = new();
+    public ConcurrentDictionary<string, DateTime> JailEntryTimes { get; } = new();
+    public int GamePhase { get; set; }
+    public int CountdownTime { get; set; } = 3;
+    public int GameTime { get; set; } = 300;
+    public DateTime LastJailBreakAt { get; set; } = DateTime.MinValue;
 }
 
 public class PlayerSession

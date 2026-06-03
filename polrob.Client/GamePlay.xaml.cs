@@ -8,6 +8,8 @@ using polrob.Client.Network;
 
 namespace polrob.Client;
 
+[QueryProperty(nameof(RoomId), "roomId")]
+[QueryProperty(nameof(Role), "role")]
 public partial class GamePlay : ContentPage
 {
     private Player _player;
@@ -61,6 +63,35 @@ public partial class GamePlay : ContentPage
     private bool _isInitialized = false;
     private Dictionary<string, DateTime> _jailBreakStartedAtByRescuer = new();
     private Dictionary<string, float> _jailBreakProgressByRescuer = new();
+    private string _roomId = string.Empty;
+    private PlayerRole _selectedRole = PlayerRole.Robber;
+
+    public string RoomId
+    {
+        set
+        {
+            _roomId = value ?? string.Empty;
+            if (_player != null)
+            {
+                _player.RoomId = _roomId;
+            }
+        }
+    }
+
+    public string Role
+    {
+        set
+        {
+            if (Enum.TryParse<PlayerRole>(value, true, out var role))
+            {
+                _selectedRole = role;
+                if (_player != null)
+                {
+                    _player.Role = role;
+                }
+            }
+        }
+    }
 
     public GamePlay()
     {
@@ -71,11 +102,12 @@ public partial class GamePlay : ContentPage
         _player = new Player
         {
             Id = AuthSession.PlayerId ?? Preferences.Get("playerId", null) ?? Guid.NewGuid().ToString(),
+            RoomId = _roomId,
             X = _gameMap.Width / 2f,
             Y = _gameMap.Height / 2f,
             Speed = 7f,
             Radius = 50f,
-            Role = PlayerRole.Police,
+            Role = _selectedRole,
             Angle = 0f,
             IsMoving = false
         };
@@ -110,6 +142,8 @@ public partial class GamePlay : ContentPage
             _player.Id = AuthSession.PlayerId;
             _players[_player.Id] = _player;
         }
+        _player.RoomId = _roomId;
+        _player.Role = _selectedRole;
 
         await LoadAssetsAsync();
         await InitializeNetworkAsync();

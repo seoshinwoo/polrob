@@ -17,6 +17,7 @@ public partial class GameMatching : ContentPage
     private HubConnection? _hubConnection;
     private string? _roomId;
     private bool _isMatched;
+    private bool _isNavigatingToGame;
 
     public string Role
     {
@@ -149,8 +150,7 @@ public partial class GameMatching : ContentPage
 
                     if (response.Matched)
                     {
-                        MatchingStatusLabel.Text = $"매칭 완료({response.CurrentCount}/{response.MaxCount})";
-                        MatchingActivityIndicator.IsRunning = false;
+                        _ = NavigateToGameAsync(response);
                     }
 
                     return;
@@ -160,6 +160,17 @@ public partial class GameMatching : ContentPage
                 {
                     MatchingStatusLabel.Text = response.Message;
                     MatchingActivityIndicator.IsRunning = false;
+                }
+            });
+        });
+
+        _hubConnection.On<ServerResponse>("GameStarted", response =>
+        {
+            MainThread.BeginInvokeOnMainThread(() =>
+            {
+                if (response.Success && response.Matched)
+                {
+                    _ = NavigateToGameAsync(response);
                 }
             });
         });
@@ -175,6 +186,25 @@ public partial class GameMatching : ContentPage
 
         await _hubConnection.StartAsync();
         await _hubConnection.InvokeAsync("JoinRoom", roomId, userId);
+    }
+
+    private async Task NavigateToGameAsync(ServerResponse response)
+    {
+        if (_isNavigatingToGame || !response.Success || !response.Matched)
+        {
+            return;
+        }
+
+        _isNavigatingToGame = true;
+        _isMatched = true;
+
+        MatchingStatusLabel.Text = $"매칭 완료({response.CurrentCount}/{response.MaxCount})";
+        MatchingActivityIndicator.IsRunning = false;
+
+        await DisconnectRoomUpdatesAsync(removePlayer: false);
+        var role = response.Role ?? _selectedRole;
+        var roomId = Uri.EscapeDataString(_roomId ?? string.Empty);
+        await Shell.Current.GoToAsync($"GamePlay?roomId={roomId}&role={role}");
     }
 
     private async Task DisconnectRoomUpdatesAsync(bool removePlayer)

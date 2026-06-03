@@ -56,6 +56,14 @@ public class GameController : ControllerBase
             await _gameRoomHubContext.Clients
                 .Group(response.RoomId)
                 .SendAsync("RoomStatusUpdated", roomStatus);
+
+            if (roomStatus.Matched)
+            {
+                var gameStartStatus = _gameRoomService.StartGameIfMatched(response.RoomId);
+                await _gameRoomHubContext.Clients
+                    .Group(response.RoomId)
+                    .SendAsync("GameStarted", gameStartStatus);
+            }
         }
 
         return Ok(response);

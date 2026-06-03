@@ -37,6 +37,12 @@ public class GameRoomHub : Hub
 
         var status = _gameRoomService.GetRoomStatus(roomId);
         await Clients.Caller.SendAsync("RoomStatusUpdated", status);
+
+        if (status.Matched)
+        {
+            var gameStartStatus = _gameRoomService.StartGameIfMatched(roomId);
+            await Clients.Caller.SendAsync("GameStarted", gameStartStatus);
+        }
     }
 
     public Task LeaveRoom(string roomId)
