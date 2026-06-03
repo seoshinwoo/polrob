@@ -123,6 +123,64 @@ public class GameRoomService
         }
     }
 
+    public ServerResponse GetRoomStatus(string roomId)
+    {
+        lock (_roomLock)
+        {
+            var game = Games.FirstOrDefault(g => g.Id == roomId);
+            if (game == null)
+            {
+                return new ServerResponse
+                {
+                    Success = false,
+                    Message = "방을 찾을 수 없습니다.",
+                    RoomId = roomId
+                };
+            }
+
+            return CreateRoomStatusResponse(game);
+        }
+    }
+
+    public ServerResponse RemovePlayer(string roomId, string userId)
+    {
+        lock (_roomLock)
+        {
+            var game = Games.FirstOrDefault(g => g.Id == roomId);
+            if (game == null)
+            {
+                return new ServerResponse
+                {
+                    Success = false,
+                    Message = "방을 찾을 수 없습니다.",
+                    RoomId = roomId
+                };
+            }
+
+            var player = game.Players.FirstOrDefault(p => p.Id == userId);
+            if (player != null)
+            {
+                game.Players.Remove(player);
+            }
+
+            if (game.Players.Count == 0 && !game.IsOnGame)
+            {
+                Games.Remove(game);
+            }
+
+            return CreateRoomStatusResponse(game);
+        }
+    }
+
+    public bool IsRoomMatched(string roomId)
+    {
+        lock (_roomLock)
+        {
+            var game = Games.FirstOrDefault(g => g.Id == roomId);
+            return game?.Players.Count >= 6;
+        }
+    }
+
     private ServerResponse CreateRandomRoom(LoginUser user, PlayerRole role)
     {
         var game = new Game("random");
@@ -158,6 +216,18 @@ public class GameRoomService
             CurrentCount = game.Players.Count,
             MaxCount = 6,
             CreatedRoom = createdRoom,
+            Matched = game.Players.Count >= 6
+        };
+    }
+
+    private static ServerResponse CreateRoomStatusResponse(Game game)
+    {
+        return new ServerResponse
+        {
+            Success = true,
+            RoomId = game.Id,
+            CurrentCount = game.Players.Count,
+            MaxCount = 6,
             Matched = game.Players.Count >= 6
         };
     }

@@ -1,3 +1,4 @@
+using polrob.Server.Hubs;
 using polrob.Server.Network;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -5,6 +6,7 @@ var builder = WebApplication.CreateBuilder(args);
 // Add services to the container.
 builder.Services.AddOpenApi();
 builder.Services.AddControllers();
+builder.Services.AddSignalR();
 
 if (builder.Configuration.GetValue<bool>("EnableGameServer", true))
 {
@@ -47,5 +49,6 @@ if (app.Environment.IsDevelopment())
 app.UseHttpsRedirection();
 
 app.MapControllers();
+app.MapHub<GameRoomHub>("/hubs/game-room");
 
 app.Run();

@@ -1,4 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR;
+using polrob.Server.Hubs;
 using polrob.Shared;
 
 namespace polrob.Server.Controllers;
@@ -8,10 +10,14 @@ namespace polrob.Server.Controllers;
 public class GameController : ControllerBase
 {
     private readonly GameRoomService _gameRoomService;
+    private readonly IHubContext<GameRoomHub> _gameRoomHubContext;
 
-    public GameController(GameRoomService gameRoomService)
+    public GameController(
+        GameRoomService gameRoomService,
+        IHubContext<GameRoomHub> gameRoomHubContext)
     {
         _gameRoomService = gameRoomService;
+        _gameRoomHubContext = gameRoomHubContext;
     }
 
     [HttpPost("create")]
@@ -42,6 +48,14 @@ public class GameController : ControllerBase
         if (!response.Success)
         {
             return BadRequest(response);
+        }
+
+        if (!string.IsNullOrWhiteSpace(response.RoomId))
+        {
+            var roomStatus = _gameRoomService.GetRoomStatus(response.RoomId);
+            await _gameRoomHubContext.Clients
+                .Group(response.RoomId)
+                .SendAsync("RoomStatusUpdated", roomStatus);
         }
 
         return Ok(response);
