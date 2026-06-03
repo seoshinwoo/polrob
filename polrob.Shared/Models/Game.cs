@@ -8,6 +8,8 @@ public class Game
     public bool IsPrivate { get; set; }
     public List<Player> Players { get; set; }
     public bool IsOnGame { get; set; } = false;
+    public DateTime? EmptyRoomExpiresAtUtc { get; set; }
+
     public Game(string type, bool isPrivate = false)
     {
         Id = Guid.NewGuid().ToString();

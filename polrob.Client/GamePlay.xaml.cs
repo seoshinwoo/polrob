@@ -10,6 +10,9 @@ namespace polrob.Client;
 
 [QueryProperty(nameof(RoomId), "roomId")]
 [QueryProperty(nameof(Role), "role")]
+[QueryProperty(nameof(GameType), "gameType")]
+[QueryProperty(nameof(RoomCode), "roomCode")]
+[QueryProperty(nameof(IsHost), "isHost")]
 public partial class GamePlay : ContentPage
 {
     private Player _player;
@@ -66,6 +69,9 @@ public partial class GamePlay : ContentPage
     private Dictionary<string, DateTime> _jailBreakStartedAtByRescuer = new();
     private Dictionary<string, float> _jailBreakProgressByRescuer = new();
     private string _roomId = string.Empty;
+    private string _gameType = string.Empty;
+    private string _roomCode = string.Empty;
+    private bool _isHost;
     private PlayerRole _selectedRole = PlayerRole.Robber;
 
     public string RoomId
@@ -93,6 +99,21 @@ public partial class GamePlay : ContentPage
                 }
             }
         }
+    }
+
+    public string GameType
+    {
+        set => _gameType = value ?? string.Empty;
+    }
+
+    public string RoomCode
+    {
+        set => _roomCode = value ?? string.Empty;
+    }
+
+    public string IsHost
+    {
+        set => _isHost = bool.TryParse(value, out var isHost) && isHost;
     }
 
     public GamePlay()
@@ -253,7 +274,8 @@ public partial class GamePlay : ContentPage
                         CenterMessageLabel.Margin = new Thickness(0, 20, 0, 0);
 
                         await Task.Delay(3000);
-                        await Shell.Current.GoToAsync("GameOver");
+                        StopGameClient();
+                        await Shell.Current.GoToAsync(BuildGameOverRoute());
                     }
                 }
             });
@@ -267,6 +289,30 @@ public partial class GamePlay : ContentPage
         {
             System.Diagnostics.Debug.WriteLine($"Network Connection Error: {ex}");
         }
+    }
+
+    protected override void OnDisappearing()
+    {
+        base.OnDisappearing();
+        StopGameClient();
+    }
+
+    private void StopGameClient()
+    {
+        _timer.Stop();
+        _networkClient?.Disconnect();
+        _networkClient = null;
+    }
+
+    private string BuildGameOverRoute()
+    {
+        var roomId = Uri.EscapeDataString(_roomId);
+        var role = Uri.EscapeDataString(_selectedRole.ToString());
+        var gameType = Uri.EscapeDataString(_gameType);
+        var roomCode = Uri.EscapeDataString(_roomCode);
+        var isHost = _isHost.ToString().ToLowerInvariant();
+
+        return $"GameOver?roomId={roomId}&role={role}&gameType={gameType}&roomCode={roomCode}&isHost={isHost}";
     }
 
     private void UpdateUI()

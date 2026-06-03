@@ -2,6 +2,8 @@ using polrob.Shared;
 
 public class GameRoomService
 {
+    private static readonly TimeSpan EmptyCustomRoomReplayLifetime = TimeSpan.FromMinutes(10);
+
     private readonly Lock _roomLock = new();
     private readonly List<Game> Games = new();
     private readonly LoginDbService _loginDbService;
@@ -30,6 +32,8 @@ public class GameRoomService
 
         lock (_roomLock)
         {
+            RemoveExpiredEmptyRoomsCore(DateTime.UtcNow);
+
             var game = new Game(type, isPrivate)
             {
                 RoomCode = CreateUniqueRoomCode()
@@ -65,6 +69,8 @@ public class GameRoomService
 
         lock (_roomLock)
         {
+            RemoveExpiredEmptyRoomsCore(DateTime.UtcNow);
+
             var normalizedCode = NormalizeRoomCode(roomCode);
             var game = Games.FirstOrDefault(g =>
                 g.IsPrivate
@@ -109,6 +115,7 @@ public class GameRoomService
             }
 
             game.Players.Add(CreatePlayer(user, game.Id, role));
+            game.EmptyRoomExpiresAtUtc = null;
             return CreateRoomStatusResponse(game, role, message: "커스텀 방에 참여했습니다.");
         }
     }
@@ -128,8 +135,15 @@ public class GameRoomService
 
         lock (_roomLock)
         {
+            RemoveExpiredEmptyRoomsCore(DateTime.UtcNow);
+
             foreach (var game in Games)
             {
+                if (game.IsPrivate || !string.Equals(game.Type, "random", StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
                 var existingPlayer = game.Players.FirstOrDefault(p => p.Id == userId);
                 if (existingPlayer != null)
                 {
@@ -138,11 +152,6 @@ public class GameRoomService
                         existingPlayer.Role,
                         createdRoom: false,
                         message: "이미 참여 중인 방입니다.");
-                }
-
-                if (game.IsPrivate || !string.Equals(game.Type, "random", StringComparison.OrdinalIgnoreCase))
-                {
-                    continue;
                 }
 
                 if (game.Players.Count < 6)
@@ -184,6 +193,8 @@ public class GameRoomService
     {
         lock (_roomLock)
         {
+            RemoveExpiredEmptyRoomsCore(DateTime.UtcNow);
+
             var game = Games.FirstOrDefault(g => g.Id == roomId);
             if (game == null)
             {
@@ -203,6 +214,8 @@ public class GameRoomService
     {
         lock (_roomLock)
         {
+            RemoveExpiredEmptyRoomsCore(DateTime.UtcNow);
+
             var game = Games.FirstOrDefault(g => g.Id == roomId);
             if (game == null)
             {
@@ -233,6 +246,8 @@ public class GameRoomService
     {
         lock (_roomLock)
         {
+            RemoveExpiredEmptyRoomsCore(DateTime.UtcNow);
+
             var game = Games.FirstOrDefault(g => g.Id == roomId);
             if (game == null)
             {
@@ -276,10 +291,119 @@ public class GameRoomService
         }
     }
 
+    public async Task<ServerResponse> ResetRoomForReplay(string roomId, string userId, PlayerRole role)
+    {
+        var user = await _loginDbService.GetItemAsync<LoginUser>(userId, userId);
+        if (user == null)
+        {
+            return new ServerResponse
+            {
+                Success = false,
+                Message = "사용자를 찾을 수 없습니다.",
+                Role = role
+            };
+        }
+
+        lock (_roomLock)
+        {
+            RemoveExpiredEmptyRoomsCore(DateTime.UtcNow);
+
+            var game = Games.FirstOrDefault(g => g.Id == roomId);
+            if (game == null)
+            {
+                return new ServerResponse
+                {
+                    Success = false,
+                    Message = "방을 찾을 수 없습니다.",
+                    RoomId = roomId
+                };
+            }
+
+            if (!game.IsPrivate)
+            {
+                return CreateRoomFailureResponse(game, role, "커스텀 방만 다시 로비로 돌아갈 수 있습니다.");
+            }
+
+            if (game.IsOnGame)
+            {
+                return CreateRoomFailureResponse(game, role, "이미 시작된 방입니다.");
+            }
+
+            var existingPlayer = game.Players.FirstOrDefault(p => p.Id == userId);
+            if (existingPlayer != null)
+            {
+                return CreateRoomStatusResponse(game, existingPlayer.Role, message: "이미 로비에 들어와 있습니다.");
+            }
+
+            if (game.Players.Count >= 6)
+            {
+                return CreateRoomFailureResponse(game, role, "방 인원이 가득 찼습니다.");
+            }
+
+            if (role == PlayerRole.Police && game.Players.Count(p => p.Role == PlayerRole.Police) >= 2)
+            {
+                return CreateRoomFailureResponse(game, role, "경찰 인원이 가득 찼습니다.");
+            }
+
+            if (role == PlayerRole.Robber && game.Players.Count(p => p.Role == PlayerRole.Robber) >= 4)
+            {
+                return CreateRoomFailureResponse(game, role, "도둑 인원이 가득 찼습니다.");
+            }
+
+            game.Players.Add(CreatePlayer(user, game.Id, role));
+            game.EmptyRoomExpiresAtUtc = null;
+
+            return CreateRoomStatusResponse(game, role, message: "커스텀 방으로 돌아갑니다.");
+        }
+    }
+
+    public ServerResponse CompleteGame(string roomId)
+    {
+        lock (_roomLock)
+        {
+            RemoveExpiredEmptyRoomsCore(DateTime.UtcNow);
+
+            var game = Games.FirstOrDefault(g => g.Id == roomId);
+            if (game == null)
+            {
+                return new ServerResponse
+                {
+                    Success = false,
+                    Message = "방을 찾을 수 없습니다.",
+                    RoomId = roomId
+                };
+            }
+
+            if (game.IsPrivate)
+            {
+                game.IsOnGame = false;
+                game.Players.Clear();
+                game.EmptyRoomExpiresAtUtc = DateTime.UtcNow.Add(EmptyCustomRoomReplayLifetime);
+                return CreateRoomStatusResponse(game, message: "게임이 종료되었습니다.");
+            }
+
+            var response = CreateRoomStatusResponse(game, message: "게임이 종료되어 랜덤 방을 정리했습니다.");
+            response.Matched = false;
+            Games.Remove(game);
+
+            return response;
+        }
+    }
+
+    public void RemoveExpiredEmptyRooms()
+    {
+        lock (_roomLock)
+        {
+            RemoveExpiredEmptyRoomsCore(DateTime.UtcNow);
+        }
+    }
+
     public bool IsRoomMatched(string roomId)
     {
         lock (_roomLock)
         {
+            RemoveExpiredEmptyRoomsCore(DateTime.UtcNow);
+
             var game = Games.FirstOrDefault(g => g.Id == roomId);
             return game is { IsOnGame: true } || game?.Players.Count >= 6;
         }
@@ -289,6 +413,8 @@ public class GameRoomService
     {
         lock (_roomLock)
         {
+            RemoveExpiredEmptyRoomsCore(DateTime.UtcNow);
+
             var game = Games.FirstOrDefault(g => g.Id == roomId);
             if (game == null)
             {
@@ -316,6 +442,7 @@ public class GameRoomService
             }
 
             game.IsOnGame = true;
+            game.EmptyRoomExpiresAtUtc = null;
             return CreateRoomStatusResponse(game, message: "게임을 시작합니다.");
         }
     }
@@ -326,6 +453,7 @@ public class GameRoomService
         var player = CreatePlayer(user, game.Id, role);
 
         game.Players.Add(player);
+        game.EmptyRoomExpiresAtUtc = null;
         Games.Add(game);
 
         return CreateRandomJoinResponse(
@@ -430,5 +558,15 @@ public class GameRoomService
     private static string NormalizeRoomCode(string roomCode)
     {
         return roomCode.Trim().Replace(" ", string.Empty).ToUpperInvariant();
+    }
+
+    private void RemoveExpiredEmptyRoomsCore(DateTime nowUtc)
+    {
+        Games.RemoveAll(game =>
+            game.IsPrivate
+            && !game.IsOnGame
+            && game.Players.Count == 0
+            && game.EmptyRoomExpiresAtUtc is { } expiresAt
+            && expiresAt <= nowUtc);
     }
 }

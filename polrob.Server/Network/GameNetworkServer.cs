@@ -13,6 +13,7 @@ public class GameNetworkServer : BackgroundService
     private readonly UdpClient _udpClient;
     private readonly ConcurrentDictionary<string, GameSession> _gameSessions = new();
     private readonly ConcurrentDictionary<string, string> _playerRooms = new();
+    private readonly GameRoomService _gameRoomService;
     private readonly GameMap _map = new();
 
     private Timer? _stateTimer;
@@ -21,8 +22,9 @@ public class GameNetworkServer : BackgroundService
     private const float JailBreakContactTolerance = 90f;
     private const double JailBreakRequestCooldownSeconds = 3d;
 
-    public GameNetworkServer()
+    public GameNetworkServer(GameRoomService gameRoomService)
     {
+        _gameRoomService = gameRoomService;
         // 7777 for reliable TCP (Join, Leave, InitialState)
         _tcpListener = new TcpListener(IPAddress.Any, 7777);
         // 7778 for fast UDP (Movement)
@@ -51,6 +53,8 @@ public class GameNetworkServer : BackgroundService
 
     private void GameStateSyncCallback(object? state)
     {
+        _gameRoomService.RemoveExpiredEmptyRooms();
+
         foreach (var sessionEntry in _gameSessions.ToArray())
         {
             var roomId = sessionEntry.Key;
@@ -102,6 +106,7 @@ public class GameNetworkServer : BackgroundService
                     {
                         gameSession.GamePhase = 3;
                         gameSession.GameTime = 0;
+                        _gameRoomService.CompleteGame(roomId);
                     }
                 }
 

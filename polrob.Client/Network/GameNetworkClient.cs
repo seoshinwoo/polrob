@@ -11,6 +11,7 @@ public class GameNetworkClient
     private UdpClient? _udpClient;
     private BinaryReader? _reader;
     private BinaryWriter? _writer;
+    private bool _isDisconnected;
 
     public event Action<List<Player>>? OnInitialStateReceived;
     public event Action<Player>? OnPlayerJoined;
@@ -22,6 +23,7 @@ public class GameNetworkClient
 
     public async Task ConnectAsync(string ipAddress, Player localPlayer)
     {
+        _isDisconnected = false;
         _tcpClient = new TcpClient();
         await _tcpClient.ConnectAsync(ipAddress, 7777);
 
@@ -41,7 +43,7 @@ public class GameNetworkClient
 
     private void SendTcp(byte type, string payload)
     {
-        if (_writer == null) return;
+        if (_isDisconnected || _writer == null) return;
         lock (_writer)
         {
             _writer.Write(payload.Length + 1);
@@ -62,10 +64,25 @@ public class GameNetworkClient
 
     public void SendMoveUdp(Player player)
     {
-        if (_udpClient == null) return;
+        if (_isDisconnected || _udpClient == null) return;
         string json = JsonSerializer.Serialize(player);
         byte[] bytes = System.Text.Encoding.UTF8.GetBytes(json);
         _udpClient.SendAsync(bytes, bytes.Length);
+    }
+
+    public void Disconnect()
+    {
+        _isDisconnected = true;
+
+        try { _udpClient?.Dispose(); } catch { }
+        try { _tcpClient?.Close(); } catch { }
+        try { _reader?.Dispose(); } catch { }
+        try { _writer?.Dispose(); } catch { }
+
+        _udpClient = null;
+        _tcpClient = null;
+        _reader = null;
+        _writer = null;
     }
 
     private void ReceiveTcpLoop()
@@ -73,7 +90,7 @@ public class GameNetworkClient
         if (_reader == null) return;
         try
         {
-            while (true)
+            while (!_isDisconnected)
             {
                 int length = _reader.ReadInt32();
                 byte type = _reader.ReadByte();
@@ -118,14 +135,17 @@ public class GameNetworkClient
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"TCP Receive error: {ex.Message}");
+            if (!_isDisconnected)
+            {
+                System.Diagnostics.Debug.WriteLine($"TCP Receive error: {ex.Message}");
+            }
         }
     }
 
     private async Task ReceiveUdpLoop()
     {
         if (_udpClient == null) return;
-        while (true)
+        while (!_isDisconnected)
         {
             try
             {
@@ -143,6 +163,11 @@ public class GameNetworkClient
             }
             catch (Exception ex)
             {
+                if (_isDisconnected || ex is ObjectDisposedException)
+                {
+                    break;
+                }
+
                 System.Diagnostics.Debug.WriteLine($"UDP Receive error: {ex.Message}");
             }
         }

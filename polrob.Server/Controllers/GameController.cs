@@ -125,6 +125,40 @@ public class GameController : ControllerBase
         return Ok(response);
     }
 
+    [HttpPost("reset-room")]
+    public async Task<ActionResult<ServerResponse>> ResetRoom([FromBody] ResetRoomRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request.UserId))
+        {
+            return BadRequest(new ServerResponse
+            {
+                Success = false,
+                Message = "사용자 ID가 필요합니다."
+            });
+        }
+
+        if (string.IsNullOrWhiteSpace(request.RoomId))
+        {
+            return BadRequest(new ServerResponse
+            {
+                Success = false,
+                Message = "방 ID가 필요합니다."
+            });
+        }
+
+        var response = await _gameRoomService.ResetRoomForReplay(request.RoomId, request.UserId, request.Role);
+        if (!response.Success)
+        {
+            return BadRequest(response);
+        }
+
+        await _gameRoomHubContext.Clients
+            .Group(request.RoomId)
+            .SendAsync("RoomStatusUpdated", response);
+
+        return Ok(response);
+    }
+
     public sealed record CreateRoomRequest(
         string UserId,
         string Type = "custom",
@@ -133,4 +167,5 @@ public class GameController : ControllerBase
 
     public sealed record JoinCustomGameRequest(string UserId, string RoomCode, PlayerRole Role = PlayerRole.Robber);
     public sealed record JoinRandomGameRequest(string UserId, PlayerRole Role);
+    public sealed record ResetRoomRequest(string UserId, string RoomId, PlayerRole Role);
 }

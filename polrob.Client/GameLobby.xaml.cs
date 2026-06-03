@@ -270,7 +270,11 @@ public partial class GameLobby : ContentPage
         await DisconnectRoomUpdatesAsync(removePlayer: false);
 
         var roomId = Uri.EscapeDataString(_roomId);
-        await Shell.Current.GoToAsync($"GamePlay?roomId={roomId}&role={_role}");
+        var roomCode = Uri.EscapeDataString(_roomCode);
+        var role = Uri.EscapeDataString(_role.ToString());
+        var isHost = _isHost.ToString().ToLowerInvariant();
+
+        await Shell.Current.GoToAsync($"GamePlay?roomId={roomId}&role={role}&gameType=custom&roomCode={roomCode}&isHost={isHost}");
     }
 
     private async Task DisconnectRoomUpdatesAsync(bool removePlayer)

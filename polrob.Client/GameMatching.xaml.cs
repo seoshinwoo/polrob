@@ -202,9 +202,9 @@ public partial class GameMatching : ContentPage
         MatchingActivityIndicator.IsRunning = false;
 
         await DisconnectRoomUpdatesAsync(removePlayer: false);
-        var role = response.Role ?? _selectedRole;
         var roomId = Uri.EscapeDataString(_roomId ?? string.Empty);
-        await Shell.Current.GoToAsync($"GamePlay?roomId={roomId}&role={role}");
+        var role = Uri.EscapeDataString(_selectedRole.ToString());
+        await Shell.Current.GoToAsync($"GamePlay?roomId={roomId}&role={role}&gameType=random");
     }
 
     private async Task DisconnectRoomUpdatesAsync(bool removePlayer)
