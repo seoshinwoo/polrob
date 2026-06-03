@@ -61,15 +61,66 @@
                                Spacing="30"
                                HorizontalOptions="Center"
                                VerticalOptions="Start">
-            <Button Text="Random"
-                    FontAttributes="Bold"
-                    FontSize="24"
-                    TextColor="Black"
-                    BackgroundColor="#76d859"
-                    WidthRequest="150"
-                    HeightRequest="150"
-                    CornerRadius="25"
-                    Clicked="OnRandomClicked"/>
+            <VerticalStackLayout Spacing="12"
+                                 WidthRequest="150"
+                                 VerticalOptions="Start">
+                <Button Text="Random"
+                        FontAttributes="Bold"
+                        FontSize="24"
+                        TextColor="Black"
+                        BackgroundColor="#76d859"
+                        WidthRequest="150"
+                        HeightRequest="150"
+                        CornerRadius="25"
+                        Clicked="OnRandomClicked"/>
+
+                <HorizontalStackLayout x:Name="RoleSelectionLayout"
+                                       IsVisible="False"
+                                       Spacing="0"
+                                       HorizontalOptions="Center">
+                    <Frame x:Name="PoliceRoleFrame"
+                           WidthRequest="75"
+                           HeightRequest="75"
+                           Padding="8"
+                           BackgroundColor="Transparent"
+                           BorderColor="#76d859"
+                           CornerRadius="12"
+                           HasShadow="False">
+                        <Frame.GestureRecognizers>
+                            <TapGestureRecognizer Tapped="OnPoliceRoleClicked"/>
+                        </Frame.GestureRecognizers>
+                        <Image x:Name="PoliceRoleImage"
+                               Aspect="AspectFit"/>
+                    </Frame>
+
+                    <Frame x:Name="RobberRoleFrame"
+                           WidthRequest="75"
+                           HeightRequest="75"
+                           Padding="8"
+                           BackgroundColor="Transparent"
+                           BorderColor="#76d859"
+                           CornerRadius="12"
+                           HasShadow="False">
+                        <Frame.GestureRecognizers>
+                            <TapGestureRecognizer Tapped="OnRobberRoleClicked"/>
+                        </Frame.GestureRecognizers>
+                        <Image x:Name="RobberRoleImage"
+                               Aspect="AspectFit"/>
+                    </Frame>
+                </HorizontalStackLayout>
+
+                <Button x:Name="MatchingButton"
+                        Text="Matching"
+                        IsVisible="False"
+                        FontAttributes="Bold"
+                        FontSize="16"
+                        TextColor="Black"
+                        BackgroundColor="#76d859"
+                        WidthRequest="150"
+                        HeightRequest="44"
+                        CornerRadius="14"
+                        Clicked="OnMatchingClicked"/>
+            </VerticalStackLayout>
 
             <Button Text="Custom"
                     FontAttributes="Bold"
@@ -79,6 +130,7 @@
                     WidthRequest="150"
                     HeightRequest="150"
                     CornerRadius="25"
+                    VerticalOptions="Start"
                     Clicked="OnCustomClicked"/>
         </HorizontalStackLayout>
     </Grid>

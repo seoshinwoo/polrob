@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using Microsoft.AspNetCore.Mvc;
 using polrob.Shared;
 
@@ -27,10 +26,26 @@ public class GameController : ControllerBase
         return response;
     }
 
-    public async Task<ServerResponse?> JoinRandomGame(string userId, string roomId, PlayerRole role)
+    [HttpPost("join-random")]
+    public async Task<ActionResult<ServerResponse>> JoinRandomGame([FromBody] JoinRandomGameRequest request)
     {
-        var response = new ServerResponse();
+        if (string.IsNullOrWhiteSpace(request.UserId))
+        {
+            return BadRequest(new ServerResponse
+            {
+                Success = false,
+                Message = "사용자 ID가 필요합니다."
+            });
+        }
 
-        return response;
+        var response = await _gameRoomService.JoinRandomGame(request.UserId, string.Empty, request.Role);
+        if (!response.Success)
+        {
+            return BadRequest(response);
+        }
+
+        return Ok(response);
     }
+
+    public sealed record JoinRandomGameRequest(string UserId, PlayerRole Role);
 }

@@ -1,10 +1,8 @@
-using System.Collections.Concurrent;
 using polrob.Shared;
 
 public class GameRoomService
 {
-    private readonly Lock _createLock = new();
-    private readonly Lock _joinLock = new();
+    private readonly Lock _roomLock = new();
     private readonly List<Game> Games = new();
     private readonly LoginDbService _loginDbService;
 
@@ -13,7 +11,7 @@ public class GameRoomService
         _loginDbService = loginDbService;
     }
 
-    public async Task CreateRoom(string userId, string type = "custom")
+    public async Task CreateRoom(string userId, string type = "custom", PlayerRole role = PlayerRole.Police)
     {
         var game = new Game(type);
 
@@ -25,10 +23,10 @@ public class GameRoomService
         {
             Id = user.UserId,
             Name = user.DisplayName,
-            Role = PlayerRole.Police
+            Role = role
         };
 
-        lock (_createLock)
+        lock (_roomLock)
         {
             if (game.Players == null) game.Players = new List<Player>();
             game.Players.Add(player);
@@ -49,62 +47,118 @@ public class GameRoomService
         }
     }
 
-    public async Task JoinRandomGame(string userId, string roomId, PlayerRole role)
+    public async Task<ServerResponse> JoinRandomGame(string userId, string roomId, PlayerRole role)
     {
-        if (Games.Count > 0)
+        var user = await _loginDbService.GetItemAsync<LoginUser>(userId, userId);
+        if (user == null)
         {
-            lock (_joinLock)
+            return new ServerResponse
             {
-                foreach (var game in Games)
+                Success = false,
+                Message = "사용자를 찾을 수 없습니다.",
+                Role = role
+            };
+        }
+
+        lock (_roomLock)
+        {
+            foreach (var game in Games)
+            {
+                var existingPlayer = game.Players.FirstOrDefault(p => p.Id == userId);
+                if (existingPlayer != null)
                 {
-                    if (game.Players.Count < 6)
-                    {
-                        if (role == PlayerRole.Police)
-                        {
-                            if (game.Players.Count(p => p.Role == PlayerRole.Police) < 2)
-                            {
-                                var player = new Player();
-                                player.Id = userId;
-                                player.Role = PlayerRole.Police;
+                    return CreateRandomJoinResponse(
+                        game,
+                        existingPlayer.Role,
+                        createdRoom: false,
+                        message: "이미 참여 중인 방입니다.");
+                }
 
-                                game.Players.Add(player);
-                                return;
-                            }
-                            else
-                            {
-                                continue;
-                            }
-                        }
-                        else
-                        {
-                            if (game.Players.Count(p => p.Role == PlayerRole.Robber) < 4)
-                            {
-                                var player = new Player();
-                                player.Id = userId;
-                                player.Role = PlayerRole.Robber;
-
-                                game.Players.Add(player);
-                                return;
-                            }
-                            else
-                            {
-                                continue;
-                            }
-                        }
-                    }
-                    else
+                if (game.Players.Count < 6)
+                {
+                    if (role == PlayerRole.Police)
                     {
+                        if (game.Players.Count(p => p.Role == PlayerRole.Police) < 2)
+                        {
+                            var player = new Player
+                            {
+                                Id = user.UserId,
+                                Name = user.DisplayName,
+                                Role = PlayerRole.Police
+                            };
+
+                            game.Players.Add(player);
+                            return CreateRandomJoinResponse(
+                                game,
+                                role,
+                                createdRoom: false,
+                                message: "랜덤 방에 참여했습니다.");
+                        }
+
                         continue;
                     }
-                }
-            } // end lock
 
-            // lock 블록 밖에서 비동기 호출을 진행함.
-            await CreateRoom(userId, "random");
+                    if (game.Players.Count(p => p.Role == PlayerRole.Robber) < 4)
+                    {
+                        var player = new Player
+                        {
+                            Id = user.UserId,
+                            Name = user.DisplayName,
+                            Role = PlayerRole.Robber
+                        };
+
+                        game.Players.Add(player);
+                        return CreateRandomJoinResponse(
+                            game,
+                            role,
+                            createdRoom: false,
+                            message: "랜덤 방에 참여했습니다.");
+                    }
+                }
+
+                continue;
+            }
+
+            return CreateRandomRoom(user, role);
         }
-        else
+    }
+
+    private ServerResponse CreateRandomRoom(LoginUser user, PlayerRole role)
+    {
+        var game = new Game("random");
+        var player = new Player
         {
-            await CreateRoom(userId, "random");
-        }
+            Id = user.UserId,
+            Name = user.DisplayName,
+            Role = role
+        };
+
+        game.Players.Add(player);
+        Games.Add(game);
+
+        return CreateRandomJoinResponse(
+            game,
+            role,
+            createdRoom: true,
+            message: "참여 가능한 방이 없어 새 랜덤 방을 만들었습니다.");
+    }
+
+    private static ServerResponse CreateRandomJoinResponse(
+        Game game,
+        PlayerRole role,
+        bool createdRoom,
+        string message)
+    {
+        return new ServerResponse
+        {
+            Success = true,
+            Message = message,
+            RoomId = game.Id,
+            Role = role,
+            CurrentCount = game.Players.Count,
+            MaxCount = 6,
+            CreatedRoom = createdRoom,
+            Matched = game.Players.Count >= 6
+        };
     }
 }
