@@ -21,15 +21,71 @@ public class GameController : ControllerBase
     }
 
     [HttpPost("create")]
-    public async Task CreateRoom(string userId)
+    public async Task<ActionResult<ServerResponse>> CreateRoom([FromBody] CreateRoomRequest request)
     {
-        await _gameRoomService.CreateRoom(userId);
-    }
-    public async Task<ServerResponse?> JoinCustomGame(string userId, string roomId)
-    {
-        var response = new ServerResponse();
+        if (string.IsNullOrWhiteSpace(request.UserId))
+        {
+            return BadRequest(new ServerResponse
+            {
+                Success = false,
+                Message = "사용자 ID가 필요합니다."
+            });
+        }
 
-        return response;
+        var response = await _gameRoomService.CreateRoom(
+            request.UserId,
+            request.Type,
+            request.Role,
+            request.IsPrivate);
+
+        if (!response.Success)
+        {
+            return BadRequest(response);
+        }
+
+        return Ok(response);
+    }
+
+    [HttpPost("join-custom")]
+    public async Task<ActionResult<ServerResponse>> JoinCustomGame([FromBody] JoinCustomGameRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request.UserId))
+        {
+            return BadRequest(new ServerResponse
+            {
+                Success = false,
+                Message = "사용자 ID가 필요합니다."
+            });
+        }
+
+        if (string.IsNullOrWhiteSpace(request.RoomCode))
+        {
+            return BadRequest(new ServerResponse
+            {
+                Success = false,
+                Message = "방 코드가 필요합니다."
+            });
+        }
+
+        var response = await _gameRoomService.JoinCustomGame(
+            request.UserId,
+            request.RoomCode,
+            request.Role);
+
+        if (!response.Success)
+        {
+            return BadRequest(response);
+        }
+
+        if (!string.IsNullOrWhiteSpace(response.RoomId))
+        {
+            var roomStatus = _gameRoomService.GetRoomStatus(response.RoomId);
+            await _gameRoomHubContext.Clients
+                .Group(response.RoomId)
+                .SendAsync("RoomStatusUpdated", roomStatus);
+        }
+
+        return Ok(response);
     }
 
     [HttpPost("join-random")]
@@ -69,5 +125,12 @@ public class GameController : ControllerBase
         return Ok(response);
     }
 
+    public sealed record CreateRoomRequest(
+        string UserId,
+        string Type = "custom",
+        PlayerRole Role = PlayerRole.Police,
+        bool IsPrivate = true);
+
+    public sealed record JoinCustomGameRequest(string UserId, string RoomCode, PlayerRole Role = PlayerRole.Robber);
     public sealed record JoinRandomGameRequest(string UserId, PlayerRole Role);
 }

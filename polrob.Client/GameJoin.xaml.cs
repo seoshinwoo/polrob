@@ -1,3 +1,4 @@
+using System.Net.Http.Json;
 using Microsoft.Maui.Storage;
 using polrob.Shared;
 
@@ -21,18 +22,20 @@ public partial class GameJoin : ContentPage
         UpdateAuthHeader();
     }
 
-    private async void OnHomeClicked(object sender, EventArgs e)
+    private async void OnHomeClicked(object? sender, EventArgs e)
     {
         await Shell.Current.GoToAsync("..", true);
     }
 
-    private async void OnProfileClicked(object sender, EventArgs e)
+    private async void OnProfileClicked(object? sender, EventArgs e)
     {
         await Shell.Current.GoToAsync("Profile");
     }
 
-    private void OnRandomClicked(object sender, EventArgs e)
+    private void OnRandomClicked(object? sender, EventArgs e)
     {
+        ClearCustomSelection();
+
         if (RoleSelectionLayout.IsVisible)
         {
             ClearRandomSelection();
@@ -42,23 +45,96 @@ public partial class GameJoin : ContentPage
         RoleSelectionLayout.IsVisible = true;
     }
 
-    private void OnCustomClicked(object sender, EventArgs e)
+    private void OnCustomClicked(object? sender, EventArgs e)
     {
         ClearRandomSelection();
-        // Custom Join Logic
+        CustomStatusLabel.Text = string.Empty;
+        CustomJoinLayout.IsVisible = !CustomJoinLayout.IsVisible;
+
+        if (CustomJoinLayout.IsVisible)
+        {
+            RoomCodeEntry.Focus();
+        }
     }
 
-    private void OnPoliceRoleClicked(object sender, EventArgs e)
+    private async void OnJoinCustomClicked(object? sender, EventArgs e)
+    {
+        await AuthSession.LoadAsync();
+        if (!AuthSession.IsLoggedIn || string.IsNullOrWhiteSpace(AuthSession.PlayerId))
+        {
+            await Shell.Current.GoToAsync("Login");
+            return;
+        }
+
+        var roomCode = NormalizeRoomCode(RoomCodeEntry.Text);
+        if (string.IsNullOrWhiteSpace(roomCode))
+        {
+            CustomStatusLabel.Text = "방 코드를 입력해 주세요.";
+            return;
+        }
+
+        try
+        {
+            JoinCustomButton.IsEnabled = false;
+            CustomStatusLabel.Text = "입장 중...";
+
+            using var httpClient = new HttpClient { BaseAddress = new Uri(AuthSession.ApiBaseUrl) };
+            var response = await httpClient.PostAsJsonAsync(
+                "game/join-custom",
+                new JoinCustomGameRequest(AuthSession.PlayerId, roomCode, PlayerRole.Robber));
+
+            if (!response.IsSuccessStatusCode)
+            {
+                CustomStatusLabel.Text = await ReadErrorMessageAsync(response);
+                return;
+            }
+
+            var serverResponse = await response.Content.ReadFromJsonAsync<ServerResponse>();
+            if (serverResponse?.Success != true || string.IsNullOrWhiteSpace(serverResponse.RoomId))
+            {
+                CustomStatusLabel.Text = serverResponse?.Message ?? "방에 입장할 수 없습니다.";
+                return;
+            }
+
+            var roomId = Uri.EscapeDataString(serverResponse.RoomId);
+            var encodedRoomCode = Uri.EscapeDataString(serverResponse.RoomCode ?? roomCode);
+            var role = serverResponse.Role ?? PlayerRole.Robber;
+            await Shell.Current.GoToAsync($"GameLobby?roomId={roomId}&roomCode={encodedRoomCode}&role={role}&isHost=false");
+        }
+        catch (HttpRequestException)
+        {
+            CustomStatusLabel.Text = "서버에 연결할 수 없습니다.";
+        }
+        catch (Exception ex)
+        {
+            CustomStatusLabel.Text = $"입장 중 오류가 발생했습니다: {ex.Message}";
+        }
+        finally
+        {
+            JoinCustomButton.IsEnabled = true;
+        }
+    }
+
+    private void OnRoomCodeTextChanged(object? sender, TextChangedEventArgs e)
+    {
+        var normalized = NormalizeRoomCode(e.NewTextValue);
+        if (RoomCodeEntry.Text != normalized)
+        {
+            RoomCodeEntry.Text = normalized;
+        }
+    }
+
+    private void OnPoliceRoleClicked(object? sender, EventArgs e)
     {
         SelectRole(PlayerRole.Police);
     }
 
-    private void OnRobberRoleClicked(object sender, EventArgs e)
+    private void OnRobberRoleClicked(object? sender, EventArgs e)
     {
         SelectRole(PlayerRole.Robber);
     }
 
-    private async void OnMatchingClicked(object sender, EventArgs e)
+    private async void OnMatchingClicked(object? sender, EventArgs e)
     {
         if (_selectedRole is null)
         {
@@ -91,6 +167,12 @@ public partial class GameJoin : ContentPage
         RobberRoleFrame.BackgroundColor = Colors.Transparent;
     }
 
+    private void ClearCustomSelection()
+    {
+        CustomJoinLayout.IsVisible = false;
+        CustomStatusLabel.Text = string.Empty;
+    }
+
     private async Task LoadRoleImagesAsync()
     {
         if (_roleImagesLoaded)
@@ -112,4 +194,19 @@ public partial class GameJoin : ContentPage
         var imageBytes = memoryStream.ToArray();
         return ImageSource.FromStream(() => new MemoryStream(imageBytes));
     }
+
+    private static string NormalizeRoomCode(string? roomCode)
+    {
+        return (roomCode ?? string.Empty).Trim().Replace(" ", string.Empty).ToUpperInvariant();
+    }
+
+    private static async Task<string> ReadErrorMessageAsync(HttpResponseMessage response)
+    {
+        var message = await response.Content.ReadAsStringAsync();
+        return string.IsNullOrWhiteSpace(message)
+            ? $"요청이 실패했습니다. ({(int)response.StatusCode})"
+            : message.Trim('"');
+    }
+
+    private sealed record JoinCustomGameRequest(string UserId, string RoomCode, PlayerRole Role);
 }

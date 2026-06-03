@@ -122,16 +122,53 @@
                         Clicked="OnMatchingClicked"/>
             </VerticalStackLayout>
 
-            <Button Text="Custom"
-                    FontAttributes="Bold"
-                    FontSize="24"
-                    TextColor="Black"
-                    BackgroundColor="#f9d955"
-                    WidthRequest="150"
-                    HeightRequest="150"
-                    CornerRadius="25"
-                    VerticalOptions="Start"
-                    Clicked="OnCustomClicked"/>
+            <VerticalStackLayout Spacing="12"
+                                 WidthRequest="150"
+                                 VerticalOptions="Start">
+                <Button x:Name="CustomButton"
+                        Text="Custom"
+                        FontAttributes="Bold"
+                        FontSize="24"
+                        TextColor="Black"
+                        BackgroundColor="#f9d955"
+                        WidthRequest="150"
+                        HeightRequest="150"
+                        CornerRadius="25"
+                        VerticalOptions="Start"
+                        Clicked="OnCustomClicked"/>
+
+                <VerticalStackLayout x:Name="CustomJoinLayout"
+                                     IsVisible="False"
+                                     Spacing="10">
+                    <Entry x:Name="RoomCodeEntry"
+                           Placeholder="Room Code"
+                           TextColor="White"
+                           PlaceholderColor="#dddddd"
+                           BackgroundColor="#444444"
+                           FontSize="18"
+                           FontAttributes="Bold"
+                           MaxLength="6"
+                           HorizontalTextAlignment="Center"
+                           TextChanged="OnRoomCodeTextChanged"/>
+
+                    <Button x:Name="JoinCustomButton"
+                            Text="Join"
+                            FontAttributes="Bold"
+                            FontSize="16"
+                            TextColor="Black"
+                            BackgroundColor="#f9d955"
+                            WidthRequest="150"
+                            HeightRequest="44"
+                            CornerRadius="14"
+                            Clicked="OnJoinCustomClicked"/>
+
+                    <Label x:Name="CustomStatusLabel"
+                           Text=""
+                           FontSize="13"
+                           TextColor="White"
+                           HorizontalTextAlignment="Center"/>
+                </VerticalStackLayout>
+            </VerticalStackLayout>
         </HorizontalStackLayout>
     </Grid>
 

@@ -38,11 +38,56 @@ public class GameRoomHub : Hub
         var status = _gameRoomService.GetRoomStatus(roomId);
         await Clients.Caller.SendAsync("RoomStatusUpdated", status);
 
-        if (status.Matched)
+        if (status.Matched && !status.IsPrivate)
         {
             var gameStartStatus = _gameRoomService.StartGameIfMatched(roomId);
             await Clients.Caller.SendAsync("GameStarted", gameStartStatus);
         }
+    }
+
+    public async Task StartGame(string roomId)
+    {
+        if (string.IsNullOrWhiteSpace(roomId))
+        {
+            await Clients.Caller.SendAsync("RoomStatusUpdated", new ServerResponse
+            {
+                Success = false,
+                Message = "방 ID가 필요합니다."
+            });
+            return;
+        }
+
+        var gameStartStatus = _gameRoomService.StartGameIfMatched(roomId);
+        if (gameStartStatus.Success && gameStartStatus.Matched)
+        {
+            await Clients.Group(roomId).SendAsync("GameStarted", gameStartStatus);
+            return;
+        }
+
+        await Clients.Caller.SendAsync("RoomStatusUpdated", gameStartStatus);
+    }
+
+    public async Task ChangeRole(string roomId, string userId, PlayerRole role)
+    {
+        if (string.IsNullOrWhiteSpace(roomId) || string.IsNullOrWhiteSpace(userId))
+        {
+            await Clients.Caller.SendAsync("RoomStatusUpdated", new ServerResponse
+            {
+                Success = false,
+                Message = "방 ID와 사용자 ID가 필요합니다.",
+                Role = role
+            });
+            return;
+        }
+
+        var status = _gameRoomService.ChangePlayerRole(roomId, userId, role);
+        if (!status.Success)
+        {
+            await Clients.Caller.SendAsync("RoomStatusUpdated", status);
+            return;
+        }
+
+        await Clients.Group(roomId).SendAsync("RoomStatusUpdated", status);
     }
 
     public Task LeaveRoom(string roomId)

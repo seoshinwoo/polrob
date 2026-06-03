@@ -44,20 +44,38 @@
                 Clicked="OnProfileClicked"/>
 
         <!-- Center Text "Lobby" -->
-        <Label Grid.Row="1"
-               Text="Lobby"
-               FontSize="46"
-               FontAttributes="Bold"
-               TextColor="White"
-               HorizontalOptions="Center"
-               Margin="0,30,0,40"/>
+        <VerticalStackLayout Grid.Row="1"
+                             Spacing="8"
+                             HorizontalOptions="Center"
+                             Margin="0,30,0,32">
+            <Label Text="Lobby"
+                   FontSize="46"
+                   FontAttributes="Bold"
+                   TextColor="White"
+                   HorizontalOptions="Center"/>
+
+            <Label x:Name="RoomCodeLabel"
+                   Text=""
+                   FontSize="22"
+                   FontAttributes="Bold"
+                   TextColor="#f9d955"
+                   HorizontalOptions="Center"/>
+
+            <Label x:Name="LobbyStatusLabel"
+                   Text=""
+                   FontSize="15"
+                   TextColor="White"
+                   HorizontalTextAlignment="Center"
+                   HorizontalOptions="Center"/>
+        </VerticalStackLayout>
 
         <!-- Two Columns with Vertical Separator -->
         <Grid Grid.Row="2"
                 ColumnDefinitions="*, 2, *">
             <!-- Police Area -->
-            <Grid Grid.Column="0"
-                    BackgroundColor="Transparent">
+            <Grid x:Name="PoliceArea"
+                  Grid.Column="0"
+                  BackgroundColor="Transparent">
                 <Grid.GestureRecognizers>
                     <TapGestureRecognizer Tapped="OnPoliceAreaTapped"/>
                 </Grid.GestureRecognizers>
@@ -81,8 +99,9 @@
                     VerticalOptions="Fill"/>
 
             <!-- Robber Area -->
-            <Grid Grid.Column="2"
-                    BackgroundColor="Transparent">
+            <Grid x:Name="RobberArea"
+                  Grid.Column="2"
+                  BackgroundColor="Transparent">
                 <Grid.GestureRecognizers>
                     <TapGestureRecognizer Tapped="OnRobberAreaTapped"/>
                 </Grid.GestureRecognizers>
@@ -102,7 +121,8 @@
         </Grid>
 
         <!-- Bottom Game Start Button -->
-        <Button Grid.Row="3"
+        <Button x:Name="StartGameButton"
+                Grid.Row="3"
                 Text="Game Start"
                 FontAttributes="Bold"
                 FontSize="24"

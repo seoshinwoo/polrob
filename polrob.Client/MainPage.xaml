@@ -45,7 +45,8 @@
 
             <HorizontalStackLayout Spacing="25"
                                    HorizontalOptions="Center">
-                <Button Text="Create"
+                <Button x:Name="CreateButton"
+                        Text="Create"
                         FontAttributes="Bold"
                         FontSize="24"
                         TextColor="White"
