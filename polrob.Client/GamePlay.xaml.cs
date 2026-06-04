@@ -176,10 +176,7 @@ public partial class GamePlay : ContentPage
 
     private string GetServerIpAddress()
     {
-        // 시뮬레이터 2개 테스트를 위해 localhost(127.0.0.1)를 사용합니다.
-        // 실제 기기(안드로이드, 아이폰) 연결 시에는 현재 로컬 IP(예: 192.0.0.2 등)로 변경해야 합니다.
-        // 집 와이파이 : 192.168.0.238
-        return "127.0.0.1";
+        return AuthSession.GameServerHost;
     }
 
     private async Task InitializeNetworkAsync()
