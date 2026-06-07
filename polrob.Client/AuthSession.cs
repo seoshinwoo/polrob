@@ -5,7 +5,7 @@ namespace polrob.Client;
 
 public static class AuthSession
 {
-    private const string LocalNetworkServerHost = "192.168.0.238";
+    private const string LocalNetworkServerHost = "192.0.0.2";
 
     public static string? SessionToken { get; private set; }
     public static string? PlayerId { get; private set; }
@@ -78,7 +78,7 @@ public static class AuthSession
 #if ANDROID
             return "http://10.0.2.2:5174";
 #elif IOS
-            return $"http://{LocalNetworkServerHost}:5174";
+            return $"http://{IosServerHost}:5174";
 #else
             return "http://localhost:5174";
 #endif
@@ -92,12 +92,17 @@ public static class AuthSession
 #if ANDROID
             return "10.0.2.2";
 #elif IOS
-            return LocalNetworkServerHost;
+            return IosServerHost;
 #else
             return "127.0.0.1";
 #endif
         }
     }
+
+    private static string IosServerHost =>
+        DeviceInfo.DeviceType == DeviceType.Virtual
+            ? "127.0.0.1"
+            : LocalNetworkServerHost;
 
     private sealed record LogoutRequest(string SessionToken);
 }
