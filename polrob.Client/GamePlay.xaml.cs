@@ -17,8 +17,6 @@ public partial class GamePlay : ContentPage
 {
     private Player _player;
     private Dictionary<string, Player> _players = new();
-    // 감지된(현재 시야에 들어와 처리된) 도둑 목록
-    private HashSet<string> _detectedRobbers = new();
 
     // Shared Map
     private GameMap _gameMap;
@@ -40,13 +38,9 @@ public partial class GamePlay : ContentPage
     private const float VisionRangePlayerSizeMultiplier = 2.5f;
     private const float VisionConeAngleDegrees = 90f;
     private const byte FogOpacity = 120;
-    private const double JailBreakDurationSeconds = 3d;
-    private const float JailBreakRemoteContactTolerance = 20f;
     private const float PlayerNameFontSize = 28f;
     private const float PlayerNameMaxWidth = 180f;
 
-    // private SKBitmap? _playerIdleBitmap;
-    // private SKBitmap?[] _playerRunBitmaps = new SKBitmap?[8];
     private SKBitmap? _policeIdleBitmap;
     private SKBitmap?[] _policeRunBitmaps = new SKBitmap?[8];
     private SKBitmap? _policeArrestBitmap;
@@ -66,7 +60,6 @@ public partial class GamePlay : ContentPage
     private int _currentRunFrameIndex = 0;
     private float _animationTimer = 0f;
     private bool _isInitialized = false;
-    private Dictionary<string, DateTime> _jailBreakStartedAtByRescuer = new();
     private Dictionary<string, float> _jailBreakProgressByRescuer = new();
     private string _roomId = string.Empty;
     private string _gameType = string.Empty;
@@ -203,15 +196,31 @@ public partial class GamePlay : ContentPage
 
         _networkClient.OnPlayerMoved += (p) =>
         {
-            if (p.Id != _player.Id && _players.ContainsKey(p.Id))
+            if (!_players.TryGetValue(p.Id, out var player))
             {
-                _players[p.Id].X = p.X;
-                _players[p.Id].Y = p.Y;
-                _players[p.Id].Angle = p.Angle;
-                _players[p.Id].IsMoving = p.IsMoving;
-                if (!string.IsNullOrWhiteSpace(p.Name))
+                _players[p.Id] = p;
+                player = p;
+            }
+
+            player.RoomId = p.RoomId;
+            player.X = p.X;
+            player.Y = p.Y;
+            player.Speed = p.Speed;
+            player.Radius = p.Radius;
+            player.Angle = p.Angle;
+            player.IsMoving = p.IsMoving;
+            player.Role = p.Role;
+            if (!string.IsNullOrWhiteSpace(p.Name))
+            {
+                player.Name = p.Name;
+            }
+
+            if (p.Id == _player.Id)
+            {
+                _player = player;
+                if (_player.Role == PlayerRole.Robber && IsInJail(_player.X, _player.Y))
                 {
-                    _players[p.Id].Name = p.Name;
+                    _activeTouchId = -1;
                 }
             }
         };
@@ -234,6 +243,20 @@ public partial class GamePlay : ContentPage
             MainThread.BeginInvokeOnMainThread(() =>
             {
                 ApplyJailBreak(syncData);
+            });
+        };
+
+        _networkClient.OnJailBreakProgressReceived += (syncData) =>
+        {
+            MainThread.BeginInvokeOnMainThread(() =>
+            {
+                if (!string.IsNullOrWhiteSpace(syncData.RoomId) && syncData.RoomId != _roomId)
+                {
+                    return;
+                }
+
+                _jailBreakProgressByRescuer = syncData.ProgressByRescuer ?? new();
+                _canvas.InvalidateSurface();
             });
         };
 
@@ -333,38 +356,31 @@ public partial class GamePlay : ContentPage
 
     private async Task LoadAssetsAsync()
     {
+        _policeIdleBitmap = await LoadBitmapAsync("char_police.png");
+        _robberIdleBitmap = await LoadBitmapAsync("char_robber.png");
+        _policeArrestBitmap = await LoadBitmapAsync("char_police_arrest.png");
+        _robberSurrendBitmap = await LoadBitmapAsync("char_robber_surrend.png");
+        _policeStationBitmap = await LoadBitmapAsync("police_station.png");
+        _jailBitmap = await LoadBitmapAsync("jail.png");
+
+        for (int i = 0; i < 8; i++)
+        {
+            _policeRunBitmaps[i] = await LoadBitmapAsync($"char_police_run_{i + 1}.png");
+            _robberRunBitmaps[i] = await LoadBitmapAsync($"char_robber_run_{i + 1}.png");
+        }
+    }
+
+    private static async Task<SKBitmap?> LoadBitmapAsync(string fileName)
+    {
         try
         {
-            using var policeStream = await FileSystem.OpenAppPackageFileAsync($"char_police.png");
-            _policeIdleBitmap = SKBitmap.Decode(policeStream);
-
-            using var robberStream = await FileSystem.OpenAppPackageFileAsync($"char_robber.png");
-            _robberIdleBitmap = SKBitmap.Decode(robberStream);
-
-            using var policeArrestStream = await FileSystem.OpenAppPackageFileAsync($"char_police_arrest.png");
-            _policeArrestBitmap = SKBitmap.Decode(policeArrestStream);
-
-            using var robberSurrendStream = await FileSystem.OpenAppPackageFileAsync($"char_robber-surrend.png");
-            _robberSurrendBitmap = SKBitmap.Decode(robberSurrendStream);
-
-            using var policeStationStream = await FileSystem.OpenAppPackageFileAsync($"police_station.png");
-            _policeStationBitmap = SKBitmap.Decode(policeStationStream);
-
-            using var jailStream = await FileSystem.OpenAppPackageFileAsync($"jail.png");
-            _jailBitmap = SKBitmap.Decode(jailStream);
-
-            for (int i = 0; i < 8; i++)
-            {
-                using var policeRunStream = await FileSystem.OpenAppPackageFileAsync($"char_police_run_{i + 1}.png");
-                _policeRunBitmaps[i] = SKBitmap.Decode(policeRunStream);
-
-                using var robberRunStream = await FileSystem.OpenAppPackageFileAsync($"char_robber_run_{i + 1}.png");
-                _robberRunBitmaps[i] = SKBitmap.Decode(robberRunStream);
-            }
+            using var stream = await FileSystem.OpenAppPackageFileAsync(fileName);
+            return SKBitmap.Decode(stream);
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"Failed to load image: {ex}");
+            System.Diagnostics.Debug.WriteLine($"Failed to load image '{fileName}': {ex}");
+            return null;
         }
     }
 
@@ -439,8 +455,6 @@ public partial class GamePlay : ContentPage
         // 체포 상태이면 이동 불가
         bool isArrestedOrArresting = _arrestVisualTimers.TryGetValue(_player.Id, out var freezeEnd) && DateTime.Now < freezeEnd;
 
-        bool isTouchingJailForBreak = false;
-
         if (_activeTouchId != -1 && !isArrestedOrArresting)
         {
             var dx = _joystickThumb.X - _joystickCenter.X;
@@ -471,23 +485,17 @@ public partial class GamePlay : ContentPage
                 if (newY + _player.Radius > _gameMap.Height) newY = _gameMap.Height - _player.Radius;
 
                 // 벽을 따라 미끄러지도록 X축, Y축 각각 충돌 검사
-                bool isCollidingWithJailX = IsCollidingWithJail(newX, _player.Y, _player.Radius);
                 if (!IsColliding(newX, _player.Y, _player.Radius))
                 {
                     _player.X = newX;
                 }
 
-                bool isCollidingWithJailY = IsCollidingWithJail(_player.X, newY, _player.Radius);
                 if (!IsColliding(_player.X, newY, _player.Radius))
                 {
                     _player.Y = newY;
                 }
-
-                isTouchingJailForBreak = isCollidingWithJailX || isCollidingWithJailY;
             }
         }
-
-        UpdateJailBreakProgress(isTouchingJailForBreak);
 
         // Run global animation timer for all moving players
         _animationTimer += 0.016f; // approx 16ms per frame
@@ -507,33 +515,6 @@ public partial class GamePlay : ContentPage
                 {
                     _networkClient.SendMoveUdp(_player);
                     _lastSyncTime = DateTime.Now;
-                }
-            }
-        }
-
-        // 감지 처리: 로컬 플레이어가 경찰이면 다른 플레이어들(도둑)을 시야 검사하여
-        // 새로 감지된 경우 핸들러를 호출합니다.
-        if (_player.Role == PlayerRole.Police)
-        {
-            foreach (var kv in _players)
-            {
-                var other = kv.Value;
-                if (other.Id == _player.Id) continue;
-                if (other.Role != PlayerRole.Robber) continue;
-
-                bool inVision = IsPointInVision(other.X, other.Y);
-                bool inJail = IsInJail(other.X, other.Y);
-
-                // 감옥 밖에서 시야에 들어왔을 때 새로 발각 처리
-                if (inVision && !inJail && !_detectedRobbers.Contains(other.Id))
-                {
-                    _detectedRobbers.Add(other.Id);
-                    HandleRobberDetected(other);
-                }
-                else if ((!inVision || inJail) && _detectedRobbers.Contains(other.Id))
-                {
-                    // 시야에서 벗어나거나 기 체포(감옥 안) 상태가 되면 감지 상태 해제
-                    _detectedRobbers.Remove(other.Id);
                 }
             }
         }
@@ -586,23 +567,6 @@ public partial class GamePlay : ContentPage
         return false;
     }
 
-    private bool IsCollidingWithJail(float x, float y, float radius)
-    {
-        return IsCircleCollidingWithBuilding(x, y, radius, _gameMap.Jail);
-    }
-
-    private bool IsNearJailForBreak(Player player)
-    {
-        var jail = _gameMap.Jail;
-        float closestX = Math.Max(jail.LeftTop.X, Math.Min(player.X, jail.RightBottom.X));
-        float closestY = Math.Max(jail.LeftTop.Y, Math.Min(player.Y, jail.RightBottom.Y));
-        float distanceX = player.X - closestX;
-        float distanceY = player.Y - closestY;
-        float allowedDistance = player.Radius + JailBreakRemoteContactTolerance;
-
-        return (distanceX * distanceX) + (distanceY * distanceY) <= allowedDistance * allowedDistance;
-    }
-
     private static bool IsCircleCollidingWithBuilding(float x, float y, float radius, MapBuilding building)
     {
         float closestX = Math.Max(building.LeftTop.X, Math.Min(x, building.RightBottom.X));
@@ -614,73 +578,8 @@ public partial class GamePlay : ContentPage
         return (distanceX * distanceX) + (distanceY * distanceY) < (radius * radius);
     }
 
-    private void UpdateJailBreakProgress(bool isLocalTouchingJailForBreak)
-    {
-        if (_player.Role != PlayerRole.Robber)
-        {
-            ResetJailBreakProgress();
-            return;
-        }
-
-        int jailedRobberCount = _players.Values.Count(p => p.Role == PlayerRole.Robber && IsInJail(p.X, p.Y));
-        if (jailedRobberCount == 0)
-        {
-            ResetJailBreakProgress();
-            return;
-        }
-
-        var activeRescuers = new List<Player>();
-        if (!IsInJail(_player.X, _player.Y) && isLocalTouchingJailForBreak)
-        {
-            activeRescuers.Add(_player);
-        }
-
-        activeRescuers.AddRange(_players.Values
-            .Where(p => p.Id != _player.Id &&
-                        p.Role == PlayerRole.Robber &&
-                        p.IsMoving &&
-                        !IsInJail(p.X, p.Y) &&
-                        IsNearJailForBreak(p))
-            .OrderBy(p => p.Id));
-        activeRescuers = activeRescuers.Take(jailedRobberCount).ToList();
-
-        if (activeRescuers.Count == 0)
-        {
-            ResetJailBreakProgress();
-            return;
-        }
-
-        var now = DateTime.Now;
-        var activeRescuerIds = activeRescuers.Select(p => p.Id).ToHashSet();
-        foreach (var rescuerId in _jailBreakStartedAtByRescuer.Keys.Where(id => !activeRescuerIds.Contains(id)).ToList())
-        {
-            _jailBreakStartedAtByRescuer.Remove(rescuerId);
-            _jailBreakProgressByRescuer.Remove(rescuerId);
-        }
-
-        foreach (var rescuer in activeRescuers)
-        {
-            if (!_jailBreakStartedAtByRescuer.TryGetValue(rescuer.Id, out var startedAt))
-            {
-                startedAt = now;
-                _jailBreakStartedAtByRescuer[rescuer.Id] = startedAt;
-            }
-
-            double elapsedSeconds = (now - startedAt).TotalSeconds;
-            _jailBreakProgressByRescuer[rescuer.Id] = Math.Clamp((float)(elapsedSeconds / JailBreakDurationSeconds), 0f, 1f);
-
-            if (rescuer.Id == _player.Id && elapsedSeconds >= JailBreakDurationSeconds)
-            {
-                _networkClient?.SendJailBreakRequest(_player.Id);
-                ResetJailBreakProgress();
-                return;
-            }
-        }
-    }
-
     private void ResetJailBreakProgress()
     {
-        _jailBreakStartedAtByRescuer.Clear();
         _jailBreakProgressByRescuer.Clear();
     }
 
@@ -1156,7 +1055,6 @@ public partial class GamePlay : ContentPage
         robber.IsMoving = false;
 
         _arrestVisualTimers.Remove(syncData.RobberId);
-        _detectedRobbers.Remove(syncData.RobberId);
 
         if (_player.Id == syncData.RobberId)
         {
@@ -1165,7 +1063,6 @@ public partial class GamePlay : ContentPage
             _player.Y = syncData.Y;
             _player.Angle = 0f;
             _player.IsMoving = false;
-            _networkClient?.SendMoveUdp(_player);
         }
 
         ResetJailBreakProgress();
@@ -1181,53 +1078,7 @@ public partial class GamePlay : ContentPage
         if (_player.Id == policeId || _player.Id == robberId)
         {
             _showArrestedTextUntil = endTime;
+            _activeTouchId = -1;
         }
-
-        // 자신이 도둑일 경우 2초 뒤 감옥으로 자동 이동 처리
-        if (_player.Id == robberId)
-        {
-            Task.Run(async () =>
-            {
-                await Task.Delay(2000);
-                MainThread.BeginInvokeOnMainThread(() =>
-                {
-                    var jailCenter = _gameMap.Jail.Center;
-
-                    var allRobbers = _players.Values.Where(p => p.Role == PlayerRole.Robber).OrderBy(p => p.Id).ToList();
-                    int myIndex = allRobbers.FindIndex(p => p.Id == _player.Id);
-                    if (myIndex == -1) myIndex = 0;
-
-                    float gap = 150f;
-                    float offsetX = (myIndex % 2 == 0) ? -gap / 2f : gap / 2f;
-                    float offsetY = (myIndex < 2) ? -gap / 2f : gap / 2f;
-
-                    _player.X = jailCenter.X + offsetX;
-                    _player.Y = jailCenter.Y + offsetY;
-
-                    _player.Angle = 0f; // 초기 각도(아래 방향)로 설정
-                    _player.IsMoving = false;
-                    _networkClient?.SendMoveUdp(_player);
-                });
-            });
-        }
-    }
-
-    private async void HandleRobberDetected(Player robber)
-    {
-        // 중복 감지 방지 (이미 체포 중이면 스킵)
-        if (_arrestVisualTimers.TryGetValue(robber.Id, out var time) && DateTime.Now < time)
-            return;
-
-        // 다른 클라이언트들에게 알림
-        _networkClient?.SendArrest(_player.Id, robber.Id);
-
-        // 로컬에서 이미지 변경 및 텍스트 표시
-        TriggerArrestVisuals(_player.Id, robber.Id);
-
-        // 화면 갱신
-        MainThread.BeginInvokeOnMainThread(() =>
-        {
-            _canvas.InvalidateSurface();
-        });
     }
 }

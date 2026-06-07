@@ -17,10 +17,14 @@ public class GameNetworkServer : BackgroundService
     private readonly GameMap _map = new();
 
     private Timer? _stateTimer;
+    private Timer? _ruleTimer;
     private const string DefaultRoomId = "default";
+    private const float VisionRangePlayerSizeMultiplier = 2.5f;
+    private const float VisionConeAngleDegrees = 90f;
+    private const double ArrestDurationSeconds = 2d;
+    private const double JailBreakDurationSeconds = 3d;
     private const float JailBreakReleaseOffset = 20f;
     private const float JailBreakContactTolerance = 90f;
-    private const double JailBreakRequestCooldownSeconds = 3d;
 
     public GameNetworkServer(GameRoomService gameRoomService)
     {
@@ -38,6 +42,7 @@ public class GameNetworkServer : BackgroundService
         Console.WriteLine("UDP Server started on port 7778");
 
         _stateTimer = new Timer(GameStateSyncCallback, null, 1000, 1000);
+        _ruleTimer = new Timer(GameRuleTickCallback, null, 100, 100);
 
         _ = Task.Run(() => AcceptTcpClientsAsync(stoppingToken), stoppingToken);
         _ = Task.Run(() => ReceiveUdpAsync(stoppingToken), stoppingToken);
@@ -48,7 +53,30 @@ public class GameNetworkServer : BackgroundService
     public override void Dispose()
     {
         _stateTimer?.Dispose();
+        _ruleTimer?.Dispose();
         base.Dispose();
+    }
+
+    private void GameRuleTickCallback(object? state)
+    {
+        foreach (var sessionEntry in _gameSessions.ToArray())
+        {
+            var roomId = sessionEntry.Key;
+            var gameSession = sessionEntry.Value;
+
+            lock (gameSession.SyncRoot)
+            {
+                if (gameSession.GamePhase != 2 || gameSession.Sessions.Count == 0)
+                {
+                    ClearJailBreakProgress(gameSession, roomId);
+                    continue;
+                }
+
+                CompletePendingArrests(gameSession);
+                DetectRobbersForArrest(gameSession);
+                UpdateJailBreakProgress(roomId, gameSession);
+            }
+        }
     }
 
     private void GameStateSyncCallback(object? state)
@@ -154,7 +182,8 @@ public class GameNetworkServer : BackgroundService
             {
                 // Simple binary protocol frame:
                 // [Int32 Payload Length]
-                // [Byte Packet Type: 1=Join, 2=Joined, 3=Left, 4=InitialState, 5=Arrested, 6=GameState, 7=JailBreak]
+                // [Byte Packet Type: 1=Join, 2=Joined, 3=Left, 4=InitialState, 5=Arrested,
+                // 6=GameState, 7=JailBreak, 8=PlayerState, 9=JailBreakProgress]
                 // [String JSON Payload]
                 _ = reader.ReadInt32();
                 var type = reader.ReadByte();
@@ -203,17 +232,6 @@ public class GameNetworkServer : BackgroundService
                     BroadcastTcp(gameSession, 2, JsonSerializer.Serialize(player), playerId);
                     Console.WriteLine($"{roomId} 방에 플레이어 입장 브로드캐스트!!");
                 }
-                else if (type == 5)
-                {
-                    if (roomId != null && _gameSessions.TryGetValue(roomId, out var gameSession))
-                    {
-                        BroadcastTcp(gameSession, 5, json, null);
-                    }
-                }
-                else if (type == 7)
-                {
-                    HandleJailBreakRequest(json);
-                }
             }
         }
         catch
@@ -229,6 +247,15 @@ public class GameNetworkServer : BackgroundService
                     if (gameSession.Sessions.TryRemove(playerId, out _))
                     {
                         gameSession.JailEntryTimes.TryRemove(playerId, out _);
+                        gameSession.JailBreakStartedAtByRescuer.Remove(playerId);
+                        gameSession.JailBreakProgressByRescuer.Remove(playerId);
+                        foreach (var arrest in gameSession.ActiveArrestsByRobberId.Values
+                                     .Where(a => a.RobberId == playerId || a.PoliceId == playerId)
+                                     .ToList())
+                        {
+                            gameSession.ActiveArrestsByRobberId.Remove(arrest.RobberId);
+                        }
+
                         _playerRooms.TryRemove(playerId, out _);
                         Console.WriteLine($"Player Disconnected: {playerId} / room {roomId}");
                         BroadcastTcp(gameSession, 3, playerId, null);
@@ -265,95 +292,265 @@ public class GameNetworkServer : BackgroundService
         }
     }
 
-    private void HandleJailBreakRequest(string rescuerId)
+    private void CompletePendingArrests(GameSession gameSession)
     {
-        if (!_playerRooms.TryGetValue(rescuerId, out var roomId)
-            || !_gameSessions.TryGetValue(roomId, out var gameSession))
+        var now = DateTime.UtcNow;
+        var completedArrests = gameSession.ActiveArrestsByRobberId.Values
+            .Where(a => a.CompletesAtUtc <= now)
+            .ToList();
+
+        foreach (var arrest in completedArrests)
+        {
+            if (!gameSession.Sessions.TryGetValue(arrest.RobberId, out var robberSession))
+            {
+                gameSession.ActiveArrestsByRobberId.Remove(arrest.RobberId);
+                continue;
+            }
+
+            var robber = robberSession.PlayerState;
+            var jailPosition = GetJailHoldingPosition(robber, gameSession);
+            robber.X = jailPosition.X;
+            robber.Y = jailPosition.Y;
+            robber.Angle = 0f;
+            robber.IsMoving = false;
+
+            gameSession.JailEntryTimes[robber.Id] = now;
+            gameSession.ActiveArrestsByRobberId.Remove(robber.Id);
+
+            BroadcastTcp(gameSession, 8, JsonSerializer.Serialize(robber), null);
+
+            if (gameSession.Sessions.TryGetValue(arrest.PoliceId, out var policeSession))
+            {
+                policeSession.PlayerState.IsMoving = false;
+                BroadcastTcp(gameSession, 8, JsonSerializer.Serialize(policeSession.PlayerState), null);
+            }
+        }
+    }
+
+    private void DetectRobbersForArrest(GameSession gameSession)
+    {
+        var policePlayers = gameSession.Sessions.Values
+            .Select(s => s.PlayerState)
+            .Where(p => p.Role == PlayerRole.Police && !IsPlayerInActiveArrest(gameSession, p.Id))
+            .OrderBy(p => p.Id)
+            .ToList();
+
+        var robbers = gameSession.Sessions.Values
+            .Select(s => s.PlayerState)
+            .Where(p => p.Role == PlayerRole.Robber)
+            .OrderBy(p => p.Id)
+            .ToList();
+
+        foreach (var police in policePlayers)
+        {
+            foreach (var robber in robbers)
+            {
+                if (IsInJail(robber) || gameSession.ActiveArrestsByRobberId.ContainsKey(robber.Id))
+                {
+                    continue;
+                }
+
+                if (IsPointInVision(police, robber.X, robber.Y))
+                {
+                    StartArrest(gameSession, police, robber);
+                    break;
+                }
+            }
+        }
+    }
+
+    private void StartArrest(GameSession gameSession, Player police, Player robber)
+    {
+        var now = DateTime.UtcNow;
+        gameSession.ActiveArrestsByRobberId[robber.Id] = new ArrestState
+        {
+            PoliceId = police.Id,
+            RobberId = robber.Id,
+            CompletesAtUtc = now.AddSeconds(ArrestDurationSeconds)
+        };
+
+        police.IsMoving = false;
+        robber.IsMoving = false;
+
+        BroadcastTcp(gameSession, 5, $"{police.Id},{robber.Id}", null);
+        BroadcastTcp(gameSession, 8, JsonSerializer.Serialize(police), null);
+        BroadcastTcp(gameSession, 8, JsonSerializer.Serialize(robber), null);
+    }
+
+    private (float X, float Y) GetJailHoldingPosition(Player robber, GameSession gameSession)
+    {
+        var robbers = gameSession.Sessions.Values
+            .Select(s => s.PlayerState)
+            .Where(p => p.Role == PlayerRole.Robber)
+            .OrderBy(p => p.Id)
+            .ToList();
+
+        var index = robbers.FindIndex(p => p.Id == robber.Id);
+        if (index < 0)
+        {
+            index = 0;
+        }
+
+        const int columns = 3;
+        const float gap = 150f;
+        var rows = Math.Max(1, (int)Math.Ceiling(robbers.Count / (double)columns));
+        var column = index % columns;
+        var row = index / columns;
+        var offsetX = (column - ((columns - 1) / 2f)) * gap;
+        var offsetY = (row - ((rows - 1) / 2f)) * gap;
+        var minX = _map.Jail.LeftTop.X + robber.Radius;
+        var maxX = _map.Jail.RightBottom.X - robber.Radius;
+        var minY = _map.Jail.LeftTop.Y + robber.Radius;
+        var maxY = _map.Jail.RightBottom.Y - robber.Radius;
+
+        return (
+            Math.Clamp(_map.Jail.Center.X + offsetX, minX, maxX),
+            Math.Clamp(_map.Jail.Center.Y + offsetY, minY, maxY));
+    }
+
+    private void UpdateJailBreakProgress(string roomId, GameSession gameSession)
+    {
+        var now = DateTime.UtcNow;
+        var jailedRobberCount = gameSession.Sessions.Values
+            .Count(s => s.PlayerState.Role == PlayerRole.Robber && IsInJail(s.PlayerState));
+
+        if (jailedRobberCount == 0)
+        {
+            ClearJailBreakProgress(gameSession, roomId);
+            return;
+        }
+
+        var activeRescuers = gameSession.Sessions.Values
+            .Select(s => s.PlayerState)
+            .Where(p => p.Role == PlayerRole.Robber &&
+                        p.IsMoving &&
+                        !IsInJail(p) &&
+                        !IsPlayerInActiveArrest(gameSession, p.Id) &&
+                        IsTouchingOrNearJail(p))
+            .OrderBy(p => p.Id)
+            .Take(jailedRobberCount)
+            .ToList();
+
+        if (activeRescuers.Count == 0)
+        {
+            ClearJailBreakProgress(gameSession, roomId);
+            return;
+        }
+
+        var activeRescuerIds = activeRescuers.Select(p => p.Id).ToHashSet();
+        foreach (var rescuerId in gameSession.JailBreakStartedAtByRescuer.Keys
+                     .Where(id => !activeRescuerIds.Contains(id))
+                     .ToList())
+        {
+            gameSession.JailBreakStartedAtByRescuer.Remove(rescuerId);
+            gameSession.JailBreakProgressByRescuer.Remove(rescuerId);
+        }
+
+        foreach (var rescuer in activeRescuers)
+        {
+            if (!gameSession.JailBreakStartedAtByRescuer.TryGetValue(rescuer.Id, out var startedAt))
+            {
+                startedAt = now;
+                gameSession.JailBreakStartedAtByRescuer[rescuer.Id] = startedAt;
+            }
+
+            var elapsedSeconds = (now - startedAt).TotalSeconds;
+            gameSession.JailBreakProgressByRescuer[rescuer.Id] =
+                Math.Clamp((float)(elapsedSeconds / JailBreakDurationSeconds), 0f, 1f);
+        }
+
+        var readyRescuers = activeRescuers
+            .Where(p => gameSession.JailBreakProgressByRescuer.TryGetValue(p.Id, out var progress) && progress >= 1f)
+            .ToList();
+
+        if (readyRescuers.Count > 0)
+        {
+            ReleaseJailedRobbers(roomId, gameSession, readyRescuers, now);
+        }
+
+        BroadcastJailBreakProgress(gameSession, roomId);
+    }
+
+    private void ClearJailBreakProgress(GameSession gameSession, string roomId)
+    {
+        if (gameSession.JailBreakStartedAtByRescuer.Count == 0 &&
+            gameSession.JailBreakProgressByRescuer.Count == 0)
         {
             return;
         }
 
-        lock (gameSession.SyncRoot)
+        gameSession.JailBreakStartedAtByRescuer.Clear();
+        gameSession.JailBreakProgressByRescuer.Clear();
+        BroadcastJailBreakProgress(gameSession, roomId);
+    }
+
+    private void ReleaseJailedRobbers(
+        string roomId,
+        GameSession gameSession,
+        List<Player> readyRescuers,
+        DateTime now)
+    {
+        var targetSessions = gameSession.Sessions.Values
+            .Where(s => s.PlayerState.Role == PlayerRole.Robber && IsInJail(s.PlayerState))
+            .Select(s => new
+            {
+                Session = s,
+                EnteredAt = gameSession.JailEntryTimes.GetOrAdd(s.PlayerState.Id, now)
+            })
+            .OrderBy(s => s.EnteredAt)
+            .ThenBy(s => s.Session.PlayerState.Id)
+            .Take(readyRescuers.Count)
+            .ToList();
+
+        for (var i = 0; i < targetSessions.Count; i++)
         {
-            if (gameSession.GamePhase != 2)
+            var target = targetSessions[i].Session.PlayerState;
+            var releasePosition = GetJailReleasePosition(target.Radius, i);
+
+            target.X = releasePosition.X;
+            target.Y = releasePosition.Y;
+            target.Angle = 0f;
+            target.IsMoving = false;
+            gameSession.JailEntryTimes.TryRemove(target.Id, out _);
+
+            var syncData = new JailBreakSync
             {
-                return;
-            }
+                RoomId = roomId,
+                RescuerId = readyRescuers[Math.Min(i, readyRescuers.Count - 1)].Id,
+                RobberId = target.Id,
+                X = target.X,
+                Y = target.Y
+            };
 
-            if (!gameSession.Sessions.TryGetValue(rescuerId, out var rescuerSession))
-            {
-                return;
-            }
-
-            var rescuer = rescuerSession.PlayerState;
-            if (rescuer.Role != PlayerRole.Robber || !rescuer.IsMoving || IsInJail(rescuer) || !IsTouchingOrNearJail(rescuer))
-            {
-                return;
-            }
-
-            var now = DateTime.UtcNow;
-            if ((now - gameSession.LastJailBreakAt).TotalSeconds < JailBreakRequestCooldownSeconds)
-            {
-                return;
-            }
-
-            var activeRescuers = gameSession.Sessions.Values
-                .Select(s => s.PlayerState)
-                .Where(p => p.Role == PlayerRole.Robber &&
-                            p.IsMoving &&
-                            !IsInJail(p) &&
-                            IsTouchingOrNearJail(p))
-                .OrderBy(p => p.Id)
-                .ToList();
-
-            if (activeRescuers.Count == 0)
-            {
-                return;
-            }
-
-            var targetSessions = gameSession.Sessions.Values
-                .Where(s => s.PlayerState.Role == PlayerRole.Robber &&
-                            IsInJail(s.PlayerState))
-                .Select(s => new
-                {
-                    Session = s,
-                    EnteredAt = gameSession.JailEntryTimes.GetOrAdd(s.PlayerState.Id, now)
-                })
-                .OrderBy(s => s.EnteredAt)
-                .ThenBy(s => s.Session.PlayerState.Id)
-                .Take(activeRescuers.Count)
-                .ToList();
-
-            if (targetSessions.Count == 0)
-            {
-                return;
-            }
-
-            gameSession.LastJailBreakAt = now;
-
-            for (var i = 0; i < targetSessions.Count; i++)
-            {
-                var target = targetSessions[i].Session.PlayerState;
-                var releasePosition = GetJailReleasePosition(target.Radius, i);
-
-                target.X = releasePosition.X;
-                target.Y = releasePosition.Y;
-                target.Angle = 0f;
-                target.IsMoving = false;
-                gameSession.JailEntryTimes.TryRemove(target.Id, out _);
-
-                var syncData = new JailBreakSync
-                {
-                    RoomId = roomId,
-                    RescuerId = activeRescuers[Math.Min(i, activeRescuers.Count - 1)].Id,
-                    RobberId = target.Id,
-                    X = target.X,
-                    Y = target.Y
-                };
-
-                BroadcastTcp(gameSession, 7, JsonSerializer.Serialize(syncData), null);
-            }
+            BroadcastTcp(gameSession, 7, JsonSerializer.Serialize(syncData), null);
+            BroadcastTcp(gameSession, 8, JsonSerializer.Serialize(target), null);
         }
+
+        foreach (var rescuer in readyRescuers)
+        {
+            gameSession.JailBreakStartedAtByRescuer.Remove(rescuer.Id);
+            gameSession.JailBreakProgressByRescuer.Remove(rescuer.Id);
+        }
+
+        var remainingJailedRobbers = gameSession.Sessions.Values
+            .Count(s => s.PlayerState.Role == PlayerRole.Robber && IsInJail(s.PlayerState));
+
+        if (remainingJailedRobbers == 0)
+        {
+            gameSession.JailBreakStartedAtByRescuer.Clear();
+            gameSession.JailBreakProgressByRescuer.Clear();
+        }
+    }
+
+    private static void BroadcastJailBreakProgress(GameSession gameSession, string roomId)
+    {
+        var syncData = new JailBreakProgressSync
+        {
+            RoomId = roomId,
+            ProgressByRescuer = new Dictionary<string, float>(gameSession.JailBreakProgressByRescuer)
+        };
+
+        BroadcastTcp(gameSession, 9, JsonSerializer.Serialize(syncData), null);
     }
 
     private void RefreshJailEntry(GameSession gameSession, Player player)
@@ -373,12 +570,70 @@ public class GameNetworkServer : BackgroundService
         }
     }
 
+    private static bool IsPlayerInActiveArrest(GameSession gameSession, string playerId)
+    {
+        return gameSession.ActiveArrestsByRobberId.ContainsKey(playerId) ||
+               gameSession.ActiveArrestsByRobberId.Values.Any(a => a.PoliceId == playerId);
+    }
+
+    private bool IsPlayerMovementLocked(GameSession gameSession, Player player)
+    {
+        return IsPlayerInActiveArrest(gameSession, player.Id) ||
+               (player.Role == PlayerRole.Robber && IsInJail(player));
+    }
+
     private bool IsInJail(Player player)
     {
         return player.X >= _map.Jail.LeftTop.X &&
                player.X <= _map.Jail.RightBottom.X &&
                player.Y >= _map.Jail.LeftTop.Y &&
                player.Y <= _map.Jail.RightBottom.Y;
+    }
+
+    private static bool IsPointInVision(Player player, float x, float y)
+    {
+        var dx = x - player.X;
+        var dy = y - player.Y;
+        var distanceSquared = dx * dx + dy * dy;
+        var visionRange = GetVisionRange(player);
+
+        if (distanceSquared > visionRange * visionRange)
+        {
+            return false;
+        }
+
+        var targetAngle = NormalizeDegrees((float)(Math.Atan2(dy, dx) * 180f / Math.PI));
+        var facingAngle = GetFacingAngle(player);
+        var angleDifference = Math.Abs(ShortestAngleDifference(facingAngle, targetAngle));
+
+        return angleDifference <= VisionConeAngleDegrees / 2f;
+    }
+
+    private static float GetVisionRange(Player player)
+    {
+        return player.Radius * 2f * VisionRangePlayerSizeMultiplier;
+    }
+
+    private static float GetFacingAngle(Player player)
+    {
+        return NormalizeDegrees(player.Angle + 90f);
+    }
+
+    private static float NormalizeDegrees(float degrees)
+    {
+        degrees %= 360f;
+        if (degrees < 0)
+        {
+            degrees += 360f;
+        }
+
+        return degrees;
+    }
+
+    private static float ShortestAngleDifference(float fromDegrees, float toDegrees)
+    {
+        var difference = NormalizeDegrees(toDegrees - fromDegrees);
+        return difference > 180f ? difference - 360f : difference;
     }
 
     private bool IsTouchingOrNearJail(Player player)
@@ -524,13 +779,27 @@ public class GameNetworkServer : BackgroundService
                     continue;
                 }
 
+                string authoritativePlayerJson;
+                var shouldBroadcastUdp = false;
+                var shouldBroadcastTcpState = false;
                 lock (gameSession.SyncRoot)
                 {
-                    session.PlayerState.X = player.X;
-                    session.PlayerState.Y = player.Y;
-                    session.PlayerState.Angle = player.Angle;
-                    session.PlayerState.IsMoving = player.IsMoving;
-                    RefreshJailEntry(gameSession, session.PlayerState);
+                    if (IsPlayerMovementLocked(gameSession, session.PlayerState))
+                    {
+                        session.PlayerState.IsMoving = false;
+                        authoritativePlayerJson = JsonSerializer.Serialize(session.PlayerState);
+                        shouldBroadcastTcpState = true;
+                    }
+                    else
+                    {
+                        session.PlayerState.X = player.X;
+                        session.PlayerState.Y = player.Y;
+                        session.PlayerState.Angle = player.Angle;
+                        session.PlayerState.IsMoving = player.IsMoving;
+                        RefreshJailEntry(gameSession, session.PlayerState);
+                        authoritativePlayerJson = JsonSerializer.Serialize(session.PlayerState);
+                        shouldBroadcastUdp = true;
+                    }
                 }
 
                 if (session.UdpEndPoint == null || !session.UdpEndPoint.Equals(result.RemoteEndPoint))
@@ -539,7 +808,15 @@ public class GameNetworkServer : BackgroundService
                     Console.WriteLine($"UDP Endpoint registered for {player.Id} / room {roomId}: {result.RemoteEndPoint}");
                 }
 
-                BroadcastUdp(gameSession, result.Buffer, player.Id);
+                if (shouldBroadcastTcpState)
+                {
+                    BroadcastTcp(gameSession, 8, authoritativePlayerJson, null);
+                }
+                else if (shouldBroadcastUdp)
+                {
+                    var authoritativeBuffer = System.Text.Encoding.UTF8.GetBytes(authoritativePlayerJson);
+                    BroadcastUdp(gameSession, authoritativeBuffer, player.Id);
+                }
             }
             catch
             {
@@ -575,10 +852,19 @@ public class GameSession
     public object SyncRoot { get; } = new();
     public ConcurrentDictionary<string, PlayerSession> Sessions { get; } = new();
     public ConcurrentDictionary<string, DateTime> JailEntryTimes { get; } = new();
+    public Dictionary<string, ArrestState> ActiveArrestsByRobberId { get; } = new();
+    public Dictionary<string, DateTime> JailBreakStartedAtByRescuer { get; } = new();
+    public Dictionary<string, float> JailBreakProgressByRescuer { get; } = new();
     public int GamePhase { get; set; }
     public int CountdownTime { get; set; } = 3;
     public int GameTime { get; set; } = 300;
-    public DateTime LastJailBreakAt { get; set; } = DateTime.MinValue;
+}
+
+public class ArrestState
+{
+    public string PoliceId { get; set; } = string.Empty;
+    public string RobberId { get; set; } = string.Empty;
+    public DateTime CompletesAtUtc { get; set; }
 }
 
 public class PlayerSession
