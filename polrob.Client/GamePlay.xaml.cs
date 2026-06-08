@@ -32,7 +32,7 @@ public partial class GamePlay : ContentPage
     private SKCanvasView _canvas;
     private GameNetworkClient? _networkClient;
     private DateTime _lastSyncTime = DateTime.MinValue;
-    private int _gamePhase = 0; // 0=Wait, 1=Countdown, 2=Play, 3=End
+    private GamePhase _gamePhase = GamePhase.Waiting;
     private int _remainingTime = 300;
     private bool _isGameOverTransitioning = false;
     private const float VisionRangePlayerSizeMultiplier = 2.5f;
@@ -267,11 +267,11 @@ public partial class GamePlay : ContentPage
                 _gamePhase = syncData.Phase;
                 _remainingTime = syncData.GameTime;
 
-                if (_gamePhase == 1)
+                if (_gamePhase == GamePhase.Countdown)
                 {
                     CenterMessageLabel.Text = syncData.CountdownTime > 0 ? syncData.CountdownTime.ToString() : "Start";
                 }
-                else if (_gamePhase == 2)
+                else if (_gamePhase == GamePhase.Playing)
                 {
                     if (CenterMessageLabel.Text == "Start" || int.TryParse(CenterMessageLabel.Text, out _))
                     {
@@ -279,7 +279,7 @@ public partial class GamePlay : ContentPage
                     }
                     TimerLabel.Text = $"Timer : {_remainingTime}";
                 }
-                else if (_gamePhase == 3)
+                else if (_gamePhase == GamePhase.Ended)
                 {
                     if (!_isGameOverTransitioning)
                     {
@@ -386,7 +386,7 @@ public partial class GamePlay : ContentPage
 
     private void Canvas_Touch(object? sender, SKTouchEventArgs e)
     {
-        if (_gamePhase < 2)
+        if (_gamePhase < GamePhase.Playing)
         {
             e.Handled = true;
             return;
@@ -444,7 +444,7 @@ public partial class GamePlay : ContentPage
 
     private void UpdatePhysics()
     {
-        if (!_isInitialized || _gamePhase < 2)
+        if (!_isInitialized || _gamePhase < GamePhase.Playing)
         {
             _player.IsMoving = false;
             return;

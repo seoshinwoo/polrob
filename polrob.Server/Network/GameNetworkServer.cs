@@ -66,7 +66,7 @@ public class GameNetworkServer : BackgroundService
 
             lock (gameSession.SyncRoot)
             {
-                if (gameSession.GamePhase != 2 || gameSession.Sessions.Count == 0)
+                if (gameSession.GamePhase != GamePhase.Playing || gameSession.Sessions.Count == 0)
                 {
                     ClearJailBreakProgress(gameSession, roomId);
                     continue;
@@ -96,22 +96,22 @@ public class GameNetworkServer : BackgroundService
                     continue;
                 }
 
-                if (gameSession.GamePhase == 0)
+                if (gameSession.GamePhase == GamePhase.Waiting)
                 {
-                    gameSession.GamePhase = 1; // First player joined, start countdown
+                    gameSession.GamePhase = GamePhase.Countdown;
                     gameSession.CountdownTime = 3;
                     gameSession.GameTime = 300;
                 }
-                else if (gameSession.GamePhase == 1)
+                else if (gameSession.GamePhase == GamePhase.Countdown)
                 {
                     gameSession.CountdownTime--;
                     if (gameSession.CountdownTime < 0)
                     {
-                        gameSession.GamePhase = 2;
+                        gameSession.GamePhase = GamePhase.Playing;
                         gameSession.CountdownTime = 0;
                     }
                 }
-                else if (gameSession.GamePhase == 2)
+                else if (gameSession.GamePhase == GamePhase.Playing)
                 {
                     gameSession.GameTime--;
 
@@ -132,7 +132,7 @@ public class GameNetworkServer : BackgroundService
 
                     if (gameSession.GameTime <= 0 || allRobbersCaught)
                     {
-                        gameSession.GamePhase = 3;
+                        gameSession.GamePhase = GamePhase.Ended;
                         gameSession.GameTime = 0;
                         _gameRoomService.CompleteGame(roomId);
                     }
@@ -855,7 +855,7 @@ public class GameSession
     public Dictionary<string, ArrestState> ActiveArrestsByRobberId { get; } = new();
     public Dictionary<string, DateTime> JailBreakStartedAtByRescuer { get; } = new();
     public Dictionary<string, float> JailBreakProgressByRescuer { get; } = new();
-    public int GamePhase { get; set; }
+    public GamePhase GamePhase { get; set; }
     public int CountdownTime { get; set; } = 3;
     public int GameTime { get; set; } = 300;
 }
