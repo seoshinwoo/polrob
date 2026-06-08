@@ -11,6 +11,10 @@ public partial class App : Application
 
 	protected override Window CreateWindow(IActivationState? activationState)
 	{
+#if ANDROID
+		return new Window(new AndroidStartupSplashPage());
+#else
 		return new Window(new AppShell());
+#endif
 	}
 }

@@ -54,11 +54,12 @@
 
 
 		<!-- Splash Screen -->
-		<MauiSplashScreen Include="Resources\Splash\splashpolrob_new.png" Color="#BDBDBD" BaseSize="256,570" Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) != 'ios'" />
+		<MauiSplashScreen Include="Resources\Splash\android_splash_icon.png" Color="#000000" BaseSize="180,180" Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'" />
 
 		<!-- Images -->
 		<MauiImage Include="Resources\Images\*" />
 		<MauiImage Update="Resources\Images\dotnet_bot.png" Resize="True" BaseSize="300,185" />
+		<MauiImage Include="Resources\Splash\splashpolrob_new.png" Link="Resources\Images\splashpolrob_full.png" Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'" />
 		
 		<!-- Custom Fonts -->
 		<MauiFont Include="Resources\Fonts\*" />
