@@ -38,17 +38,16 @@ public class GameNetworkClient
         _ = Task.Run(ReceiveTcpLoop);
         _ = Task.Run(ReceiveUdpLoop);
 
-        // 1 = Join
-        SendTcp(1, JsonSerializer.Serialize(localPlayer));
+        SendTcp(TcpMessageType.Join, JsonSerializer.Serialize(localPlayer));
     }
 
-    private void SendTcp(byte type, string payload)
+    private void SendTcp(TcpMessageType type, string payload)
     {
         if (_isDisconnected || _writer == null) return;
         lock (_writer)
         {
             _writer.Write(payload.Length + 1);
-            _writer.Write(type);
+            _writer.Write((byte)type);
             _writer.Write(payload);
         }
     }
@@ -84,26 +83,26 @@ public class GameNetworkClient
             while (!_isDisconnected)
             {
                 int length = _reader.ReadInt32();
-                byte type = _reader.ReadByte();
+                var type = (TcpMessageType)_reader.ReadByte();
                 string json = _reader.ReadString();
 
                 MainThread.BeginInvokeOnMainThread(() =>
                 {
-                    if (type == 4) // Initial State
+                    if (type == TcpMessageType.InitialState)
                     {
                         var players = JsonSerializer.Deserialize<List<Player>>(json);
                         if (players != null) OnInitialStateReceived?.Invoke(players);
                     }
-                    else if (type == 2) // Joined
+                    else if (type == TcpMessageType.Joined)
                     {
                         var player = JsonSerializer.Deserialize<Player>(json);
                         if (player != null) OnPlayerJoined?.Invoke(player);
                     }
-                    else if (type == 3) // Left
+                    else if (type == TcpMessageType.Left)
                     {
                         OnPlayerLeft?.Invoke(json);
                     }
-                    else if (type == 5) // Arrested
+                    else if (type == TcpMessageType.Arrested)
                     {
                         var ids = json.Split(',');
                         if (ids.Length == 2)
@@ -111,22 +110,22 @@ public class GameNetworkClient
                             OnPlayerArrested?.Invoke(ids[0], ids[1]);
                         }
                     }
-                    else if (type == 6) // GameStateSync
+                    else if (type == TcpMessageType.GameState)
                     {
                         var syncData = JsonSerializer.Deserialize<GameStateSync>(json);
                         if (syncData != null) OnGameStateReceived?.Invoke(syncData);
                     }
-                    else if (type == 7) // JailBreakSync
+                    else if (type == TcpMessageType.JailBreak)
                     {
                         var syncData = JsonSerializer.Deserialize<JailBreakSync>(json);
                         if (syncData != null) OnPlayerJailBroken?.Invoke(syncData);
                     }
-                    else if (type == 8) // Server-authoritative player state
+                    else if (type == TcpMessageType.PlayerState)
                     {
                         var player = JsonSerializer.Deserialize<Player>(json);
                         if (player != null) OnPlayerMoved?.Invoke(player);
                     }
-                    else if (type == 9) // JailBreakProgressSync
+                    else if (type == TcpMessageType.JailBreakProgress)
                     {
                         var syncData = JsonSerializer.Deserialize<JailBreakProgressSync>(json);
                         if (syncData != null) OnJailBreakProgressReceived?.Invoke(syncData);

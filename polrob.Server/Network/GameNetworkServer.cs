@@ -12,7 +12,7 @@ public class GameNetworkServer : BackgroundService
     private readonly TcpListener _tcpListener;
     private readonly UdpClient _udpClient;
     private readonly ConcurrentDictionary<string, GameSession> _gameSessions = new();
-    private readonly ConcurrentDictionary<string, string> _playerRooms = new();
+    private readonly ConcurrentDictionary<string, string> _playerRooms = new(); // 
     private readonly GameRoomService _gameRoomService;
     private readonly GameMap _map = new();
 
@@ -26,6 +26,7 @@ public class GameNetworkServer : BackgroundService
     private const float JailBreakReleaseOffset = 20f;
     private const float JailBreakContactTolerance = 90f;
 
+    // TCP/UDP 소켓과 방 서비스를 준비합니다.
     public GameNetworkServer(GameRoomService gameRoomService)
     {
         _gameRoomService = gameRoomService;
@@ -35,6 +36,7 @@ public class GameNetworkServer : BackgroundService
         _udpClient = new UdpClient(7778);
     }
 
+    // 백그라운드 서비스가 시작될 때 TCP/UDP 수신 루프와 게임 타이머를 켭니다.
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         _tcpListener.Start();
@@ -50,6 +52,7 @@ public class GameNetworkServer : BackgroundService
         await Task.CompletedTask;
     }
 
+    // 서버가 종료될 때 주기적으로 돌던 타이머들을 정리합니다.
     public override void Dispose()
     {
         _stateTimer?.Dispose();
@@ -57,6 +60,7 @@ public class GameNetworkServer : BackgroundService
         base.Dispose();
     }
 
+    // 짧은 주기로 체포 판정, 체포 완료, 탈옥 진행 같은 실시간 게임 규칙을 갱신합니다.
     private void GameRuleTickCallback(object? state)
     {
         foreach (var sessionEntry in _gameSessions.ToArray())
@@ -79,6 +83,7 @@ public class GameNetworkServer : BackgroundService
         }
     }
 
+    // 1초마다 게임 페이즈와 남은 시간을 갱신하고 방 전체에 상태를 동기화합니다.
     private void GameStateSyncCallback(object? state)
     {
         _gameRoomService.RemoveExpiredEmptyRooms();
@@ -146,11 +151,12 @@ public class GameNetworkServer : BackgroundService
                     GameTime = gameSession.GameTime
                 };
 
-                BroadcastTcp(gameSession, 6, JsonSerializer.Serialize(syncData), null);
+                BroadcastTcp(gameSession, TcpMessageType.GameState, JsonSerializer.Serialize(syncData), null);
             }
         }
     }
 
+    // TCP 접속을 계속 기다리다가 새 클라이언트마다 처리 작업을 시작합니다.
     private async Task AcceptTcpClientsAsync(CancellationToken stoppingToken)
     {
         while (!stoppingToken.IsCancellationRequested)
@@ -167,6 +173,7 @@ public class GameNetworkServer : BackgroundService
         }
     }
 
+    // TCP 클라이언트 하나의 입장 패킷과 연결 종료 정리를 담당합니다.
     private async Task HandleTcpClientAsync(TcpClient client, CancellationToken stoppingToken)
     {
         using var stream = client.GetStream();
@@ -182,14 +189,13 @@ public class GameNetworkServer : BackgroundService
             {
                 // Simple binary protocol frame:
                 // [Int32 Payload Length]
-                // [Byte Packet Type: 1=Join, 2=Joined, 3=Left, 4=InitialState, 5=Arrested,
-                // 6=GameState, 7=JailBreak, 8=PlayerState, 9=JailBreakProgress]
+                // [Byte Packet Type]
                 // [String JSON Payload]
                 _ = reader.ReadInt32();
-                var type = reader.ReadByte();
+                var type = (TcpMessageType)reader.ReadByte();
                 var json = reader.ReadString();
 
-                if (type == 1)
+                if (type == TcpMessageType.Join)
                 {
                     var player = JsonSerializer.Deserialize<Player>(json);
                     if (player == null)
@@ -217,7 +223,7 @@ public class GameNetworkServer : BackgroundService
                     Console.WriteLine($"Player Connected [TCP]: {playerId} / room {roomId}");
 
                     var allPlayers = gameSession.Sessions.Values.Select(s => s.PlayerState).ToList();
-                    SendTcp(writer, 4, JsonSerializer.Serialize(allPlayers));
+                    SendTcp(writer, TcpMessageType.InitialState, JsonSerializer.Serialize(allPlayers));
                     Console.WriteLine($"{roomId} 방 {allPlayers.Count}명에게 플레이어 초기화!!");
 
                     var syncData = new GameStateSync
@@ -227,9 +233,9 @@ public class GameNetworkServer : BackgroundService
                         CountdownTime = gameSession.CountdownTime,
                         GameTime = gameSession.GameTime
                     };
-                    SendTcp(writer, 6, JsonSerializer.Serialize(syncData));
+                    SendTcp(writer, TcpMessageType.GameState, JsonSerializer.Serialize(syncData));
 
-                    BroadcastTcp(gameSession, 2, JsonSerializer.Serialize(player), playerId);
+                    BroadcastTcp(gameSession, TcpMessageType.Joined, JsonSerializer.Serialize(player), playerId);
                     Console.WriteLine($"{roomId} 방에 플레이어 입장 브로드캐스트!!");
                 }
             }
@@ -258,7 +264,7 @@ public class GameNetworkServer : BackgroundService
 
                         _playerRooms.TryRemove(playerId, out _);
                         Console.WriteLine($"Player Disconnected: {playerId} / room {roomId}");
-                        BroadcastTcp(gameSession, 3, playerId, null);
+                        BroadcastTcp(gameSession, TcpMessageType.Left, playerId, null);
                     }
 
                     if (gameSession.Sessions.Count == 0)
@@ -272,6 +278,7 @@ public class GameNetworkServer : BackgroundService
         }
     }
 
+    // 방에 입장한 플레이어를 역할별 시작 위치에 배치합니다.
     private void PositionPlayerForRoom(Player player, GameSession gameSession)
     {
         var policeCount = gameSession.Sessions.Values.Count(s => s.PlayerState.Role == PlayerRole.Police);
@@ -292,6 +299,7 @@ public class GameNetworkServer : BackgroundService
         }
     }
 
+    // 완료 시간이 지난 체포를 감옥 이동으로 확정합니다.
     private void CompletePendingArrests(GameSession gameSession)
     {
         var now = DateTime.UtcNow;
@@ -317,16 +325,17 @@ public class GameNetworkServer : BackgroundService
             gameSession.JailEntryTimes[robber.Id] = now;
             gameSession.ActiveArrestsByRobberId.Remove(robber.Id);
 
-            BroadcastTcp(gameSession, 8, JsonSerializer.Serialize(robber), null);
+            BroadcastTcp(gameSession, TcpMessageType.PlayerState, JsonSerializer.Serialize(robber), null);
 
             if (gameSession.Sessions.TryGetValue(arrest.PoliceId, out var policeSession))
             {
                 policeSession.PlayerState.IsMoving = false;
-                BroadcastTcp(gameSession, 8, JsonSerializer.Serialize(policeSession.PlayerState), null);
+                BroadcastTcp(gameSession, TcpMessageType.PlayerState, JsonSerializer.Serialize(policeSession.PlayerState), null);
             }
         }
     }
 
+    // 경찰 시야 안에 들어온 도둑을 찾아 체포를 시작합니다.
     private void DetectRobbersForArrest(GameSession gameSession)
     {
         var policePlayers = gameSession.Sessions.Values
@@ -359,6 +368,7 @@ public class GameNetworkServer : BackgroundService
         }
     }
 
+    // 경찰과 도둑을 멈추고 일정 시간 뒤 완료될 체포 상태를 등록합니다.
     private void StartArrest(GameSession gameSession, Player police, Player robber)
     {
         var now = DateTime.UtcNow;
@@ -372,11 +382,12 @@ public class GameNetworkServer : BackgroundService
         police.IsMoving = false;
         robber.IsMoving = false;
 
-        BroadcastTcp(gameSession, 5, $"{police.Id},{robber.Id}", null);
-        BroadcastTcp(gameSession, 8, JsonSerializer.Serialize(police), null);
-        BroadcastTcp(gameSession, 8, JsonSerializer.Serialize(robber), null);
+        BroadcastTcp(gameSession, TcpMessageType.Arrested, $"{police.Id},{robber.Id}", null);
+        BroadcastTcp(gameSession, TcpMessageType.PlayerState, JsonSerializer.Serialize(police), null);
+        BroadcastTcp(gameSession, TcpMessageType.PlayerState, JsonSerializer.Serialize(robber), null);
     }
 
+    // 감옥 안에서 도둑들이 겹치지 않도록 수용 위치를 계산합니다.
     private (float X, float Y) GetJailHoldingPosition(Player robber, GameSession gameSession)
     {
         var robbers = gameSession.Sessions.Values
@@ -408,6 +419,7 @@ public class GameNetworkServer : BackgroundService
             Math.Clamp(_map.Jail.Center.Y + offsetY, minY, maxY));
     }
 
+    // 감옥 근처에서 구조 중인 도둑들의 탈옥 진행률을 갱신하고 완료 시 석방합니다.
     private void UpdateJailBreakProgress(string roomId, GameSession gameSession)
     {
         var now = DateTime.UtcNow;
@@ -471,6 +483,7 @@ public class GameNetworkServer : BackgroundService
         BroadcastJailBreakProgress(gameSession, roomId);
     }
 
+    // 구조 조건이 깨졌을 때 탈옥 진행 상태를 초기화하고 클라이언트에 알립니다.
     private void ClearJailBreakProgress(GameSession gameSession, string roomId)
     {
         if (gameSession.JailBreakStartedAtByRescuer.Count == 0 &&
@@ -484,6 +497,7 @@ public class GameNetworkServer : BackgroundService
         BroadcastJailBreakProgress(gameSession, roomId);
     }
 
+    // 탈옥 진행을 완료한 구조자 수만큼 오래 갇힌 도둑을 감옥 밖으로 보냅니다.
     private void ReleaseJailedRobbers(
         string roomId,
         GameSession gameSession,
@@ -522,8 +536,8 @@ public class GameNetworkServer : BackgroundService
                 Y = target.Y
             };
 
-            BroadcastTcp(gameSession, 7, JsonSerializer.Serialize(syncData), null);
-            BroadcastTcp(gameSession, 8, JsonSerializer.Serialize(target), null);
+            BroadcastTcp(gameSession, TcpMessageType.JailBreak, JsonSerializer.Serialize(syncData), null);
+            BroadcastTcp(gameSession, TcpMessageType.PlayerState, JsonSerializer.Serialize(target), null);
         }
 
         foreach (var rescuer in readyRescuers)
@@ -542,6 +556,7 @@ public class GameNetworkServer : BackgroundService
         }
     }
 
+    // 현재 구조자별 탈옥 진행률을 방의 모든 TCP 클라이언트에 보냅니다.
     private static void BroadcastJailBreakProgress(GameSession gameSession, string roomId)
     {
         var syncData = new JailBreakProgressSync
@@ -550,9 +565,10 @@ public class GameNetworkServer : BackgroundService
             ProgressByRescuer = new Dictionary<string, float>(gameSession.JailBreakProgressByRescuer)
         };
 
-        BroadcastTcp(gameSession, 9, JsonSerializer.Serialize(syncData), null);
+        BroadcastTcp(gameSession, TcpMessageType.JailBreakProgress, JsonSerializer.Serialize(syncData), null);
     }
 
+    // 도둑의 현재 위치를 기준으로 감옥 입장 시간 기록을 추가하거나 제거합니다.
     private void RefreshJailEntry(GameSession gameSession, Player player)
     {
         if (player.Role != PlayerRole.Robber)
@@ -570,18 +586,21 @@ public class GameNetworkServer : BackgroundService
         }
     }
 
+    // 플레이어가 현재 체포 중인 경찰이나 도둑인지 확인합니다.
     private static bool IsPlayerInActiveArrest(GameSession gameSession, string playerId)
     {
         return gameSession.ActiveArrestsByRobberId.ContainsKey(playerId) ||
                gameSession.ActiveArrestsByRobberId.Values.Any(a => a.PoliceId == playerId);
     }
 
+    // 체포 중이거나 감옥에 갇혀 있어 이동을 막아야 하는 플레이어인지 확인합니다.
     private bool IsPlayerMovementLocked(GameSession gameSession, Player player)
     {
         return IsPlayerInActiveArrest(gameSession, player.Id) ||
                (player.Role == PlayerRole.Robber && IsInJail(player));
     }
 
+    // 플레이어의 현재 좌표가 감옥 사각형 안에 있는지 확인합니다.
     private bool IsInJail(Player player)
     {
         return player.X >= _map.Jail.LeftTop.X &&
@@ -590,6 +609,7 @@ public class GameNetworkServer : BackgroundService
                player.Y <= _map.Jail.RightBottom.Y;
     }
 
+    // 특정 좌표가 플레이어의 시야 거리와 시야각 안에 들어오는지 계산합니다.
     private static bool IsPointInVision(Player player, float x, float y)
     {
         var dx = x - player.X;
@@ -609,16 +629,19 @@ public class GameNetworkServer : BackgroundService
         return angleDifference <= VisionConeAngleDegrees / 2f;
     }
 
+    // 플레이어 크기를 기준으로 시야 거리를 계산합니다.
     private static float GetVisionRange(Player player)
     {
         return player.Radius * 2f * VisionRangePlayerSizeMultiplier;
     }
 
+    // 플레이어 회전값을 실제 바라보는 방향 각도로 변환합니다.
     private static float GetFacingAngle(Player player)
     {
         return NormalizeDegrees(player.Angle + 90f);
     }
 
+    // 각도를 0도 이상 360도 미만 범위로 맞춥니다.
     private static float NormalizeDegrees(float degrees)
     {
         degrees %= 360f;
@@ -630,12 +653,14 @@ public class GameNetworkServer : BackgroundService
         return degrees;
     }
 
+    // 두 각도 사이의 가장 짧은 방향 차이를 -180도부터 180도 범위로 계산합니다.
     private static float ShortestAngleDifference(float fromDegrees, float toDegrees)
     {
         var difference = NormalizeDegrees(toDegrees - fromDegrees);
         return difference > 180f ? difference - 360f : difference;
     }
 
+    // 플레이어가 탈옥 구조를 진행할 만큼 감옥에 가까이 붙어 있는지 확인합니다.
     private bool IsTouchingOrNearJail(Player player)
     {
         var closestX = Math.Max(_map.Jail.LeftTop.X, Math.Min(player.X, _map.Jail.RightBottom.X));
@@ -647,6 +672,7 @@ public class GameNetworkServer : BackgroundService
         return distanceX * distanceX + distanceY * distanceY <= allowedDistance * allowedDistance;
     }
 
+    // 감옥 아래쪽에서 장애물과 겹치지 않는 석방 위치를 찾습니다.
     private (float X, float Y) GetJailReleasePosition(float radius, int releaseIndex)
     {
         var jail = _map.Jail;
@@ -681,6 +707,7 @@ public class GameNetworkServer : BackgroundService
         return (Math.Clamp(jail.Center.X, radius, _map.Width - radius), Math.Clamp(startY, radius, _map.Height - radius));
     }
 
+    // 석방 후보 위치가 감옥이나 장애물과 충돌하는지 확인합니다.
     private bool IsReleasePositionBlocked(float x, float y, float radius)
     {
         if (IsCircleCollidingWithBuilding(x, y, radius, _map.Jail))
@@ -718,6 +745,7 @@ public class GameNetworkServer : BackgroundService
         return false;
     }
 
+    // 원형 플레이어가 사각형 건물 영역과 충돌하는지 계산합니다.
     private static bool IsCircleCollidingWithBuilding(float x, float y, float radius, MapBuilding building)
     {
         var closestX = Math.Max(building.LeftTop.X, Math.Min(x, building.RightBottom.X));
@@ -728,17 +756,19 @@ public class GameNetworkServer : BackgroundService
         return distanceX * distanceX + distanceY * distanceY < radius * radius;
     }
 
-    private static void SendTcp(BinaryWriter writer, byte type, string payload)
+    // 타입과 JSON payload를 정해진 TCP 프레임 형식으로 전송합니다.
+    private static void SendTcp(BinaryWriter writer, TcpMessageType type, string payload)
     {
         lock (writer)
         {
             writer.Write(payload.Length + 1);
-            writer.Write(type);
+            writer.Write((byte)type);
             writer.Write(payload);
         }
     }
 
-    private static void BroadcastTcp(GameSession gameSession, byte type, string payload, string? excludeId)
+    // 한 방의 TCP 클라이언트들에게 메시지를 보내고 필요하면 특정 플레이어는 제외합니다.
+    private static void BroadcastTcp(GameSession gameSession, TcpMessageType type, string payload, string? excludeId)
     {
         foreach (var kvp in gameSession.Sessions)
         {
@@ -758,6 +788,7 @@ public class GameNetworkServer : BackgroundService
         }
     }
 
+    // UDP 이동 패킷을 받아 서버의 플레이어 상태에 반영하고 같은 방에 전파합니다.
     private async Task ReceiveUdpAsync(CancellationToken stoppingToken)
     {
         while (!stoppingToken.IsCancellationRequested)
@@ -810,7 +841,7 @@ public class GameNetworkServer : BackgroundService
 
                 if (shouldBroadcastTcpState)
                 {
-                    BroadcastTcp(gameSession, 8, authoritativePlayerJson, null);
+                    BroadcastTcp(gameSession, TcpMessageType.PlayerState, authoritativePlayerJson, null);
                 }
                 else if (shouldBroadcastUdp)
                 {
@@ -825,6 +856,7 @@ public class GameNetworkServer : BackgroundService
         }
     }
 
+    // 한 방의 등록된 UDP endpoint들에게 이동 데이터를 보내고 보낸 플레이어는 제외합니다.
     private void BroadcastUdp(GameSession gameSession, byte[] buffer, string excludeId)
     {
         foreach (var kvp in gameSession.Sessions)
@@ -841,6 +873,7 @@ public class GameNetworkServer : BackgroundService
         }
     }
 
+    // 비어 있는 roomId를 기본 방 ID로 보정합니다.
     private static string NormalizeRoomId(string? roomId)
     {
         return string.IsNullOrWhiteSpace(roomId) ? DefaultRoomId : roomId;
@@ -849,12 +882,12 @@ public class GameNetworkServer : BackgroundService
 
 public class GameSession
 {
-    public object SyncRoot { get; } = new();
+    public object SyncRoot { get; } = new(); // 방 수정 상태 동시 수정을 막는 락
     public ConcurrentDictionary<string, PlayerSession> Sessions { get; } = new();
-    public ConcurrentDictionary<string, DateTime> JailEntryTimes { get; } = new();
-    public Dictionary<string, ArrestState> ActiveArrestsByRobberId { get; } = new();
-    public Dictionary<string, DateTime> JailBreakStartedAtByRescuer { get; } = new();
-    public Dictionary<string, float> JailBreakProgressByRescuer { get; } = new();
+    public ConcurrentDictionary<string, DateTime> JailEntryTimes { get; } = new(); // 감옥 입장 순서
+    public Dictionary<string, ArrestState> ActiveArrestsByRobberId { get; } = new(); // 현재 체포 중인 도둑 관리
+    public Dictionary<string, DateTime> JailBreakStartedAtByRescuer { get; } = new(); // 탈옥 시작 시간
+    public Dictionary<string, float> JailBreakProgressByRescuer { get; } = new(); // 탈옥 진행률 관리한느 필드
     public GamePhase GamePhase { get; set; }
     public int CountdownTime { get; set; } = 3;
     public int GameTime { get; set; } = 300;
@@ -864,7 +897,7 @@ public class ArrestState
 {
     public string PoliceId { get; set; } = string.Empty;
     public string RobberId { get; set; } = string.Empty;
-    public DateTime CompletesAtUtc { get; set; }
+    public DateTime CompletesAtUtc { get; set; } // 체포가 완료되는 시간
 }
 
 public class PlayerSession

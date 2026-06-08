@@ -55,6 +55,7 @@ public class MapBuilding
 public class Obstacle
 {
     public string Type { get; set; } = string.Empty;
+    public string ImageUrl { get; set; } = string.Empty;
     public PointF LeftTop { get; set; }
     public PointF LeftBottom { get; set; }
     public PointF RightTop { get; set; }

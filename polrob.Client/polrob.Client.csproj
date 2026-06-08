@@ -44,16 +44,17 @@
 		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios'">15.0</SupportedOSPlatformVersion>
 		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">21.0</SupportedOSPlatformVersion>
 		<ApplicationManifest Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios'">Platforms/iOS/Info.plist</ApplicationManifest>
+		<EnableMauiSplashScreenProcessing Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios'">false</EnableMauiSplashScreenProcessing>
 	</PropertyGroup>
 
 	<ItemGroup>
 		<!-- App Icon -->
 		<!-- <MauiIcon Include="Resources\AppIcon\appicon.svg" ForegroundFile="Resources\AppIcon\appiconfg.svg" Color="#512BD4" /> -->
-		<MauiIcon Include="Resources\AppIcon\polrobicon.svg" ForegroundFile="Resources\AppIcon\polrobiconfg.svg" Color="#BDBDBD" />
+		<MauiIcon Include="Resources\AppIcon\polrobicon_new.png" Color="#BDBDBD" />
 
 
 		<!-- Splash Screen -->
-		<MauiSplashScreen Include="Resources\Splash\splashpolrob.svg" Color="#BDBDBD" BaseSize="256,256" />
+		<MauiSplashScreen Include="Resources\Splash\splashpolrob_new.png" Color="#BDBDBD" BaseSize="256,570" Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) != 'ios'" />
 
 		<!-- Images -->
 		<MauiImage Include="Resources\Images\*" />
@@ -71,6 +72,10 @@
 		<PackageReference Include="Microsoft.AspNetCore.SignalR.Client" Version="10.0.5" />
 		<PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="10.0.0" />
 		<PackageReference Include="SkiaSharp.Views.Maui.Controls" Version="3.119.2" />
+	</ItemGroup>
+
+	<ItemGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios'">
+		<BundleResource Include="Resources\Splash\splashpolrob_new.png" LogicalName="splashpolrob_native.png" />
 	</ItemGroup>
 
 	<ItemGroup>
