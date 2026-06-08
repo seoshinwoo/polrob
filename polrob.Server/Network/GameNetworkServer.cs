@@ -435,7 +435,6 @@ public class GameNetworkServer : BackgroundService
         var activeRescuers = gameSession.Sessions.Values
             .Select(s => s.PlayerState)
             .Where(p => p.Role == PlayerRole.Robber &&
-                        p.IsMoving &&
                         !IsInJail(p) &&
                         !IsPlayerInActiveArrest(gameSession, p.Id) &&
                         IsTouchingOrNearJail(p))
