@@ -1,4 +1,6 @@
 using System.Collections.Concurrent;
+using System.Security.Cryptography;
+using System.Text;
 using Microsoft.AspNetCore.Mvc;
 
 namespace polrob.Server.Controllers;
@@ -10,14 +12,22 @@ public class AuthController : ControllerBase
     private static readonly ConcurrentDictionary<string, (string PlayerId, DateTime Expires)> Sessions = new();
 
     private readonly LoginDbService _loginDbService;
+    private readonly BotIdentityService _botIdentityService;
+    private readonly IConfiguration _configuration;
 
-    public AuthController(LoginDbService loginDbService)
+    public AuthController(
+        LoginDbService loginDbService,
+        BotIdentityService botIdentityService,
+        IConfiguration configuration)
     {
         _loginDbService = loginDbService;
+        _botIdentityService = botIdentityService;
+        _configuration = configuration;
     }
 
     public record SignUpRequest(string LoginId, string DisplayName, string Password);
     public record LoginRequest(string LoginId, string Password);
+    public record BotLoginRequest(string? DisplayName);
     public record LoginResponse(string SessionToken, string PlayerId, string LoginId, string DisplayName);
     public record LogoutRequest(string SessionToken);
 
@@ -59,6 +69,25 @@ public class AuthController : ControllerBase
         }
 
         return Ok(CreateLoginResponse(user));
+    }
+
+    [HttpPost("bot-login")]
+    public IActionResult BotLogin([FromBody] BotLoginRequest? req)
+    {
+        if (!_configuration.GetValue<bool>("BotAuth:Enabled"))
+        {
+            return NotFound();
+        }
+
+        var configuredApiKey = _configuration["BotAuth:ApiKey"];
+        var providedApiKey = Request.Headers["X-Polrob-Bot-Key"].ToString();
+        if (!IsValidBotApiKey(configuredApiKey, providedApiKey))
+        {
+            return Unauthorized("봇 인증 키가 올바르지 않습니다.");
+        }
+
+        var bot = _botIdentityService.Create(req?.DisplayName);
+        return Ok(CreateLoginResponse(bot));
     }
 
     [HttpPost("logout")]
@@ -138,6 +167,19 @@ public class AuthController : ControllerBase
             or >= '0' and <= '9'
             or '_'
             or '-';
+    }
+
+    private static bool IsValidBotApiKey(string? expected, string? provided)
+    {
+        if (string.IsNullOrWhiteSpace(expected) || string.IsNullOrWhiteSpace(provided))
+        {
+            return false;
+        }
+
+        var expectedBytes = Encoding.UTF8.GetBytes(expected);
+        var providedBytes = Encoding.UTF8.GetBytes(provided);
+        return expectedBytes.Length == providedBytes.Length
+            && CryptographicOperations.FixedTimeEquals(expectedBytes, providedBytes);
     }
 
     private static LoginResponse CreateLoginResponse(LoginUser user)

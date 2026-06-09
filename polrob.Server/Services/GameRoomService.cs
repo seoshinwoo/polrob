@@ -7,10 +7,12 @@ public class GameRoomService
     private readonly Lock _roomLock = new();
     private readonly List<Game> Games = new();
     private readonly LoginDbService _loginDbService;
+    private readonly BotIdentityService _botIdentityService;
 
-    public GameRoomService(LoginDbService loginDbService)
+    public GameRoomService(LoginDbService loginDbService, BotIdentityService botIdentityService)
     {
         _loginDbService = loginDbService;
+        _botIdentityService = botIdentityService;
     }
 
     public async Task<ServerResponse> CreateRoom(
@@ -19,7 +21,7 @@ public class GameRoomService
         PlayerRole role = PlayerRole.Police,
         bool isPrivate = true)
     {
-        var user = await _loginDbService.GetItemAsync<LoginUser>(userId, userId);
+        var user = await GetUserAsync(userId);
         if (user == null)
         {
             return new ServerResponse
@@ -56,7 +58,7 @@ public class GameRoomService
         string roomCode,
         PlayerRole role = PlayerRole.Robber)
     {
-        var user = await _loginDbService.GetItemAsync<LoginUser>(userId, userId);
+        var user = await GetUserAsync(userId);
         if (user == null)
         {
             return new ServerResponse
@@ -122,7 +124,7 @@ public class GameRoomService
 
     public async Task<ServerResponse> JoinRandomGame(string userId, string roomId, PlayerRole role)
     {
-        var user = await _loginDbService.GetItemAsync<LoginUser>(userId, userId);
+        var user = await GetUserAsync(userId);
         if (user == null)
         {
             return new ServerResponse
@@ -293,7 +295,7 @@ public class GameRoomService
 
     public async Task<ServerResponse> ResetRoomForReplay(string roomId, string userId, PlayerRole role)
     {
-        var user = await _loginDbService.GetItemAsync<LoginUser>(userId, userId);
+        var user = await GetUserAsync(userId);
         if (user == null)
         {
             return new ServerResponse
@@ -518,6 +520,12 @@ public class GameRoomService
     {
         return game.Players.Any(p => p.Role == PlayerRole.Police)
             && game.Players.Any(p => p.Role == PlayerRole.Robber);
+    }
+
+    private async Task<LoginUser?> GetUserAsync(string userId)
+    {
+        var bot = _botIdentityService.Get(userId);
+        return bot ?? await _loginDbService.GetItemAsync<LoginUser>(userId, userId);
     }
 
     private Player CreatePlayer(LoginUser user, string roomId, PlayerRole role)
