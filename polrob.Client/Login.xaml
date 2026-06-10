@@ -92,16 +92,8 @@
                                  Spacing="12"
                                  WidthRequest="320"
                                  MaximumWidthRequest="360">
-                <Entry x:Name="DisplayNameEntry"
-                       Placeholder="닉네임"
-                       FontSize="17"
-                       TextColor="White"
-                       PlaceholderColor="#cfcfcf"
-                       BackgroundColor="#666666"
-                       HeightRequest="50"/>
-
-                <Entry x:Name="LoginIdEntry"
-                       Placeholder="아이디"
+                <Entry x:Name="NameEntry"
+                       Placeholder="이름"
                        FontSize="17"
                        TextColor="White"
                        PlaceholderColor="#cfcfcf"
@@ -150,7 +142,7 @@
         </ScrollView>
 
         <Label Grid.Row="2"
-               Text="아이디와 비밀번호로 계속"
+               Text="이름과 비밀번호로 계속"
                Margin="24,0,24,26"
                FontSize="13"
                HorizontalTextAlignment="Center"

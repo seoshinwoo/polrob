@@ -38,6 +38,6 @@ public partial class GameCreate : ContentPage
     private void UpdateAuthHeader()
     {
         ProfileButton.IsVisible = AuthSession.IsLoggedIn;
-        ProfileButton.Text = AuthSession.DisplayName ?? string.Empty;
+        ProfileButton.Text = AuthSession.Name ?? string.Empty;
     }
 }

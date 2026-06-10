@@ -9,26 +9,26 @@ namespace polrob.Server.Controllers;
 [Route("auth")]
 public class AuthController : ControllerBase
 {
-    private static readonly ConcurrentDictionary<string, (string PlayerId, DateTime Expires)> Sessions = new();
+    private static readonly ConcurrentDictionary<string, (string UserId, DateTime Expires)> Sessions = new();
 
-    private readonly LoginDbService _loginDbService;
+    private readonly UserDbService _userDbService;
     private readonly BotIdentityService _botIdentityService;
     private readonly IConfiguration _configuration;
 
     public AuthController(
-        LoginDbService loginDbService,
+        UserDbService userDbService,
         BotIdentityService botIdentityService,
         IConfiguration configuration)
     {
-        _loginDbService = loginDbService;
+        _userDbService = userDbService;
         _botIdentityService = botIdentityService;
         _configuration = configuration;
     }
 
-    public record SignUpRequest(string LoginId, string DisplayName, string Password);
-    public record LoginRequest(string LoginId, string Password);
-    public record BotLoginRequest(string? DisplayName);
-    public record LoginResponse(string SessionToken, string PlayerId, string LoginId, string DisplayName);
+    public record SignUpRequest(string Name, string Password);
+    public record LoginRequest(string Name, string Password);
+    public record BotLoginRequest(string? Name);
+    public record LoginResponse(string SessionToken, string UserId, string Name);
     public record LogoutRequest(string SessionToken);
 
     [HttpPost("signup")]
@@ -39,16 +39,16 @@ public class AuthController : ControllerBase
             return BadRequest("회원가입 정보를 입력해주세요.");
         }
 
-        var validationError = ValidateCredentials(req.LoginId, req.Password, req.DisplayName);
+        var validationError = ValidateCredentials(req.Name, req.Password);
         if (validationError is not null)
         {
             return BadRequest(validationError);
         }
 
-        var user = await _loginDbService.CreateUserAsync(req.LoginId, req.DisplayName, req.Password);
+        var user = await _userDbService.CreateUserAsync(req.Name, req.Password);
         if (user is null)
         {
-            return Conflict("이미 사용 중인 아이디입니다.");
+            return Conflict("이미 사용 중인 이름입니다.");
         }
 
         return Ok(CreateLoginResponse(user));
@@ -57,15 +57,15 @@ public class AuthController : ControllerBase
     [HttpPost("login")]
     public async Task<IActionResult> Login([FromBody] LoginRequest req)
     {
-        if (req is null || string.IsNullOrWhiteSpace(req.LoginId) || string.IsNullOrWhiteSpace(req.Password))
+        if (req is null || string.IsNullOrWhiteSpace(req.Name) || string.IsNullOrWhiteSpace(req.Password))
         {
-            return BadRequest("아이디와 비밀번호를 입력해주세요.");
+            return BadRequest("이름과 비밀번호를 입력해주세요.");
         }
 
-        var user = await _loginDbService.ValidateUserAsync(req.LoginId, req.Password);
+        var user = await _userDbService.ValidateUserAsync(req.Name, req.Password);
         if (user is null)
         {
-            return Unauthorized("아이디 또는 비밀번호가 올바르지 않습니다.");
+            return Unauthorized("이름 또는 비밀번호가 올바르지 않습니다.");
         }
 
         return Ok(CreateLoginResponse(user));
@@ -86,7 +86,7 @@ public class AuthController : ControllerBase
             return Unauthorized("봇 인증 키가 올바르지 않습니다.");
         }
 
-        var bot = _botIdentityService.Create(req?.DisplayName);
+        var bot = _botIdentityService.Create(req?.Name);
         return Ok(CreateLoginResponse(bot));
     }
 
@@ -101,9 +101,9 @@ public class AuthController : ControllerBase
         return NoContent();
     }
 
-    public static bool ValidateSession(string sessionToken, out string? playerId)
+    public static bool ValidateSession(string sessionToken, out string? userId)
     {
-        playerId = null;
+        userId = null;
         if (string.IsNullOrEmpty(sessionToken))
         {
             return false;
@@ -117,39 +117,29 @@ public class AuthController : ControllerBase
                 return false;
             }
 
-            playerId = entry.PlayerId;
+            userId = entry.UserId;
             return true;
         }
 
         return false;
     }
 
-    private static string? ValidateCredentials(string loginId, string password, string displayName)
+    private static string? ValidateCredentials(string name, string password)
     {
-        if (string.IsNullOrWhiteSpace(displayName))
+        if (string.IsNullOrWhiteSpace(name))
         {
-            return "닉네임을 입력해주세요.";
+            return "이름을 입력해주세요.";
         }
 
-        if (displayName.Trim().Length is < 2 or > 24)
+        var trimmedName = name.Trim();
+        if (trimmedName.Length is < 4 or > 20)
         {
-            return "닉네임은 2자 이상 24자 이하로 입력해주세요.";
+            return "이름은 4자 이상 20자 이하로 입력해주세요.";
         }
 
-        if (string.IsNullOrWhiteSpace(loginId))
+        if (!trimmedName.All(IsAllowedNameCharacter))
         {
-            return "아이디를 입력해주세요.";
-        }
-
-        var trimmedLoginId = loginId.Trim();
-        if (trimmedLoginId.Length is < 4 or > 20)
-        {
-            return "아이디는 4자 이상 20자 이하로 입력해주세요.";
-        }
-
-        if (!trimmedLoginId.All(IsAllowedLoginIdCharacter))
-        {
-            return "아이디는 영문, 숫자, 밑줄, 하이픈만 사용할 수 있습니다.";
+            return "이름은 영문, 숫자, 밑줄, 하이픈만 사용할 수 있습니다.";
         }
 
         if (string.IsNullOrWhiteSpace(password) || password.Length < 8)
@@ -160,7 +150,7 @@ public class AuthController : ControllerBase
         return null;
     }
 
-    private static bool IsAllowedLoginIdCharacter(char ch)
+    private static bool IsAllowedNameCharacter(char ch)
     {
         return ch is >= 'a' and <= 'z'
             or >= 'A' and <= 'Z'
@@ -182,11 +172,11 @@ public class AuthController : ControllerBase
             && CryptographicOperations.FixedTimeEquals(expectedBytes, providedBytes);
     }
 
-    private static LoginResponse CreateLoginResponse(LoginUser user)
+    private static LoginResponse CreateLoginResponse(User user)
     {
         var sessionId = Guid.NewGuid().ToString("N");
-        Sessions[sessionId] = (user.UserId, DateTime.UtcNow.AddHours(12));
+        Sessions[sessionId] = (user.Id, DateTime.UtcNow.AddHours(12));
 
-        return new LoginResponse(sessionId, user.UserId, user.LoginId, user.DisplayName);
+        return new LoginResponse(sessionId, user.Id, user.Name);
     }
 }

@@ -30,14 +30,14 @@ if (!cosmosDbConnString.Contains("AccountEndpoint=", StringComparison.OrdinalIgn
         "Cosmos DB connection string is invalid. Use the full connection string from Azure Portal > Cosmos DB account > Keys > Primary Connection String. An endpoint URL alone is not enough.");
 }
 
-builder.Services.AddSingleton<LoginDbService>(sp => new LoginDbService(cosmosDbConnString));
+builder.Services.AddSingleton<UserDbService>(sp => new UserDbService(cosmosDbConnString));
 builder.Services.AddSingleton<BotIdentityService>();
 builder.Services.AddSingleton<GameRoomService>();
 
 var app = builder.Build();
 using (var scope = app.Services.CreateAsyncScope())
 {
-    var cosmosService = scope.ServiceProvider.GetRequiredService<LoginDbService>();
+    var cosmosService = scope.ServiceProvider.GetRequiredService<UserDbService>();
     await cosmosService.InitializeAsync();
 }
 

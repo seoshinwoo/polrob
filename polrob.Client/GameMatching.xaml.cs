@@ -46,13 +46,13 @@ public partial class GameMatching : ContentPage
 
         await AuthSession.LoadAsync();
 
-        if (!AuthSession.IsLoggedIn || string.IsNullOrWhiteSpace(AuthSession.PlayerId))
+        if (!AuthSession.IsLoggedIn || string.IsNullOrWhiteSpace(AuthSession.UserId))
         {
             await Shell.Current.GoToAsync("Login");
             return;
         }
 
-        await JoinRandomGameAsync(AuthSession.PlayerId, _selectedRole);
+        await JoinRandomGameAsync(AuthSession.UserId, _selectedRole);
     }
 
     private async void OnCancelMatchingClicked(object sender, EventArgs e)
@@ -104,9 +104,9 @@ public partial class GameMatching : ContentPage
                 UpdateMatchingCount(serverResponse.CurrentCount, serverResponse.MaxCount);
 
                 if (!string.IsNullOrWhiteSpace(_roomId)
-                    && !string.IsNullOrWhiteSpace(AuthSession.PlayerId))
+                    && !string.IsNullOrWhiteSpace(AuthSession.UserId))
                 {
-                    await StartRoomUpdatesAsync(_roomId, AuthSession.PlayerId);
+                    await StartRoomUpdatesAsync(_roomId, AuthSession.UserId);
                 }
             }
         }
@@ -178,9 +178,9 @@ public partial class GameMatching : ContentPage
         _hubConnection.Reconnected += async _ =>
         {
             if (!string.IsNullOrWhiteSpace(_roomId)
-                && !string.IsNullOrWhiteSpace(AuthSession.PlayerId))
+                && !string.IsNullOrWhiteSpace(AuthSession.UserId))
             {
-                await _hubConnection.InvokeAsync("JoinRoom", _roomId, AuthSession.PlayerId);
+                await _hubConnection.InvokeAsync("JoinRoom", _roomId, AuthSession.UserId);
             }
         };
 
@@ -224,9 +224,9 @@ public partial class GameMatching : ContentPage
             {
                 if (removePlayer
                     && !_isMatched
-                    && !string.IsNullOrWhiteSpace(AuthSession.PlayerId))
+                    && !string.IsNullOrWhiteSpace(AuthSession.UserId))
                 {
-                    await connection.InvokeAsync("CancelMatching", _roomId, AuthSession.PlayerId);
+                    await connection.InvokeAsync("CancelMatching", _roomId, AuthSession.UserId);
                 }
                 else
                 {

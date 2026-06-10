@@ -50,7 +50,6 @@ public partial class Login : ContentPage
     private void SetMode(bool isSignUpMode)
     {
         _isSignUpMode = isSignUpMode;
-        DisplayNameEntry.IsVisible = isSignUpMode;
         ConfirmPasswordEntry.IsVisible = isSignUpMode;
 
         ContinueButton.Text = isSignUpMode ? "Sign Up" : "Login";
@@ -62,14 +61,13 @@ public partial class Login : ContentPage
 
     private async Task SignUpAsync()
     {
-        var displayName = DisplayNameEntry.Text?.Trim() ?? string.Empty;
-        var loginId = LoginIdEntry.Text?.Trim() ?? string.Empty;
+        var name = NameEntry.Text?.Trim() ?? string.Empty;
         var password = PasswordEntry.Text ?? string.Empty;
         var confirmPassword = ConfirmPasswordEntry.Text ?? string.Empty;
 
-        if (string.IsNullOrWhiteSpace(displayName))
+        if (string.IsNullOrWhiteSpace(name))
         {
-            ShowStatus("닉네임을 입력해주세요.", isError: true);
+            ShowStatus("이름을 입력해주세요.", isError: true);
             return;
         }
 
@@ -79,15 +77,15 @@ public partial class Login : ContentPage
             return;
         }
 
-        await SendAuthRequestAsync("auth/signup", new SignUpRequest(loginId, displayName, password));
+        await SendAuthRequestAsync("auth/signup", new SignUpRequest(name, password));
     }
 
     private async Task LoginAsync()
     {
-        var loginId = LoginIdEntry.Text?.Trim() ?? string.Empty;
+        var name = NameEntry.Text?.Trim() ?? string.Empty;
         var password = PasswordEntry.Text ?? string.Empty;
 
-        await SendAuthRequestAsync("auth/login", new LoginRequest(loginId, password));
+        await SendAuthRequestAsync("auth/login", new LoginRequest(name, password));
     }
 
     private async Task SendAuthRequestAsync<TRequest>(string route, TRequest request)
@@ -112,11 +110,10 @@ public partial class Login : ContentPage
 
             await AuthSession.SetLoggedInAsync(
                 loginResponse.SessionToken,
-                loginResponse.PlayerId,
-                loginResponse.LoginId,
-                loginResponse.DisplayName);
+                loginResponse.UserId,
+                loginResponse.Name);
 
-            ShowStatus($"{loginResponse.DisplayName}님, 환영합니다.", isError: false);
+            ShowStatus($"{loginResponse.Name}님, 환영합니다.", isError: false);
             await Shell.Current.GoToAsync("//MainPage");
         }
         catch (HttpRequestException)
@@ -155,7 +152,7 @@ public partial class Login : ContentPage
         StatusLabel.TextColor = isError ? Color.FromArgb("#ffb1b1") : Color.FromArgb("#76d859");
     }
 
-    private sealed record SignUpRequest(string LoginId, string DisplayName, string Password);
-    private sealed record LoginRequest(string LoginId, string Password);
-    private sealed record LoginResponse(string SessionToken, string PlayerId, string LoginId, string DisplayName);
+    private sealed record SignUpRequest(string Name, string Password);
+    private sealed record LoginRequest(string Name, string Password);
+    private sealed record LoginResponse(string SessionToken, string UserId, string Name);
 }

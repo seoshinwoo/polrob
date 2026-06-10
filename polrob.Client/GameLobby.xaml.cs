@@ -81,9 +81,9 @@ public partial class GameLobby : ContentPage
         UpdateStartButtonVisibility();
         UpdateRoleAreaBackgrounds();
 
-        if (!string.IsNullOrWhiteSpace(AuthSession.PlayerId))
+        if (!string.IsNullOrWhiteSpace(AuthSession.UserId))
         {
-            await StartRoomUpdatesAsync(_roomId, AuthSession.PlayerId);
+            await StartRoomUpdatesAsync(_roomId, AuthSession.UserId);
         }
     }
 
@@ -122,7 +122,7 @@ public partial class GameLobby : ContentPage
     private void UpdateAuthHeader()
     {
         ProfileButton.IsVisible = AuthSession.IsLoggedIn;
-        ProfileButton.Text = AuthSession.DisplayName ?? string.Empty;
+        ProfileButton.Text = AuthSession.Name ?? string.Empty;
     }
 
     private async Task StartRoomUpdatesAsync(string roomId, string userId)
@@ -160,9 +160,9 @@ public partial class GameLobby : ContentPage
         _hubConnection.Reconnected += async _ =>
         {
             if (!string.IsNullOrWhiteSpace(_roomId)
-                && !string.IsNullOrWhiteSpace(AuthSession.PlayerId))
+                && !string.IsNullOrWhiteSpace(AuthSession.UserId))
             {
-                await _hubConnection.InvokeAsync("JoinRoom", _roomId, AuthSession.PlayerId);
+                await _hubConnection.InvokeAsync("JoinRoom", _roomId, AuthSession.UserId);
             }
         };
 
@@ -189,9 +189,9 @@ public partial class GameLobby : ContentPage
         _canStartGame = response.Players.Any(p => p.Role == PlayerRole.Police)
             && response.Players.Any(p => p.Role == PlayerRole.Robber);
 
-        if (!string.IsNullOrWhiteSpace(AuthSession.PlayerId))
+        if (!string.IsNullOrWhiteSpace(AuthSession.UserId))
         {
-            var localPlayer = response.Players.FirstOrDefault(p => p.Id == AuthSession.PlayerId);
+            var localPlayer = response.Players.FirstOrDefault(p => p.Id == AuthSession.UserId);
             if (localPlayer != null)
             {
                 _role = localPlayer.Role;
@@ -217,14 +217,14 @@ public partial class GameLobby : ContentPage
             return;
         }
 
-        if (string.IsNullOrWhiteSpace(AuthSession.PlayerId))
+        if (string.IsNullOrWhiteSpace(AuthSession.UserId))
         {
             LobbyStatusLabel.Text = "로그인 정보를 확인할 수 없습니다.";
             UpdateRoleAreaBackgrounds();
             return;
         }
 
-        await _hubConnection.InvokeAsync("ChangeRole", _roomId, AuthSession.PlayerId, role);
+        await _hubConnection.InvokeAsync("ChangeRole", _roomId, AuthSession.UserId, role);
     }
 
     private void UpdateRoleAreaBackgrounds()
@@ -292,9 +292,9 @@ public partial class GameLobby : ContentPage
             if (!string.IsNullOrWhiteSpace(_roomId)
                 && connection.State == HubConnectionState.Connected)
             {
-                if (removePlayer && !string.IsNullOrWhiteSpace(AuthSession.PlayerId))
+                if (removePlayer && !string.IsNullOrWhiteSpace(AuthSession.UserId))
                 {
-                    await connection.InvokeAsync("CancelMatching", _roomId, AuthSession.PlayerId);
+                    await connection.InvokeAsync("CancelMatching", _roomId, AuthSession.UserId);
                 }
                 else
                 {

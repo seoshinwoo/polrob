@@ -18,8 +18,8 @@ public partial class Profile : ContentPage
             return;
         }
 
-        DisplayNameLabel.Text = AuthSession.DisplayName ?? string.Empty;
-        LoginIdLabel.Text = AuthSession.LoginId ?? string.Empty;
+        NameLabel.Text = AuthSession.Name ?? string.Empty;
+        UserIdLabel.Text = AuthSession.UserId ?? string.Empty;
     }
 
     private async void OnBackClicked(object sender, EventArgs e)

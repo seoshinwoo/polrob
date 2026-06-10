@@ -5,32 +5,29 @@ public sealed class BotIdentityService
     private static readonly TimeSpan IdentityLifetime = TimeSpan.FromHours(12);
     private readonly ConcurrentDictionary<string, BotIdentity> _identities = new();
 
-    public LoginUser Create(string? requestedName)
+    public User Create(string? requestedName)
     {
         RemoveExpiredIdentities();
 
         var suffix = Guid.NewGuid().ToString("N");
-        var playerId = $"bot-{suffix}";
-        var displayName = string.IsNullOrWhiteSpace(requestedName)
+        var userId = $"bot-{suffix}";
+        var name = string.IsNullOrWhiteSpace(requestedName)
             ? $"Bot-{suffix[..8]}"
             : requestedName.Trim();
 
-        var user = new LoginUser
+        var user = new User
         {
-            Id = playerId,
-            UserId = playerId,
-            LoginId = playerId,
-            DisplayName = displayName,
-            CreatedAt = DateTimeOffset.UtcNow
+            Id = userId,
+            Name = name
         };
 
-        _identities[playerId] = new BotIdentity(user, DateTimeOffset.UtcNow.Add(IdentityLifetime));
+        _identities[userId] = new BotIdentity(user, DateTimeOffset.UtcNow.Add(IdentityLifetime));
         return user;
     }
 
-    public LoginUser? Get(string playerId)
+    public User? Get(string userId)
     {
-        if (!_identities.TryGetValue(playerId, out var identity))
+        if (!_identities.TryGetValue(userId, out var identity))
         {
             return null;
         }
@@ -40,7 +37,7 @@ public sealed class BotIdentityService
             return identity.User;
         }
 
-        _identities.TryRemove(playerId, out _);
+        _identities.TryRemove(userId, out _);
         return null;
     }
 
@@ -56,5 +53,5 @@ public sealed class BotIdentityService
         }
     }
 
-    private sealed record BotIdentity(LoginUser User, DateTimeOffset ExpiresAt);
+    private sealed record BotIdentity(User User, DateTimeOffset ExpiresAt);
 }

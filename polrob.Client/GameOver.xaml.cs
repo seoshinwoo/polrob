@@ -72,7 +72,7 @@ public partial class GameOver : ContentPage
     private async void OnPlayAgainClicked(object sender, EventArgs e)
     {
         await AuthSession.LoadAsync();
-        if (!AuthSession.IsLoggedIn || string.IsNullOrWhiteSpace(AuthSession.PlayerId))
+        if (!AuthSession.IsLoggedIn || string.IsNullOrWhiteSpace(AuthSession.UserId))
         {
             await Shell.Current.GoToAsync("Login");
             return;
@@ -90,7 +90,7 @@ public partial class GameOver : ContentPage
     private void UpdateAuthHeader()
     {
         ProfileButton.IsVisible = AuthSession.IsLoggedIn;
-        ProfileButton.Text = AuthSession.DisplayName ?? string.Empty;
+        ProfileButton.Text = AuthSession.Name ?? string.Empty;
     }
 
     private async Task NavigateToCustomLobbyAsync()
@@ -106,7 +106,7 @@ public partial class GameOver : ContentPage
             using var httpClient = new HttpClient { BaseAddress = new Uri(AuthSession.ApiBaseUrl) };
             var response = await httpClient.PostAsJsonAsync(
                 "game/reset-room",
-                new ResetRoomRequest(AuthSession.PlayerId!, _roomId, _role));
+                new ResetRoomRequest(AuthSession.UserId!, _roomId, _role));
 
             if (!response.IsSuccessStatusCode)
             {

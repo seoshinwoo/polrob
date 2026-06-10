@@ -117,8 +117,8 @@ public partial class GamePlay : ContentPage
 
         _player = new Player
         {
-            Id = AuthSession.PlayerId ?? Preferences.Get("playerId", null) ?? Guid.NewGuid().ToString(),
-            Name = GetLocalDisplayName(),
+            Id = AuthSession.UserId ?? Preferences.Get("userId", null) ?? Guid.NewGuid().ToString(),
+            Name = GetLocalName(),
             RoomId = _roomId,
             X = _gameMap.Width / 2f,
             Y = _gameMap.Height / 2f,
@@ -153,15 +153,15 @@ public partial class GamePlay : ContentPage
     {
         base.OnAppearing();
         await AuthSession.LoadAsync();
-        if (!string.IsNullOrWhiteSpace(AuthSession.PlayerId) && _player.Id != AuthSession.PlayerId)
+        if (!string.IsNullOrWhiteSpace(AuthSession.UserId) && _player.Id != AuthSession.UserId)
         {
             _players.Remove(_player.Id);
-            _player.Id = AuthSession.PlayerId;
+            _player.Id = AuthSession.UserId;
             _players[_player.Id] = _player;
         }
         _player.RoomId = _roomId;
         _player.Role = _selectedRole;
-        _player.Name = GetLocalDisplayName();
+        _player.Name = GetLocalName();
 
         await LoadAssetsAsync();
         await InitializeNetworkAsync();
@@ -769,10 +769,10 @@ public partial class GamePlay : ContentPage
         }
     }
 
-    private static string GetLocalDisplayName()
+    private static string GetLocalName()
     {
-        return AuthSession.DisplayName
-            ?? Preferences.Get("displayName", null)
+        return AuthSession.Name
+            ?? Preferences.Get("name", null)
             ?? "Player";
     }
 

@@ -8,35 +8,31 @@ public static class AuthSession
     private const string LocalNetworkServerHost = "192.0.0.2";
 
     public static string? SessionToken { get; private set; }
-    public static string? PlayerId { get; private set; }
-    public static string? LoginId { get; private set; }
-    public static string? DisplayName { get; private set; }
+    public static string? UserId { get; private set; }
+    public static string? Name { get; private set; }
 
     public static bool IsLoggedIn => !string.IsNullOrWhiteSpace(SessionToken)
-        && !string.IsNullOrWhiteSpace(PlayerId);
+        && !string.IsNullOrWhiteSpace(UserId);
 
     public static event Action? Changed;
 
     public static async Task LoadAsync()
     {
         SessionToken = await SecureStorage.GetAsync("sessionToken");
-        PlayerId = Preferences.Get("playerId", null);
-        LoginId = Preferences.Get("loginId", null);
-        DisplayName = Preferences.Get("displayName", null);
+        UserId = Preferences.Get("userId", null);
+        Name = Preferences.Get("name", null);
         Changed?.Invoke();
     }
 
-    public static async Task SetLoggedInAsync(string sessionToken, string playerId, string loginId, string displayName)
+    public static async Task SetLoggedInAsync(string sessionToken, string userId, string name)
     {
         SessionToken = sessionToken;
-        PlayerId = playerId;
-        LoginId = loginId;
-        DisplayName = displayName;
+        UserId = userId;
+        Name = name;
 
         await SecureStorage.SetAsync("sessionToken", sessionToken);
-        Preferences.Set("playerId", playerId);
-        Preferences.Set("loginId", loginId);
-        Preferences.Set("displayName", displayName);
+        Preferences.Set("userId", userId);
+        Preferences.Set("name", name);
 
         Changed?.Invoke();
     }
@@ -59,14 +55,15 @@ public static class AuthSession
         }
 
         SessionToken = null;
-        PlayerId = null;
-        LoginId = null;
-        DisplayName = null;
+        UserId = null;
+        Name = null;
 
         SecureStorage.Remove("sessionToken");
         Preferences.Remove("playerId");
         Preferences.Remove("loginId");
         Preferences.Remove("displayName");
+        Preferences.Remove("userId");
+        Preferences.Remove("name");
 
         Changed?.Invoke();
     }

@@ -38,7 +38,7 @@ public partial class MainPage : ContentPage
 	private async void OnCreateClicked(object? sender, EventArgs e)
 	{
 		await AuthSession.LoadAsync();
-		if (!AuthSession.IsLoggedIn || string.IsNullOrWhiteSpace(AuthSession.PlayerId))
+		if (!AuthSession.IsLoggedIn || string.IsNullOrWhiteSpace(AuthSession.UserId))
 		{
 			await Shell.Current.GoToAsync("Login");
 			return;
@@ -50,7 +50,7 @@ public partial class MainPage : ContentPage
 			using var httpClient = new HttpClient { BaseAddress = new Uri(AuthSession.ApiBaseUrl) };
 			var response = await httpClient.PostAsJsonAsync(
 				"game/create",
-				new CreateRoomRequest(AuthSession.PlayerId, "custom", PlayerRole.Police, true));
+				new CreateRoomRequest(AuthSession.UserId, "custom", PlayerRole.Police, true));
 
 			if (!response.IsSuccessStatusCode)
 			{
@@ -92,7 +92,7 @@ public partial class MainPage : ContentPage
 	{
 		LoginButton.IsVisible = !AuthSession.IsLoggedIn;
 		ProfileButton.IsVisible = AuthSession.IsLoggedIn;
-		ProfileButton.Text = AuthSession.DisplayName ?? string.Empty;
+		ProfileButton.Text = AuthSession.Name ?? string.Empty;
 	}
 
 	private static async Task<string> ReadErrorMessageAsync(HttpResponseMessage response)

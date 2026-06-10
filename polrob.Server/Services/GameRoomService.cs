@@ -6,12 +6,12 @@ public class GameRoomService
 
     private readonly Lock _roomLock = new();
     private readonly List<Game> Games = new();
-    private readonly LoginDbService _loginDbService;
+    private readonly UserDbService _userDbService;
     private readonly BotIdentityService _botIdentityService;
 
-    public GameRoomService(LoginDbService loginDbService, BotIdentityService botIdentityService)
+    public GameRoomService(UserDbService userDbService, BotIdentityService botIdentityService)
     {
-        _loginDbService = loginDbService;
+        _userDbService = userDbService;
         _botIdentityService = botIdentityService;
     }
 
@@ -449,7 +449,7 @@ public class GameRoomService
         }
     }
 
-    private ServerResponse CreateRandomRoom(LoginUser user, PlayerRole role)
+    private ServerResponse CreateRandomRoom(User user, PlayerRole role)
     {
         var game = new Game("random", isPrivate: false);
         var player = CreatePlayer(user, game.Id, role);
@@ -522,18 +522,18 @@ public class GameRoomService
             && game.Players.Any(p => p.Role == PlayerRole.Robber);
     }
 
-    private async Task<LoginUser?> GetUserAsync(string userId)
+    private async Task<User?> GetUserAsync(string userId)
     {
         var bot = _botIdentityService.Get(userId);
-        return bot ?? await _loginDbService.GetItemAsync<LoginUser>(userId, userId);
+        return bot ?? await _userDbService.GetUserAsync(userId);
     }
 
-    private Player CreatePlayer(LoginUser user, string roomId, PlayerRole role)
+    private Player CreatePlayer(User user, string roomId, PlayerRole role)
     {
         return new Player
         {
-            Id = user.UserId,
-            Name = user.DisplayName,
+            Id = user.Id,
+            Name = user.Name,
             RoomId = roomId,
             Role = role
         };

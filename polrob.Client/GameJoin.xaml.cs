@@ -60,7 +60,7 @@ public partial class GameJoin : ContentPage
     private async void OnJoinCustomClicked(object? sender, EventArgs e)
     {
         await AuthSession.LoadAsync();
-        if (!AuthSession.IsLoggedIn || string.IsNullOrWhiteSpace(AuthSession.PlayerId))
+        if (!AuthSession.IsLoggedIn || string.IsNullOrWhiteSpace(AuthSession.UserId))
         {
             await Shell.Current.GoToAsync("Login");
             return;
@@ -81,7 +81,7 @@ public partial class GameJoin : ContentPage
             using var httpClient = new HttpClient { BaseAddress = new Uri(AuthSession.ApiBaseUrl) };
             var response = await httpClient.PostAsJsonAsync(
                 "game/join-custom",
-                new JoinCustomGameRequest(AuthSession.PlayerId, roomCode, PlayerRole.Robber));
+                new JoinCustomGameRequest(AuthSession.UserId, roomCode, PlayerRole.Robber));
 
             if (!response.IsSuccessStatusCode)
             {
@@ -147,7 +147,7 @@ public partial class GameJoin : ContentPage
     private void UpdateAuthHeader()
     {
         ProfileButton.IsVisible = AuthSession.IsLoggedIn;
-        ProfileButton.Text = AuthSession.DisplayName ?? string.Empty;
+        ProfileButton.Text = AuthSession.Name ?? string.Empty;
     }
 
     private void SelectRole(PlayerRole role)
