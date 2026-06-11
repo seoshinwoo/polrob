@@ -1,4 +1,5 @@
 ﻿using polrob.Test;
 
 var botRunner = new BotRunner();
-await botRunner.StartTest();
+await botRunner.TestLogin();
+await botRunner.TestRandomMatching();

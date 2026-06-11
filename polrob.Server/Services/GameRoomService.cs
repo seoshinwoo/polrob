@@ -8,11 +8,16 @@ public class GameRoomService
     private readonly List<Game> Games = new();
     private readonly UserDbService _userDbService;
     private readonly BotIdentityService _botIdentityService;
+    private readonly ILogger<GameRoomService> _logger;
 
-    public GameRoomService(UserDbService userDbService, BotIdentityService botIdentityService)
+    public GameRoomService(
+        UserDbService userDbService,
+        BotIdentityService botIdentityService,
+        ILogger<GameRoomService> logger)
     {
         _userDbService = userDbService;
         _botIdentityService = botIdentityService;
+        _logger = logger;
     }
 
     public async Task<ServerResponse> CreateRoom(
@@ -163,6 +168,7 @@ public class GameRoomService
                         if (game.Players.Count(p => p.Role == PlayerRole.Police) < 2)
                         {
                             game.Players.Add(CreatePlayer(user, game.Id, PlayerRole.Police));
+                            LogRandomMatchingCompletedIfNeeded(game);
                             return CreateRandomJoinResponse(
                                 game,
                                 role,
@@ -176,6 +182,7 @@ public class GameRoomService
                     if (game.Players.Count(p => p.Role == PlayerRole.Robber) < 4)
                     {
                         game.Players.Add(CreatePlayer(user, game.Id, PlayerRole.Robber));
+                        LogRandomMatchingCompletedIfNeeded(game);
                         return CreateRandomJoinResponse(
                             game,
                             role,
@@ -458,11 +465,39 @@ public class GameRoomService
         game.EmptyRoomExpiresAtUtc = null;
         Games.Add(game);
 
+        var randomRoomCount = Games.Count(candidate =>
+            !candidate.IsPrivate
+            && string.Equals(candidate.Type, "random", StringComparison.OrdinalIgnoreCase));
+
+        _logger.LogInformation(
+            "[Random Matching] Created rooms: {RoomCount}",
+            randomRoomCount);
+
         return CreateRandomJoinResponse(
             game,
             role,
             createdRoom: true,
             message: "참여 가능한 방이 없어 새 랜덤 방을 만들었습니다.");
+    }
+
+    private void LogRandomMatchingCompletedIfNeeded(Game game)
+    {
+        if (game.Players.Count < 6)
+        {
+            return;
+        }
+
+        var randomGames = Games
+            .Where(candidate =>
+                !candidate.IsPrivate
+                && string.Equals(candidate.Type, "random", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        var matchedRoomCount = randomGames.Count(candidate => candidate.Players.Count >= 6);
+
+        _logger.LogInformation(
+            "[Random Matching Complete] Total rooms: {RoomCount}, Matched rooms: {MatchedRoomCount}",
+            randomGames.Count,
+            matchedRoomCount);
     }
 
     private static ServerResponse CreateRandomJoinResponse(

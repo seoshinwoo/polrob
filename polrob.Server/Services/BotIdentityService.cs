@@ -1,11 +1,18 @@
 using System.Collections.Concurrent;
+using polrob.Shared;
 
 public sealed class BotIdentityService
 {
     private static readonly TimeSpan IdentityLifetime = TimeSpan.FromHours(12);
     private readonly ConcurrentDictionary<string, BotIdentity> _identities = new();
+    private readonly ILogger<BotIdentityService> _logger;
 
-    public User Create(string? requestedName)
+    public BotIdentityService(ILogger<BotIdentityService> logger)
+    {
+        _logger = logger;
+    }
+
+    public User Create(string? requestedName, PlayerRole role)
     {
         RemoveExpiredIdentities();
 
@@ -21,7 +28,12 @@ public sealed class BotIdentityService
             Name = name
         };
 
-        _identities[userId] = new BotIdentity(user, DateTimeOffset.UtcNow.Add(IdentityLifetime));
+        _identities[userId] = new BotIdentity(
+            user,
+            role,
+            DateTimeOffset.UtcNow.Add(IdentityLifetime));
+
+        LogCurrentCounts();
         return user;
     }
 
@@ -53,5 +65,18 @@ public sealed class BotIdentityService
         }
     }
 
-    private sealed record BotIdentity(User User, DateTimeOffset ExpiresAt);
+    private void LogCurrentCounts()
+    {
+        var identities = _identities.Values.ToArray();
+        var policeCount = identities.Count(identity => identity.Role == PlayerRole.Police);
+        var robberCount = identities.Count(identity => identity.Role == PlayerRole.Robber);
+
+        _logger.LogInformation(
+            "[Bot Login] Total: {TotalCount}, Police: {PoliceCount}, Robber: {RobberCount}",
+            identities.Length,
+            policeCount,
+            robberCount);
+    }
+
+    private sealed record BotIdentity(User User, PlayerRole Role, DateTimeOffset ExpiresAt);
 }

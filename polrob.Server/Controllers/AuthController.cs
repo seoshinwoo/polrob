@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.AspNetCore.Mvc;
+using polrob.Shared;
 
 namespace polrob.Server.Controllers;
 
@@ -27,9 +28,10 @@ public class AuthController : ControllerBase
 
     public record SignUpRequest(string Name, string Password);
     public record LoginRequest(string Name, string Password);
-    public record BotLoginRequest(string? Name);
     public record LoginResponse(string SessionToken, string UserId, string Name);
     public record LogoutRequest(string SessionToken);
+    public record BotLoginRequest(string? Name, PlayerRole Role);
+    public record BotLoginResponse(string UserId, string Name);
 
     [HttpPost("signup")]
     public async Task<IActionResult> SignUp([FromBody] SignUpRequest req)
@@ -71,6 +73,18 @@ public class AuthController : ControllerBase
         return Ok(CreateLoginResponse(user));
     }
 
+
+    [HttpPost("logout")]
+    public IActionResult Logout([FromBody] LogoutRequest req)
+    {
+        if (req is not null && !string.IsNullOrWhiteSpace(req.SessionToken))
+        {
+            Sessions.TryRemove(req.SessionToken, out _);
+        }
+
+        return NoContent();
+    }
+
     [HttpPost("bot-login")]
     public IActionResult BotLogin([FromBody] BotLoginRequest? req)
     {
@@ -86,21 +100,9 @@ public class AuthController : ControllerBase
             return Unauthorized("봇 인증 키가 올바르지 않습니다.");
         }
 
-        var bot = _botIdentityService.Create(req?.Name);
-        return Ok(CreateLoginResponse(bot));
+        var bot = _botIdentityService.Create(req?.Name, req?.Role ?? PlayerRole.Robber);
+        return Ok(new BotLoginResponse(bot.Id, bot.Name));
     }
-
-    [HttpPost("logout")]
-    public IActionResult Logout([FromBody] LogoutRequest req)
-    {
-        if (req is not null && !string.IsNullOrWhiteSpace(req.SessionToken))
-        {
-            Sessions.TryRemove(req.SessionToken, out _);
-        }
-
-        return NoContent();
-    }
-
     public static bool ValidateSession(string sessionToken, out string? userId)
     {
         userId = null;

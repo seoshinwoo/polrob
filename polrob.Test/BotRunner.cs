@@ -4,12 +4,13 @@ namespace polrob.Test;
 
 public class BotRunner
 {
+    private List<BotClient> _botClients = new List<BotClient>();
     public BotRunner()
     {
 
     }
 
-    public async Task StartTest()
+    public async Task TestLogin()
     {
         for (int i = 0; i < 600; i++)
         {
@@ -19,9 +20,26 @@ public class BotRunner
             bot.Role = i % 3 < 2 ? PlayerRole.Robber : PlayerRole.Police;
 
             await bot.Login();
-            await bot.Matching();
-            await bot.GamePlay();
-            await bot.GameOver();
+            _botClients.Add(bot);
         }
+    }
+
+    public async Task TestRandomMatching()
+    {
+        foreach (var bot in _botClients)
+        {
+            await bot.Matching();
+        }
+
+        await Task.WhenAll(_botClients.Select(bot =>
+            bot.WaitForMatchAsync(TimeSpan.FromSeconds(30))));
+
+        var matchedRoomCount = _botClients
+            .Select(bot => bot.RoomId)
+            .Distinct()
+            .Count();
+
+        Console.WriteLine(
+            $"랜덤 매칭 완료: {_botClients.Count}명, {matchedRoomCount}개 방");
     }
 }
