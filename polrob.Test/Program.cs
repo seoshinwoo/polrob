@@ -1,1 +1,4 @@
-﻿Console.WriteLine("Hello, World!");
+﻿using polrob.Test;
+
+var botRunner = new BotRunner();
+await botRunner.StartTest();
