@@ -208,6 +208,7 @@ public class GameNetworkServer : BackgroundService
                     player.RoomId = roomId;
 
                     var gameSession = _gameSessions.GetOrAdd(roomId, _ => new GameSession());
+                    List<Player> visiblePlayers;
                     lock (gameSession.SyncRoot)
                     {
                         PositionPlayerForRoom(player, gameSession);
@@ -218,13 +219,17 @@ public class GameNetworkServer : BackgroundService
                             PlayerState = player
                         };
                         _playerRooms[playerId] = roomId;
+                        visiblePlayers = gameSession.Sessions.Values
+                            .Select(s => s.PlayerState)
+                            .Where(p => p.Role == player.Role)
+                            .ToList();
                     }
 
                     Console.WriteLine($"Player Connected [TCP]: {playerId} / room {roomId}");
 
-                    var allPlayers = gameSession.Sessions.Values.Select(s => s.PlayerState).ToList();
-                    SendTcp(writer, TcpMessageType.InitialState, JsonSerializer.Serialize(allPlayers));
-                    Console.WriteLine($"{roomId} 방 {allPlayers.Count}명에게 플레이어 초기화!!");
+                    SendTcp(writer, TcpMessageType.InitialState, JsonSerializer.Serialize(visiblePlayers));
+                    Console.WriteLine(
+                        $"{roomId} 방 {player.Role} 역할 {visiblePlayers.Count}명으로 플레이어 초기화!!");
 
                     var syncData = new GameStateSync
                     {
@@ -235,8 +240,13 @@ public class GameNetworkServer : BackgroundService
                     };
                     SendTcp(writer, TcpMessageType.GameState, JsonSerializer.Serialize(syncData));
 
-                    BroadcastTcp(gameSession, TcpMessageType.Joined, JsonSerializer.Serialize(player), playerId);
-                    Console.WriteLine($"{roomId} 방에 플레이어 입장 브로드캐스트!!");
+                    BroadcastTcpToRole(
+                        gameSession,
+                        player.Role,
+                        TcpMessageType.Joined,
+                        JsonSerializer.Serialize(player),
+                        playerId);
+                    Console.WriteLine($"{roomId} 방 {player.Role} 역할에 플레이어 입장 브로드캐스트!!");
                 }
             }
         }
@@ -250,7 +260,7 @@ public class GameNetworkServer : BackgroundService
             {
                 lock (gameSession.SyncRoot)
                 {
-                    if (gameSession.Sessions.TryRemove(playerId, out _))
+                    if (gameSession.Sessions.TryRemove(playerId, out var removedSession))
                     {
                         gameSession.JailEntryTimes.TryRemove(playerId, out _);
                         gameSession.JailBreakStartedAtByRescuer.Remove(playerId);
@@ -264,7 +274,12 @@ public class GameNetworkServer : BackgroundService
 
                         _playerRooms.TryRemove(playerId, out _);
                         Console.WriteLine($"Player Disconnected: {playerId} / room {roomId}");
-                        BroadcastTcp(gameSession, TcpMessageType.Left, playerId, null);
+                        BroadcastTcpToRole(
+                            gameSession,
+                            removedSession.PlayerState.Role,
+                            TcpMessageType.Left,
+                            playerId,
+                            null);
                     }
 
                     if (gameSession.Sessions.Count == 0)
@@ -325,12 +340,12 @@ public class GameNetworkServer : BackgroundService
             gameSession.JailEntryTimes[robber.Id] = now;
             gameSession.ActiveArrestsByRobberId.Remove(robber.Id);
 
-            BroadcastTcp(gameSession, TcpMessageType.PlayerState, JsonSerializer.Serialize(robber), null);
+            BroadcastPlayerState(gameSession, robber);
 
             if (gameSession.Sessions.TryGetValue(arrest.PoliceId, out var policeSession))
             {
                 policeSession.PlayerState.IsMoving = false;
-                BroadcastTcp(gameSession, TcpMessageType.PlayerState, JsonSerializer.Serialize(policeSession.PlayerState), null);
+                BroadcastPlayerState(gameSession, policeSession.PlayerState);
             }
         }
     }
@@ -383,8 +398,8 @@ public class GameNetworkServer : BackgroundService
         robber.IsMoving = false;
 
         BroadcastTcp(gameSession, TcpMessageType.Arrested, $"{police.Id},{robber.Id}", null);
-        BroadcastTcp(gameSession, TcpMessageType.PlayerState, JsonSerializer.Serialize(police), null);
-        BroadcastTcp(gameSession, TcpMessageType.PlayerState, JsonSerializer.Serialize(robber), null);
+        BroadcastPlayerState(gameSession, police);
+        BroadcastPlayerState(gameSession, robber);
     }
 
     // 감옥 안에서 도둑들이 겹치지 않도록 수용 위치를 계산합니다.
@@ -535,8 +550,13 @@ public class GameNetworkServer : BackgroundService
                 Y = target.Y
             };
 
-            BroadcastTcp(gameSession, TcpMessageType.JailBreak, JsonSerializer.Serialize(syncData), null);
-            BroadcastTcp(gameSession, TcpMessageType.PlayerState, JsonSerializer.Serialize(target), null);
+            BroadcastTcpToRole(
+                gameSession,
+                PlayerRole.Robber,
+                TcpMessageType.JailBreak,
+                JsonSerializer.Serialize(syncData),
+                null);
+            BroadcastPlayerState(gameSession, target);
         }
 
         foreach (var rescuer in readyRescuers)
@@ -555,7 +575,7 @@ public class GameNetworkServer : BackgroundService
         }
     }
 
-    // 현재 구조자별 탈옥 진행률을 방의 모든 TCP 클라이언트에 보냅니다.
+    // 현재 구조자별 탈옥 진행률을 같은 도둑 역할의 TCP 클라이언트에 보냅니다.
     private static void BroadcastJailBreakProgress(GameSession gameSession, string roomId)
     {
         var syncData = new JailBreakProgressSync
@@ -564,7 +584,12 @@ public class GameNetworkServer : BackgroundService
             ProgressByRescuer = new Dictionary<string, float>(gameSession.JailBreakProgressByRescuer)
         };
 
-        BroadcastTcp(gameSession, TcpMessageType.JailBreakProgress, JsonSerializer.Serialize(syncData), null);
+        BroadcastTcpToRole(
+            gameSession,
+            PlayerRole.Robber,
+            TcpMessageType.JailBreakProgress,
+            JsonSerializer.Serialize(syncData),
+            null);
     }
 
     // 도둑의 현재 위치를 기준으로 감옥 입장 시간 기록을 추가하거나 제거합니다.
@@ -787,7 +812,44 @@ public class GameNetworkServer : BackgroundService
         }
     }
 
-    // UDP 이동 패킷을 받아 서버의 플레이어 상태에 반영하고 같은 방에 전파합니다.
+    // 위치 상태는 해당 플레이어와 같은 역할의 클라이언트에만 보냅니다.
+    private static void BroadcastPlayerState(GameSession gameSession, Player player)
+    {
+        BroadcastTcpToRole(
+            gameSession,
+            player.Role,
+            TcpMessageType.PlayerState,
+            JsonSerializer.Serialize(player),
+            null);
+    }
+
+    // 한 방에서 지정한 역할의 TCP 클라이언트들에게만 메시지를 보냅니다.
+    private static void BroadcastTcpToRole(
+        GameSession gameSession,
+        PlayerRole role,
+        TcpMessageType type,
+        string payload,
+        string? excludeId)
+    {
+        foreach (var kvp in gameSession.Sessions)
+        {
+            if (kvp.Key == excludeId || kvp.Value.PlayerState.Role != role)
+            {
+                continue;
+            }
+
+            try
+            {
+                SendTcp(kvp.Value.Writer, type, payload);
+            }
+            catch
+            {
+                // Dead TCP connections are cleaned up by their read loop.
+            }
+        }
+    }
+
+    // UDP 이동 패킷을 받아 서버의 플레이어 상태에 반영하고 같은 역할에만 전파합니다.
     private async Task ReceiveUdpAsync(CancellationToken stoppingToken)
     {
         while (!stoppingToken.IsCancellationRequested)
@@ -840,12 +902,21 @@ public class GameNetworkServer : BackgroundService
 
                 if (shouldBroadcastTcpState)
                 {
-                    BroadcastTcp(gameSession, TcpMessageType.PlayerState, authoritativePlayerJson, null);
+                    BroadcastTcpToRole(
+                        gameSession,
+                        session.PlayerState.Role,
+                        TcpMessageType.PlayerState,
+                        authoritativePlayerJson,
+                        null);
                 }
                 else if (shouldBroadcastUdp)
                 {
                     var authoritativeBuffer = System.Text.Encoding.UTF8.GetBytes(authoritativePlayerJson);
-                    BroadcastUdp(gameSession, authoritativeBuffer, player.Id);
+                    BroadcastUdpToRole(
+                        gameSession,
+                        session.PlayerState.Role,
+                        authoritativeBuffer,
+                        player.Id);
                 }
             }
             catch
@@ -855,12 +926,16 @@ public class GameNetworkServer : BackgroundService
         }
     }
 
-    // 한 방의 등록된 UDP endpoint들에게 이동 데이터를 보내고 보낸 플레이어는 제외합니다.
-    private void BroadcastUdp(GameSession gameSession, byte[] buffer, string excludeId)
+    // 한 방에서 같은 역할의 UDP endpoint들에게만 이동 데이터를 보냅니다.
+    private void BroadcastUdpToRole(
+        GameSession gameSession,
+        PlayerRole role,
+        byte[] buffer,
+        string excludeId)
     {
         foreach (var kvp in gameSession.Sessions)
         {
-            if (kvp.Key == excludeId)
+            if (kvp.Key == excludeId || kvp.Value.PlayerState.Role != role)
             {
                 continue;
             }
