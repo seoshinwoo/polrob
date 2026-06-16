@@ -178,16 +178,18 @@ public class GameRoomService
 
                         continue;
                     }
-
-                    if (game.Players.Count(p => p.Role == PlayerRole.Robber) < 4)
+                    else
                     {
-                        game.Players.Add(CreatePlayer(user, game.Id, PlayerRole.Robber));
-                        LogRandomMatchingCompletedIfNeeded(game);
-                        return CreateRandomJoinResponse(
-                            game,
-                            role,
-                            createdRoom: false,
-                            message: "랜덤 방에 참여했습니다.");
+                        if (game.Players.Count(p => p.Role == PlayerRole.Robber) < 4)
+                        {
+                            game.Players.Add(CreatePlayer(user, game.Id, PlayerRole.Robber));
+                            LogRandomMatchingCompletedIfNeeded(game);
+                            return CreateRandomJoinResponse(
+                                game,
+                                role,
+                                createdRoom: false,
+                                message: "랜덤 방에 참여했습니다.");
+                        }
                     }
                 }
 
@@ -216,6 +218,28 @@ public class GameRoomService
             }
 
             return CreateRoomStatusResponse(game);
+        }
+    }
+
+    public GameRoomLoadSnapshot GetLoadSnapshot()
+    {
+        lock (_roomLock)
+        {
+            RemoveExpiredEmptyRoomsCore(DateTime.UtcNow);
+
+            var randomRooms = Games
+                .Where(game =>
+                    !game.IsPrivate &&
+                    string.Equals(game.Type, "random", StringComparison.OrdinalIgnoreCase))
+                .ToList();
+
+            return new GameRoomLoadSnapshot(
+                TotalRooms: Games.Count,
+                TotalPlayers: Games.Sum(game => game.Players.Count),
+                RandomRooms: randomRooms.Count,
+                RandomPlayers: randomRooms.Sum(game => game.Players.Count),
+                RandomMatchedRooms: randomRooms.Count(game => game.Players.Count >= 6 || game.IsOnGame),
+                RandomInGameRooms: randomRooms.Count(game => game.IsOnGame));
         }
     }
 
@@ -248,6 +272,46 @@ public class GameRoomService
             }
 
             return CreateRoomStatusResponse(game);
+        }
+    }
+
+    public ServerResponse AbortRandomGameStart(string roomId, string leavingUserId)
+    {
+        lock (_roomLock)
+        {
+            RemoveExpiredEmptyRoomsCore(DateTime.UtcNow);
+
+            var game = Games.FirstOrDefault(g => g.Id == roomId);
+            if (game == null)
+            {
+                return new ServerResponse
+                {
+                    Success = false,
+                    Message = "방을 찾을 수 없습니다.",
+                    RoomId = roomId
+                };
+            }
+
+            if (game.IsPrivate || !string.Equals(game.Type, "random", StringComparison.OrdinalIgnoreCase))
+            {
+                return CreateRoomStatusResponse(game);
+            }
+
+            var leavingPlayer = game.Players.FirstOrDefault(p => p.Id == leavingUserId);
+            if (leavingPlayer != null)
+            {
+                game.Players.Remove(leavingPlayer);
+            }
+
+            game.IsOnGame = false;
+            game.EmptyRoomExpiresAtUtc = null;
+
+            if (game.Players.Count == 0)
+            {
+                Games.Remove(game);
+            }
+
+            return CreateRoomStatusResponse(game, message: "플레이어가 나가서 랜덤 매칭으로 돌아갑니다.");
         }
     }
 
@@ -613,3 +677,11 @@ public class GameRoomService
             && expiresAt <= nowUtc);
     }
 }
+
+public sealed record GameRoomLoadSnapshot(
+    int TotalRooms,
+    int TotalPlayers,
+    int RandomRooms,
+    int RandomPlayers,
+    int RandomMatchedRooms,
+    int RandomInGameRooms);

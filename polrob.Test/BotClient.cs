@@ -9,6 +9,8 @@ public class BotClient : IAsyncDisposable
     private const string DefaultServerUrl = "http://localhost:5174";
     private const string DefaultDevelopmentBotKey = "polrob-local-bot-key";
     private static readonly TimeSpan MovementInterval = TimeSpan.FromMilliseconds(50);
+    private static readonly TimeSpan InitialStateTimeout = TimeSpan.FromSeconds(
+        GetPositiveIntEnvironmentVariable("POLROB_BOT_INITIAL_STATE_TIMEOUT_SECONDS", 60));
 
     private HubConnection? _hubConnection;
     private BotGameNetworkClient? _gameNetworkClient;
@@ -152,7 +154,17 @@ public class BotClient : IAsyncDisposable
                 serverHost,
                 joiningPlayer,
                 gameplayCancellation.Token);
-            await _initialStateReceived.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            try
+            {
+                await _initialStateReceived.Task.WaitAsync(InitialStateTimeout);
+            }
+            catch (TimeoutException ex)
+            {
+                throw new TimeoutException(
+                    $"{Name} InitialState 수신 타임아웃: room={RoomId}, role={Role}, " +
+                    $"timeout={InitialStateTimeout.TotalSeconds:0}s",
+                    ex);
+            }
 
             Console.WriteLine($"{Name} 게임 접속 완료: {RoomId} / {Role}");
 
@@ -219,6 +231,14 @@ public class BotClient : IAsyncDisposable
             await _gameNetworkClient.DisposeAsync();
             _gameNetworkClient = null;
         }
+    }
+
+    private static int GetPositiveIntEnvironmentVariable(string name, int fallback)
+    {
+        var value = Environment.GetEnvironmentVariable(name);
+        return int.TryParse(value, out var parsed) && parsed > 0
+            ? parsed
+            : fallback;
     }
 
     private void RegisterGameNetworkEvents(BotGameNetworkClient networkClient)
@@ -323,6 +343,12 @@ public class BotClient : IAsyncDisposable
             {
                 WinnerRole = gameState.WinnerRole;
                 ElapsedGameTime = gameState.ElapsedGameTime;
+                _gameEnded.TrySetResult();
+            }
+            else if (gameState.Phase == GamePhase.Rematching)
+            {
+                WinnerRole = null;
+                ElapsedGameTime = 0;
                 _gameEnded.TrySetResult();
             }
         };

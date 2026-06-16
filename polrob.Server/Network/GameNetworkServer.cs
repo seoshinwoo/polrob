@@ -1,6 +1,9 @@
 using System.Collections.Concurrent;
+using System.Diagnostics.Metrics;
 using System.Net;
 using System.Net.Sockets;
+using System.Threading;
+using System.Threading.Channels;
 using System.Text.Json;
 using Microsoft.Extensions.Hosting;
 using polrob.Shared;
@@ -15,9 +18,18 @@ public class GameNetworkServer : BackgroundService
     private readonly ConcurrentDictionary<string, string> _playerRooms = new(); // 
     private readonly GameRoomService _gameRoomService;
     private readonly GameMap _map = new();
+    private readonly RuntimeMetricSampler _runtimeMetrics = new();
 
-    private Timer? _stateTimer;
-    private Timer? _ruleTimer;
+    private Timer? _metricsTimer;
+    private long _udpPacketsReceivedThisSecond;
+    private long _udpPacketsSentThisSecond;
+    private long _tcpPacketsSentThisSecond;
+    private long _jsonSerializationsThisSecond;
+    private int _currentTcpConnections;
+    private static readonly TimeSpan RoomTickInterval = TimeSpan.FromMilliseconds(50);
+    private static readonly TimeSpan GameRuleTickInterval = TimeSpan.FromMilliseconds(100);
+    private static readonly TimeSpan GameStateSyncInterval = TimeSpan.FromSeconds(1);
+    private static readonly TimeSpan EmptyRoomStopDelay = TimeSpan.FromSeconds(2);
     private const string DefaultRoomId = "default";
     private const float VisionRangePlayerSizeMultiplier = 2.5f;
     private const float VisionConeAngleDegrees = 90f;
@@ -26,6 +38,7 @@ public class GameNetworkServer : BackgroundService
     private const double JailBreakDurationSeconds = 3d;
     private const float JailBreakReleaseOffset = 20f;
     private const float JailBreakContactTolerance = 90f;
+    private const int TcpListenBacklog = 2048;
 
     // TCP/UDP 소켓과 방 서비스를 준비합니다.
     public GameNetworkServer(GameRoomService gameRoomService)
@@ -37,15 +50,14 @@ public class GameNetworkServer : BackgroundService
         _udpClient = new UdpClient(7778);
     }
 
-    // 백그라운드 서비스가 시작될 때 TCP/UDP 수신 루프와 게임 타이머를 켭니다.
+    // 백그라운드 서비스가 시작될 때 TCP/UDP 수신 루프와 메트릭 타이머를 켭니다.
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        _tcpListener.Start();
+        _tcpListener.Start(TcpListenBacklog);
         Console.WriteLine("TCP Server started on port 7777");
         Console.WriteLine("UDP Server started on port 7778");
 
-        _stateTimer = new Timer(GameStateSyncCallback, null, 1000, 1000);
-        _ruleTimer = new Timer(GameRuleTickCallback, null, 100, 100);
+        _metricsTimer = new Timer(LogLoadMetricsCallback, null, 1000, 1000);
 
         _ = Task.Run(() => AcceptTcpClientsAsync(stoppingToken), stoppingToken);
         _ = Task.Run(() => ReceiveUdpAsync(stoppingToken), stoppingToken);
@@ -53,123 +65,326 @@ public class GameNetworkServer : BackgroundService
         await Task.CompletedTask;
     }
 
-    // 서버가 종료될 때 주기적으로 돌던 타이머들을 정리합니다.
+    // 서버가 종료될 때 주기적으로 돌던 타이머를 정리합니다.
     public override void Dispose()
     {
-        _stateTimer?.Dispose();
-        _ruleTimer?.Dispose();
+        _metricsTimer?.Dispose();
+        _runtimeMetrics.Dispose();
         base.Dispose();
     }
 
-    // 짧은 주기로 체포 판정, 체포 완료, 탈옥 진행 같은 실시간 게임 규칙을 갱신합니다.
-    private void GameRuleTickCallback(object? state)
+    // 부하 테스트에서 필요한 초당 패킷/직렬화 수와 현재 서버 상태를 터미널에 출력합니다.
+    private void LogLoadMetricsCallback(object? state)
     {
-        foreach (var sessionEntry in _gameSessions.ToArray())
-        {
-            var roomId = sessionEntry.Key;
-            var gameSession = sessionEntry.Value;
+        var udpReceived = Interlocked.Exchange(ref _udpPacketsReceivedThisSecond, 0);
+        var udpSent = Interlocked.Exchange(ref _udpPacketsSentThisSecond, 0);
+        var tcpSent = Interlocked.Exchange(ref _tcpPacketsSentThisSecond, 0);
+        var jsonSerializations = Interlocked.Exchange(ref _jsonSerializationsThisSecond, 0);
+        var currentConnections = Volatile.Read(ref _currentTcpConnections);
+        var gameSessions = _gameSessions.Values.ToList();
+        var currentRooms = gameSessions.Count;
+        var currentPlayers = gameSessions.Sum(session => session.Sessions.Count);
+        var waitingRooms = gameSessions.Count(session => session.GamePhase == GamePhase.Waiting);
+        var countdownRooms = gameSessions.Count(session => session.GamePhase == GamePhase.Countdown);
+        var playingRooms = gameSessions.Count(session => session.GamePhase == GamePhase.Playing);
+        var endedRooms = gameSessions.Count(session => session.GamePhase == GamePhase.Ended);
+        var roomLoad = _gameRoomService.GetLoadSnapshot();
+        var runtimeMetrics = _runtimeMetrics.Sample();
 
-            lock (gameSession.SyncRoot)
+        Console.WriteLine(
+            "[LoadMetrics] " +
+            $"udp_recv/s={udpReceived} " +
+            $"udp_send/s={udpSent} " +
+            $"tcp_send/s={tcpSent} " +
+            $"json_serialize/s={jsonSerializations} " +
+            $"connections={currentConnections} " +
+            $"players={currentPlayers} " +
+            $"rooms={currentRooms} " +
+            $"waiting_rooms={waitingRooms} " +
+            $"countdown_rooms={countdownRooms} " +
+            $"playing_rooms={playingRooms} " +
+            $"ended_rooms={endedRooms} " +
+            $"game_tcp_players={currentPlayers} " +
+            $"game_tcp_rooms={currentRooms} " +
+            $"lobby_players={roomLoad.TotalPlayers} " +
+            $"lobby_rooms={roomLoad.TotalRooms} " +
+            $"random_players={roomLoad.RandomPlayers} " +
+            $"random_rooms={roomLoad.RandomRooms} " +
+            $"random_matched_rooms={roomLoad.RandomMatchedRooms} " +
+            $"random_in_game_rooms={roomLoad.RandomInGameRooms} " +
+            runtimeMetrics);
+    }
+
+    private string SerializeForMetrics<T>(T value)
+    {
+        Interlocked.Increment(ref _jsonSerializationsThisSecond);
+        return JsonSerializer.Serialize(value);
+    }
+
+    private GameSession GetOrCreateGameSession(string roomId, CancellationToken stoppingToken)
+    {
+        while (!stoppingToken.IsCancellationRequested)
+        {
+            if (_gameSessions.TryGetValue(roomId, out var existingSession))
             {
-                if (gameSession.GamePhase != GamePhase.Playing || gameSession.Sessions.Count == 0)
+                lock (existingSession.CommandGate)
                 {
-                    ClearJailBreakProgress(gameSession, roomId);
-                    continue;
+                    if (!existingSession.IsStopping)
+                    {
+                        return existingSession;
+                    }
                 }
 
-                CompletePendingArrests(gameSession);
-                DetectRobbersForArrest(gameSession);
-                UpdateJailBreakProgress(roomId, gameSession);
+                Thread.Yield();
+                continue;
+            }
+
+            var createdSession = new GameSession();
+            if (!_gameSessions.TryAdd(roomId, createdSession))
+            {
+                continue;
+            }
+
+            _ = Task.Run(() => RunRoomTickLoopAsync(roomId, createdSession, stoppingToken), CancellationToken.None);
+            return createdSession;
+        }
+
+        throw new OperationCanceledException(stoppingToken);
+    }
+
+    private static bool TryWriteRoomCommand(GameSession gameSession, RoomCommand command)
+    {
+        lock (gameSession.CommandGate)
+        {
+            return !gameSession.IsStopping && gameSession.Commands.Writer.TryWrite(command);
+        }
+    }
+
+    // 방 하나의 입력 큐를 순서대로 비우고, 같은 루프에서 규칙/상태 tick을 처리합니다.
+    private async Task RunRoomTickLoopAsync(
+        string roomId,
+        GameSession gameSession,
+        CancellationToken stoppingToken)
+    {
+        var lastTickAt = DateTime.UtcNow;
+        var ruleElapsed = TimeSpan.Zero;
+        var stateElapsed = TimeSpan.Zero;
+
+        try
+        {
+            while (!stoppingToken.IsCancellationRequested)
+            {
+                var now = DateTime.UtcNow;
+                var elapsed = now - lastTickAt;
+                lastTickAt = now;
+                ruleElapsed += elapsed;
+                stateElapsed += elapsed;
+
+                DrainRoomCommands(roomId, gameSession);
+
+                while (ruleElapsed >= GameRuleTickInterval)
+                {
+                    ProcessRoomRuleTick(roomId, gameSession);
+                    ruleElapsed -= GameRuleTickInterval;
+                }
+
+                while (stateElapsed >= GameStateSyncInterval)
+                {
+                    ProcessRoomStateSync(roomId, gameSession);
+                    stateElapsed -= GameStateSyncInterval;
+                }
+
+                if (TryStopRoomLoop(roomId, gameSession, now))
+                {
+                    return;
+                }
+
+                await Task.Delay(RoomTickInterval, stoppingToken);
+            }
+        }
+        catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+        {
+            // Server is stopping.
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Room tick loop failed for {roomId}: {ex.Message}");
+        }
+        finally
+        {
+            if (_gameSessions.TryGetValue(roomId, out var currentSession)
+                && ReferenceEquals(currentSession, gameSession))
+            {
+                _gameSessions.TryRemove(roomId, out _);
+            }
+
+            gameSession.Commands.Writer.TryComplete();
+        }
+    }
+
+    private bool TryStopRoomLoop(string roomId, GameSession gameSession, DateTime now)
+    {
+        if (!gameSession.HasHadPlayers || gameSession.Sessions.Count > 0)
+        {
+            gameSession.EmptySinceUtc = null;
+            return false;
+        }
+
+        gameSession.EmptySinceUtc ??= now;
+        if (now - gameSession.EmptySinceUtc < EmptyRoomStopDelay)
+        {
+            return false;
+        }
+
+        lock (gameSession.CommandGate)
+        {
+            if (gameSession.Sessions.Count > 0 || gameSession.Commands.Reader.TryPeek(out _))
+            {
+                gameSession.EmptySinceUtc = null;
+                return false;
+            }
+
+            gameSession.IsStopping = true;
+            if (!_gameSessions.TryRemove(roomId, out var removedSession)
+                || !ReferenceEquals(removedSession, gameSession))
+            {
+                return false;
+            }
+
+            gameSession.Commands.Writer.TryComplete();
+            return true;
+        }
+    }
+
+    private void DrainRoomCommands(string roomId, GameSession gameSession)
+    {
+        while (gameSession.Commands.Reader.TryRead(out var command))
+        {
+            switch (command)
+            {
+                case JoinRoomCommand join:
+                    HandleRoomJoin(roomId, gameSession, join);
+                    break;
+                case LeaveRoomCommand leave:
+                    HandleRoomLeave(roomId, gameSession, leave);
+                    break;
+                case MoveRoomCommand move:
+                    HandleRoomMove(roomId, gameSession, move);
+                    break;
             }
         }
     }
 
+    // 짧은 주기로 체포 판정, 체포 완료, 탈옥 진행 같은 실시간 게임 규칙을 갱신합니다.
+    private void ProcessRoomRuleTick(string roomId, GameSession gameSession)
+    {
+        if (gameSession.GamePhase != GamePhase.Playing || gameSession.Sessions.Count == 0)
+        {
+            ClearJailBreakProgress(gameSession, roomId);
+            return;
+        }
+
+        CompletePendingArrests(gameSession);
+        DetectRobbersForArrest(gameSession);
+        UpdateJailBreakProgress(roomId, gameSession);
+    }
+
     // 1초마다 게임 페이즈와 남은 시간을 갱신하고 방 전체에 상태를 동기화합니다.
-    private void GameStateSyncCallback(object? state)
+    private void ProcessRoomStateSync(string roomId, GameSession gameSession)
     {
         _gameRoomService.RemoveExpiredEmptyRooms();
 
-        foreach (var sessionEntry in _gameSessions.ToArray())
+        if (gameSession.Sessions.Count == 0)
         {
-            var roomId = sessionEntry.Key;
-            var gameSession = sessionEntry.Value;
+            return;
+        }
 
-            lock (gameSession.SyncRoot)
+        if (gameSession.GamePhase == GamePhase.Waiting)
+        {
+            if (IsRoomReadyForCountdown(roomId, gameSession))
             {
-                if (gameSession.Sessions.Count == 0)
-                {
-                    _gameSessions.TryRemove(roomId, out _);
-                    continue;
-                }
-
-                if (gameSession.GamePhase == GamePhase.Waiting)
-                {
-                    gameSession.GamePhase = GamePhase.Countdown;
-                    gameSession.CountdownTime = 3;
-                    gameSession.GameTime = GameDurationSeconds;
-                    gameSession.WinnerRole = null;
-                    gameSession.ElapsedGameTime = 0;
-                }
-                else if (gameSession.GamePhase == GamePhase.Countdown)
-                {
-                    gameSession.CountdownTime--;
-                    if (gameSession.CountdownTime < 0)
-                    {
-                        gameSession.GamePhase = GamePhase.Playing;
-                        gameSession.CountdownTime = 0;
-                        gameSession.GameStartedAtUtc = DateTime.UtcNow;
-                    }
-                }
-                else if (gameSession.GamePhase == GamePhase.Playing)
-                {
-                    gameSession.GameTime--;
-
-                    var robbers = gameSession.Sessions.Values
-                        .Where(s => s.PlayerState.Role == PlayerRole.Robber)
-                        .ToList();
-
-                    var allRobbersCaught = false;
-                    if (robbers.Count > 0)
-                    {
-                        foreach (var robber in robbers)
-                        {
-                            RefreshJailEntry(gameSession, robber.PlayerState);
-                        }
-
-                        allRobbersCaught = robbers.All(p => IsInJail(p.PlayerState));
-                    }
-
-                    if (gameSession.GameTime <= 0 || allRobbersCaught)
-                    {
-                        gameSession.GamePhase = GamePhase.Ended;
-                        gameSession.GameTime = Math.Max(0, gameSession.GameTime);
-                        gameSession.WinnerRole = gameSession.GameTime <= 0
-                            ? PlayerRole.Robber
-                            : PlayerRole.Police;
-                        gameSession.ElapsedGameTime = gameSession.GameStartedAtUtc.HasValue
-                            ? Math.Clamp(
-                                (int)Math.Round(
-                                    (DateTime.UtcNow - gameSession.GameStartedAtUtc.Value).TotalSeconds),
-                                0,
-                                GameDurationSeconds)
-                            : GameDurationSeconds - gameSession.GameTime;
-                        _gameRoomService.CompleteGame(roomId);
-                    }
-                }
-
-                var syncData = new GameStateSync
-                {
-                    RoomId = roomId,
-                    Phase = gameSession.GamePhase,
-                    CountdownTime = gameSession.CountdownTime,
-                    GameTime = gameSession.GameTime,
-                    WinnerRole = gameSession.WinnerRole,
-                    ElapsedGameTime = gameSession.ElapsedGameTime
-                };
-
-                BroadcastTcp(gameSession, TcpMessageType.GameState, JsonSerializer.Serialize(syncData), null);
+                gameSession.GamePhase = GamePhase.Countdown;
+                gameSession.CountdownTime = 3;
+                gameSession.GameTime = GameDurationSeconds;
+                gameSession.WinnerRole = null;
+                gameSession.ElapsedGameTime = 0;
             }
         }
+        else if (gameSession.GamePhase == GamePhase.Countdown)
+        {
+            gameSession.CountdownTime--;
+            if (gameSession.CountdownTime < 0)
+            {
+                gameSession.GamePhase = GamePhase.Playing;
+                gameSession.CountdownTime = 0;
+                gameSession.GameStartedAtUtc = DateTime.UtcNow;
+            }
+        }
+        else if (gameSession.GamePhase == GamePhase.Playing)
+        {
+            gameSession.GameTime--;
+
+            var robbers = gameSession.Sessions.Values
+                .Where(s => s.PlayerState.Role == PlayerRole.Robber)
+                .ToList();
+
+            var allRobbersCaught = false;
+            if (robbers.Count > 0)
+            {
+                foreach (var robber in robbers)
+                {
+                    RefreshJailEntry(gameSession, robber.PlayerState);
+                }
+
+                allRobbersCaught = robbers.All(p => IsInJail(p.PlayerState));
+            }
+
+            if (gameSession.GameTime <= 0 || allRobbersCaught)
+            {
+                gameSession.GamePhase = GamePhase.Ended;
+                gameSession.GameTime = Math.Max(0, gameSession.GameTime);
+                gameSession.WinnerRole = gameSession.GameTime <= 0
+                    ? PlayerRole.Robber
+                    : PlayerRole.Police;
+                gameSession.ElapsedGameTime = gameSession.GameStartedAtUtc.HasValue
+                    ? Math.Clamp(
+                        (int)Math.Round(
+                            (DateTime.UtcNow - gameSession.GameStartedAtUtc.Value).TotalSeconds),
+                        0,
+                        GameDurationSeconds)
+                    : GameDurationSeconds - gameSession.GameTime;
+                _gameRoomService.CompleteGame(roomId);
+            }
+        }
+
+        var syncData = new GameStateSync
+        {
+            RoomId = roomId,
+            Phase = gameSession.GamePhase,
+            CountdownTime = gameSession.CountdownTime,
+            GameTime = gameSession.GameTime,
+            WinnerRole = gameSession.WinnerRole,
+            ElapsedGameTime = gameSession.ElapsedGameTime
+        };
+
+        BroadcastTcp(gameSession, TcpMessageType.GameState, SerializeForMetrics(syncData), null);
+    }
+
+    private bool IsRoomReadyForCountdown(string roomId, GameSession gameSession)
+    {
+        if (string.Equals(roomId, DefaultRoomId, StringComparison.Ordinal))
+        {
+            return gameSession.Sessions.Count > 0;
+        }
+
+        var roomStatus = _gameRoomService.GetRoomStatus(roomId);
+        if (!roomStatus.Success || !roomStatus.Matched)
+        {
+            return false;
+        }
+
+        var expectedPlayerCount = Math.Max(1, roomStatus.CurrentCount);
+        return gameSession.Sessions.Count >= expectedPlayerCount;
     }
 
     // TCP 접속을 계속 기다리다가 새 클라이언트마다 처리 작업을 시작합니다.
@@ -195,6 +410,7 @@ public class GameNetworkServer : BackgroundService
         using var stream = client.GetStream();
         using var reader = new BinaryReader(stream);
         using var writer = new BinaryWriter(stream);
+        Interlocked.Increment(ref _currentTcpConnections);
 
         string? playerId = null;
         string? roomId = null;
@@ -223,48 +439,13 @@ public class GameNetworkServer : BackgroundService
                     roomId = NormalizeRoomId(player.RoomId);
                     player.RoomId = roomId;
 
-                    var gameSession = _gameSessions.GetOrAdd(roomId, _ => new GameSession());
-                    List<Player> visiblePlayers;
-                    lock (gameSession.SyncRoot)
+                    var joinCommand = new JoinRoomCommand(player, client, writer);
+                    var gameSession = GetOrCreateGameSession(roomId, stoppingToken);
+                    if (!TryWriteRoomCommand(gameSession, joinCommand))
                     {
-                        PositionPlayerForRoom(player, gameSession);
-                        gameSession.Sessions[playerId] = new PlayerSession
-                        {
-                            Client = client,
-                            Writer = writer,
-                            PlayerState = player
-                        };
-                        _playerRooms[playerId] = roomId;
-                        visiblePlayers = gameSession.Sessions.Values
-                            .Select(s => s.PlayerState)
-                            .Where(p => p.Role == player.Role)
-                            .ToList();
+                        gameSession = GetOrCreateGameSession(roomId, stoppingToken);
+                        TryWriteRoomCommand(gameSession, joinCommand);
                     }
-
-                    Console.WriteLine($"Player Connected [TCP]: {playerId} / room {roomId}");
-
-                    SendTcp(writer, TcpMessageType.InitialState, JsonSerializer.Serialize(visiblePlayers));
-                    Console.WriteLine(
-                        $"{roomId} 방 {player.Role} 역할 {visiblePlayers.Count}명으로 플레이어 초기화!!");
-
-                    var syncData = new GameStateSync
-                    {
-                        RoomId = roomId,
-                        Phase = gameSession.GamePhase,
-                        CountdownTime = gameSession.CountdownTime,
-                        GameTime = gameSession.GameTime,
-                        WinnerRole = gameSession.WinnerRole,
-                        ElapsedGameTime = gameSession.ElapsedGameTime
-                    };
-                    SendTcp(writer, TcpMessageType.GameState, JsonSerializer.Serialize(syncData));
-
-                    BroadcastTcpToRole(
-                        gameSession,
-                        player.Role,
-                        TcpMessageType.Joined,
-                        JsonSerializer.Serialize(player),
-                        playerId);
-                    Console.WriteLine($"{roomId} 방 {player.Role} 역할에 플레이어 입장 브로드캐스트!!");
                 }
             }
         }
@@ -276,39 +457,178 @@ public class GameNetworkServer : BackgroundService
         {
             if (playerId != null && roomId != null && _gameSessions.TryGetValue(roomId, out var gameSession))
             {
-                lock (gameSession.SyncRoot)
+                if (!TryWriteRoomCommand(gameSession, new LeaveRoomCommand(playerId)))
                 {
-                    if (gameSession.Sessions.TryRemove(playerId, out var removedSession))
-                    {
-                        gameSession.JailEntryTimes.TryRemove(playerId, out _);
-                        gameSession.JailBreakStartedAtByRescuer.Remove(playerId);
-                        gameSession.JailBreakProgressByRescuer.Remove(playerId);
-                        foreach (var arrest in gameSession.ActiveArrestsByRobberId.Values
-                                     .Where(a => a.RobberId == playerId || a.PoliceId == playerId)
-                                     .ToList())
-                        {
-                            gameSession.ActiveArrestsByRobberId.Remove(arrest.RobberId);
-                        }
-
-                        _playerRooms.TryRemove(playerId, out _);
-                        Console.WriteLine($"Player Disconnected: {playerId} / room {roomId}");
-                        BroadcastTcpToRole(
-                            gameSession,
-                            removedSession.PlayerState.Role,
-                            TcpMessageType.Left,
-                            playerId,
-                            null);
-                    }
-
-                    if (gameSession.Sessions.Count == 0)
-                    {
-                        _gameSessions.TryRemove(roomId, out _);
-                    }
+                    _playerRooms.TryRemove(playerId, out _);
                 }
             }
+            else if (playerId != null)
+            {
+                _playerRooms.TryRemove(playerId, out _);
+            }
 
+            Interlocked.Decrement(ref _currentTcpConnections);
             client.Close();
         }
+    }
+
+    private void HandleRoomJoin(string roomId, GameSession gameSession, JoinRoomCommand command)
+    {
+        var player = command.Player;
+        var playerId = player.Id;
+
+        PositionPlayerForRoom(player, gameSession);
+        gameSession.Sessions[playerId] = new PlayerSession
+        {
+            Client = command.Client,
+            Writer = command.Writer,
+            PlayerState = player
+        };
+        gameSession.HasHadPlayers = true;
+        gameSession.EmptySinceUtc = null;
+        _playerRooms[playerId] = roomId;
+
+        var visiblePlayers = gameSession.Sessions.Values
+            .Select(s => s.PlayerState)
+            .Where(p => p.Role == player.Role)
+            .ToList();
+
+        Console.WriteLine($"Player Connected [TCP]: {playerId} / room {roomId}");
+
+        TrySendTcp(command.Writer, TcpMessageType.InitialState, SerializeForMetrics(visiblePlayers));
+        Console.WriteLine($"{roomId} 방 {player.Role} 역할 {visiblePlayers.Count}명으로 플레이어 초기화!!");
+
+        var syncData = new GameStateSync
+        {
+            RoomId = roomId,
+            Phase = gameSession.GamePhase,
+            CountdownTime = gameSession.CountdownTime,
+            GameTime = gameSession.GameTime,
+            WinnerRole = gameSession.WinnerRole,
+            ElapsedGameTime = gameSession.ElapsedGameTime
+        };
+        TrySendTcp(command.Writer, TcpMessageType.GameState, SerializeForMetrics(syncData));
+
+        BroadcastTcpToRole(
+            gameSession,
+            player.Role,
+            TcpMessageType.Joined,
+            SerializeForMetrics(player),
+            playerId);
+        Console.WriteLine($"{roomId} 방 {player.Role} 역할에 플레이어 입장 브로드캐스트!!");
+    }
+
+    private void HandleRoomLeave(string roomId, GameSession gameSession, LeaveRoomCommand command)
+    {
+        if (!gameSession.Sessions.TryRemove(command.PlayerId, out var removedSession))
+        {
+            _playerRooms.TryRemove(command.PlayerId, out _);
+            return;
+        }
+
+        gameSession.JailEntryTimes.TryRemove(command.PlayerId, out _);
+        gameSession.JailBreakStartedAtByRescuer.Remove(command.PlayerId);
+        gameSession.JailBreakProgressByRescuer.Remove(command.PlayerId);
+        foreach (var arrest in gameSession.ActiveArrestsByRobberId.Values
+                     .Where(a => a.RobberId == command.PlayerId || a.PoliceId == command.PlayerId)
+                     .ToList())
+        {
+            gameSession.ActiveArrestsByRobberId.Remove(arrest.RobberId);
+        }
+
+        _playerRooms.TryRemove(command.PlayerId, out _);
+        Console.WriteLine($"Player Disconnected: {command.PlayerId} / room {roomId}");
+
+        if (TryAbortRandomGameStart(roomId, gameSession, command.PlayerId))
+        {
+            return;
+        }
+
+        BroadcastTcpToRole(
+            gameSession,
+            removedSession.PlayerState.Role,
+            TcpMessageType.Left,
+            command.PlayerId,
+            null);
+    }
+
+    private bool TryAbortRandomGameStart(string roomId, GameSession gameSession, string leavingPlayerId)
+    {
+        if (gameSession.GamePhase is not (GamePhase.Waiting or GamePhase.Countdown) ||
+            string.Equals(roomId, DefaultRoomId, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        var roomStatus = _gameRoomService.GetRoomStatus(roomId);
+        if (!roomStatus.Success || roomStatus.IsPrivate || !roomStatus.Matched)
+        {
+            return false;
+        }
+
+        var resetStatus = _gameRoomService.AbortRandomGameStart(roomId, leavingPlayerId);
+        gameSession.GamePhase = GamePhase.Rematching;
+        gameSession.CountdownTime = 0;
+        gameSession.GameStartedAtUtc = null;
+        ClearJailBreakProgress(gameSession, roomId);
+
+        var syncData = new GameStateSync
+        {
+            RoomId = roomId,
+            Phase = GamePhase.Rematching,
+            CountdownTime = 0,
+            GameTime = gameSession.GameTime,
+            WinnerRole = null,
+            ElapsedGameTime = 0
+        };
+
+        BroadcastTcp(gameSession, TcpMessageType.GameState, SerializeForMetrics(syncData), null);
+        Console.WriteLine(
+            $"Random game start aborted: {roomId}, leaving player {leavingPlayerId}, remaining lobby players {resetStatus.CurrentCount}");
+        return true;
+    }
+
+    private void HandleRoomMove(string roomId, GameSession gameSession, MoveRoomCommand command)
+    {
+        var player = command.Player;
+        if (!gameSession.Sessions.TryGetValue(player.Id, out var session))
+        {
+            return;
+        }
+
+        if (session.UdpEndPoint == null || !session.UdpEndPoint.Equals(command.RemoteEndPoint))
+        {
+            session.UdpEndPoint = command.RemoteEndPoint;
+            Console.WriteLine($"UDP Endpoint registered for {player.Id} / room {roomId}: {command.RemoteEndPoint}");
+        }
+
+        string authoritativePlayerJson;
+        if (IsPlayerMovementLocked(gameSession, session.PlayerState))
+        {
+            session.PlayerState.IsMoving = false;
+            authoritativePlayerJson = SerializeForMetrics(session.PlayerState);
+            BroadcastTcpToRole(
+                gameSession,
+                session.PlayerState.Role,
+                TcpMessageType.PlayerState,
+                authoritativePlayerJson,
+                null);
+            return;
+        }
+
+        session.PlayerState.X = player.X;
+        session.PlayerState.Y = player.Y;
+        session.PlayerState.Angle = player.Angle;
+        session.PlayerState.IsMoving = player.IsMoving;
+        RefreshJailEntry(gameSession, session.PlayerState);
+
+        authoritativePlayerJson = SerializeForMetrics(session.PlayerState);
+        var authoritativeBuffer = System.Text.Encoding.UTF8.GetBytes(authoritativePlayerJson);
+        BroadcastUdpToRole(
+            gameSession,
+            session.PlayerState.Role,
+            authoritativeBuffer,
+            player.Id);
     }
 
     // 방에 입장한 플레이어를 역할별 시작 위치에 배치합니다.
@@ -572,7 +892,7 @@ public class GameNetworkServer : BackgroundService
                 gameSession,
                 PlayerRole.Robber,
                 TcpMessageType.JailBreak,
-                JsonSerializer.Serialize(syncData),
+                SerializeForMetrics(syncData),
                 null);
             BroadcastPlayerState(gameSession, target);
         }
@@ -594,7 +914,7 @@ public class GameNetworkServer : BackgroundService
     }
 
     // 현재 구조자별 탈옥 진행률을 같은 도둑 역할의 TCP 클라이언트에 보냅니다.
-    private static void BroadcastJailBreakProgress(GameSession gameSession, string roomId)
+    private void BroadcastJailBreakProgress(GameSession gameSession, string roomId)
     {
         var syncData = new JailBreakProgressSync
         {
@@ -606,7 +926,7 @@ public class GameNetworkServer : BackgroundService
             gameSession,
             PlayerRole.Robber,
             TcpMessageType.JailBreakProgress,
-            JsonSerializer.Serialize(syncData),
+            SerializeForMetrics(syncData),
             null);
     }
 
@@ -799,18 +1119,33 @@ public class GameNetworkServer : BackgroundService
     }
 
     // 타입과 JSON payload를 정해진 TCP 프레임 형식으로 전송합니다.
-    private static void SendTcp(BinaryWriter writer, TcpMessageType type, string payload)
+    private void SendTcp(BinaryWriter writer, TcpMessageType type, string payload)
     {
         lock (writer)
         {
             writer.Write(payload.Length + 1);
             writer.Write((byte)type);
             writer.Write(payload);
+            Interlocked.Increment(ref _tcpPacketsSentThisSecond);
+        }
+    }
+
+    private bool TrySendTcp(BinaryWriter writer, TcpMessageType type, string payload)
+    {
+        try
+        {
+            SendTcp(writer, type, payload);
+            return true;
+        }
+        catch
+        {
+            // Dead TCP connections are cleaned up by their read loop.
+            return false;
         }
     }
 
     // 한 방의 TCP 클라이언트들에게 메시지를 보내고 필요하면 특정 플레이어는 제외합니다.
-    private static void BroadcastTcp(GameSession gameSession, TcpMessageType type, string payload, string? excludeId)
+    private void BroadcastTcp(GameSession gameSession, TcpMessageType type, string payload, string? excludeId)
     {
         foreach (var kvp in gameSession.Sessions)
         {
@@ -819,30 +1154,23 @@ public class GameNetworkServer : BackgroundService
                 continue;
             }
 
-            try
-            {
-                SendTcp(kvp.Value.Writer, type, payload);
-            }
-            catch
-            {
-                // Dead TCP connections are cleaned up by their read loop.
-            }
+            TrySendTcp(kvp.Value.Writer, type, payload);
         }
     }
 
     // 위치 상태는 해당 플레이어와 같은 역할의 클라이언트에만 보냅니다.
-    private static void BroadcastPlayerState(GameSession gameSession, Player player)
+    private void BroadcastPlayerState(GameSession gameSession, Player player)
     {
         BroadcastTcpToRole(
             gameSession,
             player.Role,
             TcpMessageType.PlayerState,
-            JsonSerializer.Serialize(player),
+            SerializeForMetrics(player),
             null);
     }
 
     // 한 방에서 지정한 역할의 TCP 클라이언트들에게만 메시지를 보냅니다.
-    private static void BroadcastTcpToRole(
+    private void BroadcastTcpToRole(
         GameSession gameSession,
         PlayerRole role,
         TcpMessageType type,
@@ -856,14 +1184,7 @@ public class GameNetworkServer : BackgroundService
                 continue;
             }
 
-            try
-            {
-                SendTcp(kvp.Value.Writer, type, payload);
-            }
-            catch
-            {
-                // Dead TCP connections are cleaned up by their read loop.
-            }
+            TrySendTcp(kvp.Value.Writer, type, payload);
         }
     }
 
@@ -875,6 +1196,7 @@ public class GameNetworkServer : BackgroundService
             try
             {
                 var result = await _udpClient.ReceiveAsync(stoppingToken);
+                Interlocked.Increment(ref _udpPacketsReceivedThisSecond);
                 var json = System.Text.Encoding.UTF8.GetString(result.Buffer);
                 var player = JsonSerializer.Deserialize<Player>(json);
 
@@ -883,59 +1205,12 @@ public class GameNetworkServer : BackgroundService
                     continue;
                 }
 
-                if (!_gameSessions.TryGetValue(roomId, out var gameSession)
-                    || !gameSession.Sessions.TryGetValue(player.Id, out var session))
+                if (!_gameSessions.TryGetValue(roomId, out var gameSession))
                 {
                     continue;
                 }
 
-                string authoritativePlayerJson;
-                var shouldBroadcastUdp = false;
-                var shouldBroadcastTcpState = false;
-                lock (gameSession.SyncRoot)
-                {
-                    if (IsPlayerMovementLocked(gameSession, session.PlayerState))
-                    {
-                        session.PlayerState.IsMoving = false;
-                        authoritativePlayerJson = JsonSerializer.Serialize(session.PlayerState);
-                        shouldBroadcastTcpState = true;
-                    }
-                    else
-                    {
-                        session.PlayerState.X = player.X;
-                        session.PlayerState.Y = player.Y;
-                        session.PlayerState.Angle = player.Angle;
-                        session.PlayerState.IsMoving = player.IsMoving;
-                        RefreshJailEntry(gameSession, session.PlayerState);
-                        authoritativePlayerJson = JsonSerializer.Serialize(session.PlayerState);
-                        shouldBroadcastUdp = true;
-                    }
-                }
-
-                if (session.UdpEndPoint == null || !session.UdpEndPoint.Equals(result.RemoteEndPoint))
-                {
-                    session.UdpEndPoint = result.RemoteEndPoint;
-                    Console.WriteLine($"UDP Endpoint registered for {player.Id} / room {roomId}: {result.RemoteEndPoint}");
-                }
-
-                if (shouldBroadcastTcpState)
-                {
-                    BroadcastTcpToRole(
-                        gameSession,
-                        session.PlayerState.Role,
-                        TcpMessageType.PlayerState,
-                        authoritativePlayerJson,
-                        null);
-                }
-                else if (shouldBroadcastUdp)
-                {
-                    var authoritativeBuffer = System.Text.Encoding.UTF8.GetBytes(authoritativePlayerJson);
-                    BroadcastUdpToRole(
-                        gameSession,
-                        session.PlayerState.Role,
-                        authoritativeBuffer,
-                        player.Id);
-                }
+                TryWriteRoomCommand(gameSession, new MoveRoomCommand(player, result.RemoteEndPoint));
             }
             catch
             {
@@ -960,7 +1235,8 @@ public class GameNetworkServer : BackgroundService
 
             if (kvp.Value.UdpEndPoint != null)
             {
-                _udpClient.SendAsync(buffer, buffer.Length, kvp.Value.UdpEndPoint);
+                _ = _udpClient.SendAsync(buffer, buffer.Length, kvp.Value.UdpEndPoint);
+                Interlocked.Increment(ref _udpPacketsSentThisSecond);
             }
         }
     }
@@ -974,7 +1250,13 @@ public class GameNetworkServer : BackgroundService
 
 public class GameSession
 {
-    public object SyncRoot { get; } = new(); // 방 수정 상태 동시 수정을 막는 락
+    public object CommandGate { get; } = new();
+    public Channel<RoomCommand> Commands { get; } = Channel.CreateUnbounded<RoomCommand>(
+        new UnboundedChannelOptions
+        {
+            SingleReader = true,
+            SingleWriter = false
+        });
     public ConcurrentDictionary<string, PlayerSession> Sessions { get; } = new();
     public ConcurrentDictionary<string, DateTime> JailEntryTimes { get; } = new(); // 감옥 입장 순서
     public Dictionary<string, ArrestState> ActiveArrestsByRobberId { get; } = new(); // 현재 체포 중인 도둑 관리
@@ -986,7 +1268,21 @@ public class GameSession
     public PlayerRole? WinnerRole { get; set; }
     public int ElapsedGameTime { get; set; }
     public DateTime? GameStartedAtUtc { get; set; }
+    public bool HasHadPlayers { get; set; }
+    public DateTime? EmptySinceUtc { get; set; }
+    public bool IsStopping { get; set; }
 }
+
+public abstract record RoomCommand;
+
+public sealed record JoinRoomCommand(
+    Player Player,
+    TcpClient Client,
+    BinaryWriter Writer) : RoomCommand;
+
+public sealed record LeaveRoomCommand(string PlayerId) : RoomCommand;
+
+public sealed record MoveRoomCommand(Player Player, IPEndPoint RemoteEndPoint) : RoomCommand;
 
 public class ArrestState
 {
@@ -1001,4 +1297,150 @@ public class PlayerSession
     public BinaryWriter Writer { get; set; } = null!;
     public Player PlayerState { get; set; } = null!;
     public IPEndPoint? UdpEndPoint { get; set; }
+}
+
+public sealed class RuntimeMetricSampler : IDisposable
+{
+    private static readonly HashSet<string> RuntimeCounterNames = new(StringComparer.Ordinal)
+    {
+        "dotnet.exceptions",
+        "dotnet.gc.collections",
+        "dotnet.gc.heap.total_allocated",
+        "dotnet.gc.pause.time",
+        "dotnet.monitor.lock_contentions",
+        "dotnet.process.cpu.time",
+        "dotnet.process.memory.working_set",
+        "dotnet.thread_pool.queue.length",
+        "dotnet.thread_pool.thread.count"
+    };
+
+    private readonly MeterListener _listener = new();
+    private readonly ConcurrentDictionary<string, RuntimeMetricSeries> _series = new();
+    private readonly Dictionary<string, double> _previousValues = new(StringComparer.Ordinal);
+    private DateTime _previousSampleAtUtc = DateTime.UtcNow;
+
+    public RuntimeMetricSampler()
+    {
+        _listener.InstrumentPublished = (instrument, listener) =>
+        {
+            if (instrument.Meter.Name == "System.Runtime" && RuntimeCounterNames.Contains(instrument.Name))
+            {
+                listener.EnableMeasurementEvents(instrument);
+            }
+        };
+
+        _listener.SetMeasurementEventCallback<int>(RecordMeasurement);
+        _listener.SetMeasurementEventCallback<long>(RecordMeasurement);
+        _listener.SetMeasurementEventCallback<float>(RecordMeasurement);
+        _listener.SetMeasurementEventCallback<double>(RecordMeasurement);
+        _listener.SetMeasurementEventCallback<decimal>(RecordMeasurement);
+        _listener.Start();
+    }
+
+    public string Sample()
+    {
+        _listener.RecordObservableInstruments();
+
+        var now = DateTime.UtcNow;
+        var elapsedSeconds = Math.Max((now - _previousSampleAtUtc).TotalSeconds, 0.001d);
+        _previousSampleAtUtc = now;
+
+        var values = _series.Values
+            .GroupBy(series => series.Name, StringComparer.Ordinal)
+            .ToDictionary(
+                group => group.Key,
+                group => group.Sum(series => series.Value),
+                StringComparer.Ordinal);
+
+        var exceptionsPerSecond = GetDeltaPerSecond(values, "dotnet.exceptions", elapsedSeconds);
+        var gcCollectionsPerSecond = GetDeltaPerSecond(values, "dotnet.gc.collections", elapsedSeconds);
+        var gcAllocatedBytesPerSecond = GetDeltaPerSecond(values, "dotnet.gc.heap.total_allocated", elapsedSeconds);
+        var gcPauseMsPerSecond = GetDeltaPerSecond(values, "dotnet.gc.pause.time", elapsedSeconds) * 1000d;
+        var lockContentionsPerSecond = GetDeltaPerSecond(values, "dotnet.monitor.lock_contentions", elapsedSeconds);
+        var cpuSecondsPerSecond = GetDeltaPerSecond(values, "dotnet.process.cpu.time", elapsedSeconds);
+        var workingSetBytes = GetCurrent(values, "dotnet.process.memory.working_set");
+        var threadPoolQueueLength = GetCurrent(values, "dotnet.thread_pool.queue.length");
+        var threadPoolThreadCount = GetCurrent(values, "dotnet.thread_pool.thread.count");
+
+        return
+            $"exceptions/s={exceptionsPerSecond:F1} " +
+            $"gc_collections/s={gcCollectionsPerSecond:F1} " +
+            $"gc_alloc_mb/s={BytesToMegabytes(gcAllocatedBytesPerSecond):F2} " +
+            $"gc_pause_ms/s={gcPauseMsPerSecond:F2} " +
+            $"lock_contentions/s={lockContentionsPerSecond:F1} " +
+            $"cpu_s/s={cpuSecondsPerSecond:F2} " +
+            $"working_set_mb={BytesToMegabytes(workingSetBytes):F1} " +
+            $"tp_queue={threadPoolQueueLength:F0} " +
+            $"tp_threads={threadPoolThreadCount:F0}";
+    }
+
+    public void Dispose()
+    {
+        _listener.Dispose();
+    }
+
+    private void RecordMeasurement<T>(
+        Instrument instrument,
+        T measurement,
+        ReadOnlySpan<KeyValuePair<string, object?>> tags,
+        object? state)
+        where T : struct
+    {
+        var seriesKey = CreateSeriesKey(instrument, tags);
+        var value = Convert.ToDouble(measurement);
+        _series.AddOrUpdate(
+            seriesKey,
+            _ => new RuntimeMetricSeries(instrument.Name, value),
+            (_, series) =>
+            {
+                series.Value = value;
+                return series;
+            });
+    }
+
+    private double GetDeltaPerSecond(
+        IReadOnlyDictionary<string, double> values,
+        string name,
+        double elapsedSeconds)
+    {
+        var current = GetCurrent(values, name);
+        _previousValues.TryGetValue(name, out var previous);
+        _previousValues[name] = current;
+
+        return Math.Max(0d, current - previous) / elapsedSeconds;
+    }
+
+    private static double GetCurrent(IReadOnlyDictionary<string, double> values, string name)
+    {
+        return values.TryGetValue(name, out var value) ? value : 0d;
+    }
+
+    private static double BytesToMegabytes(double bytes)
+    {
+        return bytes / 1024d / 1024d;
+    }
+
+    private static string CreateSeriesKey(
+        Instrument instrument,
+        ReadOnlySpan<KeyValuePair<string, object?>> tags)
+    {
+        if (tags.IsEmpty)
+        {
+            return instrument.Name;
+        }
+
+        var key = instrument.Name;
+        foreach (var tag in tags)
+        {
+            key += $"|{tag.Key}={tag.Value}";
+        }
+
+        return key;
+    }
+
+    private sealed class RuntimeMetricSeries(string name, double value)
+    {
+        public string Name { get; } = name;
+        public double Value { get; set; } = value;
+    }
 }

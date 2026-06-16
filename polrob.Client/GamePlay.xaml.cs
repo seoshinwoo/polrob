@@ -298,6 +298,21 @@ public partial class GamePlay : ContentPage
                         await Shell.Current.GoToAsync(BuildGameOverRoute());
                     }
                 }
+                else if (_gamePhase == GamePhase.Rematching)
+                {
+                    if (!_isGameOverTransitioning)
+                    {
+                        _isGameOverTransitioning = true;
+                        TimerLabel.IsVisible = false;
+                        TimerLabel.Text = "";
+                        CenterMessageLabel.Text = "Rematching";
+                        CenterMessageLabel.TextColor = Colors.White;
+
+                        await Task.Delay(1000);
+                        StopGameClient();
+                        await Shell.Current.GoToAsync(BuildRematchingRoute());
+                    }
+                }
             });
         };
 
@@ -333,6 +348,12 @@ public partial class GamePlay : ContentPage
         var isHost = _isHost.ToString().ToLowerInvariant();
 
         return $"GameOver?roomId={roomId}&role={role}&gameType={gameType}&roomCode={roomCode}&isHost={isHost}";
+    }
+
+    private string BuildRematchingRoute()
+    {
+        var role = Uri.EscapeDataString(_selectedRole.ToString());
+        return $"GameMatching?role={role}";
     }
 
     private void UpdateUI()
@@ -386,7 +407,7 @@ public partial class GamePlay : ContentPage
 
     private void Canvas_Touch(object? sender, SKTouchEventArgs e)
     {
-        if (_gamePhase < GamePhase.Playing)
+        if (_gamePhase != GamePhase.Playing)
         {
             e.Handled = true;
             return;
@@ -444,7 +465,7 @@ public partial class GamePlay : ContentPage
 
     private void UpdatePhysics()
     {
-        if (!_isInitialized || _gamePhase < GamePhase.Playing)
+        if (!_isInitialized || _gamePhase != GamePhase.Playing)
         {
             _player.IsMoving = false;
             return;
