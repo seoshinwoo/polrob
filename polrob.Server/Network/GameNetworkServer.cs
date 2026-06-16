@@ -21,6 +21,7 @@ public class GameNetworkServer : BackgroundService
     private const string DefaultRoomId = "default";
     private const float VisionRangePlayerSizeMultiplier = 2.5f;
     private const float VisionConeAngleDegrees = 90f;
+    private const int GameDurationSeconds = 300;
     private const double ArrestDurationSeconds = 2d;
     private const double JailBreakDurationSeconds = 3d;
     private const float JailBreakReleaseOffset = 20f;
@@ -105,7 +106,9 @@ public class GameNetworkServer : BackgroundService
                 {
                     gameSession.GamePhase = GamePhase.Countdown;
                     gameSession.CountdownTime = 3;
-                    gameSession.GameTime = 300;
+                    gameSession.GameTime = GameDurationSeconds;
+                    gameSession.WinnerRole = null;
+                    gameSession.ElapsedGameTime = 0;
                 }
                 else if (gameSession.GamePhase == GamePhase.Countdown)
                 {
@@ -114,6 +117,7 @@ public class GameNetworkServer : BackgroundService
                     {
                         gameSession.GamePhase = GamePhase.Playing;
                         gameSession.CountdownTime = 0;
+                        gameSession.GameStartedAtUtc = DateTime.UtcNow;
                     }
                 }
                 else if (gameSession.GamePhase == GamePhase.Playing)
@@ -138,7 +142,17 @@ public class GameNetworkServer : BackgroundService
                     if (gameSession.GameTime <= 0 || allRobbersCaught)
                     {
                         gameSession.GamePhase = GamePhase.Ended;
-                        gameSession.GameTime = 0;
+                        gameSession.GameTime = Math.Max(0, gameSession.GameTime);
+                        gameSession.WinnerRole = gameSession.GameTime <= 0
+                            ? PlayerRole.Robber
+                            : PlayerRole.Police;
+                        gameSession.ElapsedGameTime = gameSession.GameStartedAtUtc.HasValue
+                            ? Math.Clamp(
+                                (int)Math.Round(
+                                    (DateTime.UtcNow - gameSession.GameStartedAtUtc.Value).TotalSeconds),
+                                0,
+                                GameDurationSeconds)
+                            : GameDurationSeconds - gameSession.GameTime;
                         _gameRoomService.CompleteGame(roomId);
                     }
                 }
@@ -148,7 +162,9 @@ public class GameNetworkServer : BackgroundService
                     RoomId = roomId,
                     Phase = gameSession.GamePhase,
                     CountdownTime = gameSession.CountdownTime,
-                    GameTime = gameSession.GameTime
+                    GameTime = gameSession.GameTime,
+                    WinnerRole = gameSession.WinnerRole,
+                    ElapsedGameTime = gameSession.ElapsedGameTime
                 };
 
                 BroadcastTcp(gameSession, TcpMessageType.GameState, JsonSerializer.Serialize(syncData), null);
@@ -236,7 +252,9 @@ public class GameNetworkServer : BackgroundService
                         RoomId = roomId,
                         Phase = gameSession.GamePhase,
                         CountdownTime = gameSession.CountdownTime,
-                        GameTime = gameSession.GameTime
+                        GameTime = gameSession.GameTime,
+                        WinnerRole = gameSession.WinnerRole,
+                        ElapsedGameTime = gameSession.ElapsedGameTime
                     };
                     SendTcp(writer, TcpMessageType.GameState, JsonSerializer.Serialize(syncData));
 
@@ -965,6 +983,9 @@ public class GameSession
     public GamePhase GamePhase { get; set; }
     public int CountdownTime { get; set; } = 3;
     public int GameTime { get; set; } = 300;
+    public PlayerRole? WinnerRole { get; set; }
+    public int ElapsedGameTime { get; set; }
+    public DateTime? GameStartedAtUtc { get; set; }
 }
 
 public class ArrestState

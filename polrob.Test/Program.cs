@@ -3,3 +3,4 @@
 var botRunner = new BotRunner();
 await botRunner.TestLogin();
 await botRunner.TestRandomMatching();
+await botRunner.TestGamePlay();
