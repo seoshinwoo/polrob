@@ -32,9 +32,12 @@ public partial class GamePlay : ContentPage
     private SKCanvasView _canvas;
     private GameNetworkClient? _networkClient;
     private DateTime _lastSyncTime = DateTime.MinValue;
+    private bool _lastSyncedIsMoving;
     private GamePhase _gamePhase = GamePhase.Waiting;
     private int _remainingTime = 300;
     private bool _isGameOverTransitioning = false;
+    private static readonly TimeSpan MovingUdpSyncInterval = TimeSpan.FromMilliseconds(50);
+    private static readonly TimeSpan StoppedUdpSyncInterval = TimeSpan.FromMilliseconds(500);
     private const float VisionRangePlayerSizeMultiplier = 2.5f;
     private const float VisionConeAngleDegrees = 90f;
     private const byte FogOpacity = 120;
@@ -216,6 +219,25 @@ public partial class GamePlay : ContentPage
             }
 
             if (p.Id == _player.Id)
+            {
+                _player = player;
+                if (_player.Role == PlayerRole.Robber && IsInJail(_player.X, _player.Y))
+                {
+                    _activeTouchId = -1;
+                }
+            }
+        };
+
+        _networkClient.OnPlayerMovementReceived += (movement) =>
+        {
+            if (!_players.TryGetValue(movement.Id, out var player))
+            {
+                return;
+            }
+
+            movement.ApplyTo(player);
+
+            if (movement.Id == _player.Id)
             {
                 _player = player;
                 if (_player.Role == PlayerRole.Robber && IsInJail(_player.X, _player.Y))
@@ -529,14 +551,17 @@ public partial class GamePlay : ContentPage
         // Sync with server via UDP
         if (_networkClient != null)
         {
-            if (_player.IsMoving || (DateTime.Now - _lastSyncTime).TotalMilliseconds > 100)
+            var now = DateTime.Now;
+            var syncInterval = _player.IsMoving
+                ? MovingUdpSyncInterval
+                : StoppedUdpSyncInterval;
+            var movementStateChanged = _player.IsMoving != _lastSyncedIsMoving;
+
+            if (movementStateChanged || now - _lastSyncTime >= syncInterval)
             {
-                // Sync around 20 times a second
-                if ((DateTime.Now - _lastSyncTime).TotalMilliseconds > 50)
-                {
-                    _networkClient.SendMoveUdp(_player);
-                    _lastSyncTime = DateTime.Now;
-                }
+                _networkClient.SendMoveUdp(_player);
+                _lastSyncTime = now;
+                _lastSyncedIsMoving = _player.IsMoving;
             }
         }
     }

@@ -17,6 +17,7 @@ public class GameNetworkClient
     public event Action<Player>? OnPlayerJoined;
     public event Action<string>? OnPlayerLeft;
     public event Action<Player>? OnPlayerMoved;
+    public event Action<PlayerMovementSync>? OnPlayerMovementReceived;
     public event Action<string, string>? OnPlayerArrested;
     public event Action<JailBreakSync>? OnPlayerJailBroken;
     public event Action<JailBreakProgressSync>? OnJailBreakProgressReceived;
@@ -55,7 +56,7 @@ public class GameNetworkClient
     public void SendMoveUdp(Player player)
     {
         if (_isDisconnected || _udpClient == null) return;
-        string json = JsonSerializer.Serialize(player);
+        string json = JsonSerializer.Serialize(PlayerMovementSync.FromPlayer(player));
         byte[] bytes = System.Text.Encoding.UTF8.GetBytes(json);
         _udpClient.SendAsync(bytes, bytes.Length);
     }
@@ -151,14 +152,21 @@ public class GameNetworkClient
             {
                 var result = await _udpClient.ReceiveAsync();
                 string json = System.Text.Encoding.UTF8.GetString(result.Buffer);
-                var player = JsonSerializer.Deserialize<Player>(json);
+                var movement = JsonSerializer.Deserialize<PlayerMovementSync>(json);
 
-                if (player != null)
+                if (movement != null && !string.IsNullOrWhiteSpace(movement.Id))
                 {
                     MainThread.BeginInvokeOnMainThread(() =>
                     {
-                        OnPlayerMoved?.Invoke(player);
+                        OnPlayerMovementReceived?.Invoke(movement);
                     });
+                    continue;
+                }
+
+                var player = JsonSerializer.Deserialize<Player>(json);
+                if (player != null)
+                {
+                    MainThread.BeginInvokeOnMainThread(() => OnPlayerMoved?.Invoke(player));
                 }
             }
             catch (Exception ex)

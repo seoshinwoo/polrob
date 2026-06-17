@@ -19,6 +19,7 @@ public sealed class BotGameNetworkClient : IAsyncDisposable
     public event Action<Player>? PlayerJoined;
     public event Action<string>? PlayerLeft;
     public event Action<Player>? PlayerStateReceived;
+    public event Action<PlayerMovementSync>? PlayerMovementReceived;
     public event Action<string, string>? PlayerArrested;
     public event Action<JailBreakSync>? JailBreakReceived;
     public event Action<GameStateSync>? GameStateReceived;
@@ -57,7 +58,7 @@ public sealed class BotGameNetworkClient : IAsyncDisposable
             return;
         }
 
-        var bytes = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(player));
+        var bytes = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(PlayerMovementSync.FromPlayer(player)));
         await _udpClient.SendAsync(bytes);
     }
 
@@ -174,6 +175,13 @@ public sealed class BotGameNetworkClient : IAsyncDisposable
             while (!cancellationToken.IsCancellationRequested)
             {
                 var result = await _udpClient.ReceiveAsync(cancellationToken);
+                var movement = JsonSerializer.Deserialize<PlayerMovementSync>(result.Buffer);
+                if (movement != null && !string.IsNullOrWhiteSpace(movement.Id))
+                {
+                    PlayerMovementReceived?.Invoke(movement);
+                    continue;
+                }
+
                 var player = JsonSerializer.Deserialize<Player>(result.Buffer);
                 if (player != null)
                 {

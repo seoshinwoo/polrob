@@ -9,6 +9,7 @@ public class BotClient : IAsyncDisposable
     private const string DefaultServerUrl = "http://localhost:5174";
     private const string DefaultDevelopmentBotKey = "polrob-local-bot-key";
     private static readonly TimeSpan MovementInterval = TimeSpan.FromMilliseconds(50);
+    private static readonly TimeSpan StoppedMovementInterval = TimeSpan.FromMilliseconds(500);
     private static readonly TimeSpan InitialStateTimeout = TimeSpan.FromSeconds(
         GetPositiveIntEnvironmentVariable("POLROB_BOT_INITIAL_STATE_TIMEOUT_SECONDS", 60));
 
@@ -170,6 +171,7 @@ public class BotClient : IAsyncDisposable
 
             var previousTick = DateTime.UtcNow;
             var lastMovementSentAtUtc = DateTime.MinValue;
+            var lastSentIsMoving = false;
             while (!_gameEnded.Task.IsCompleted)
             {
                 await Task.Delay(MovementInterval);
@@ -205,11 +207,13 @@ public class BotClient : IAsyncDisposable
 
                 var sendInterval = movementSnapshot.IsMoving
                     ? MovementInterval
-                    : TimeSpan.FromMilliseconds(100);
-                if (now - lastMovementSentAtUtc >= sendInterval)
+                    : StoppedMovementInterval;
+                var movementStateChanged = movementSnapshot.IsMoving != lastSentIsMoving;
+                if (movementStateChanged || now - lastMovementSentAtUtc >= sendInterval)
                 {
                     await _gameNetworkClient.SendMoveAsync(movementSnapshot);
                     lastMovementSentAtUtc = now;
+                    lastSentIsMoving = movementSnapshot.IsMoving;
                 }
             }
 
@@ -296,6 +300,23 @@ public class BotClient : IAsyncDisposable
                 if (player.Id == Id)
                 {
                     _localPlayer = _visibleTeamPlayers[player.Id];
+                }
+            }
+        };
+
+        networkClient.PlayerMovementReceived += movement =>
+        {
+            lock (_playerStateLock)
+            {
+                if (!_visibleTeamPlayers.TryGetValue(movement.Id, out var current))
+                {
+                    return;
+                }
+
+                movement.ApplyTo(current);
+                if (movement.Id == Id)
+                {
+                    _localPlayer = current;
                 }
             }
         };
