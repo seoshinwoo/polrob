@@ -23,6 +23,8 @@ public class GameNetworkServer : BackgroundService
     private Timer? _metricsTimer;
     private long _udpPacketsReceivedThisSecond;
     private long _udpPacketsSentThisSecond;
+    private long _udpBytesReceivedThisSecond;
+    private long _udpBytesSentThisSecond;
     private long _tcpPacketsSentThisSecond;
     private long _jsonSerializationsThisSecond;
     private int _currentTcpConnections;
@@ -78,8 +80,12 @@ public class GameNetworkServer : BackgroundService
     {
         var udpReceived = Interlocked.Exchange(ref _udpPacketsReceivedThisSecond, 0);
         var udpSent = Interlocked.Exchange(ref _udpPacketsSentThisSecond, 0);
+        var udpBytesReceived = Interlocked.Exchange(ref _udpBytesReceivedThisSecond, 0);
+        var udpBytesSent = Interlocked.Exchange(ref _udpBytesSentThisSecond, 0);
         var tcpSent = Interlocked.Exchange(ref _tcpPacketsSentThisSecond, 0);
         var jsonSerializations = Interlocked.Exchange(ref _jsonSerializationsThisSecond, 0);
+        var udpReceiveAverageBytes = udpReceived > 0 ? (double)udpBytesReceived / udpReceived : 0d;
+        var udpSendAverageBytes = udpSent > 0 ? (double)udpBytesSent / udpSent : 0d;
         var currentConnections = Volatile.Read(ref _currentTcpConnections);
         var gameSessions = _gameSessions.Values.ToList();
         var currentRooms = gameSessions.Count;
@@ -95,6 +101,10 @@ public class GameNetworkServer : BackgroundService
             "[LoadMetrics] " +
             $"udp_recv/s={udpReceived} " +
             $"udp_send/s={udpSent} " +
+            $"udp_recv_bytes/s={udpBytesReceived} " +
+            $"udp_send_bytes/s={udpBytesSent} " +
+            $"udp_recv_avg_bytes={udpReceiveAverageBytes:F2} " +
+            $"udp_send_avg_bytes={udpSendAverageBytes:F2} " +
             $"tcp_send/s={tcpSent} " +
             $"json_serialize/s={jsonSerializations} " +
             $"connections={currentConnections} " +
@@ -1197,6 +1207,7 @@ public class GameNetworkServer : BackgroundService
             {
                 var result = await _udpClient.ReceiveAsync(stoppingToken);
                 Interlocked.Increment(ref _udpPacketsReceivedThisSecond);
+                Interlocked.Add(ref _udpBytesReceivedThisSecond, result.Buffer.Length);
                 var json = System.Text.Encoding.UTF8.GetString(result.Buffer);
                 var player = JsonSerializer.Deserialize<Player>(json);
 
@@ -1237,6 +1248,7 @@ public class GameNetworkServer : BackgroundService
             {
                 _ = _udpClient.SendAsync(buffer, buffer.Length, kvp.Value.UdpEndPoint);
                 Interlocked.Increment(ref _udpPacketsSentThisSecond);
+                Interlocked.Add(ref _udpBytesSentThisSecond, buffer.Length);
             }
         }
     }

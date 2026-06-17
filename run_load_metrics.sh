@@ -19,7 +19,7 @@ BOT_THREAD_POOL_MIN_THREADS="${POLROB_BOT_THREAD_POOL_MIN_THREADS:-1600}"
 
 mkdir -p "$LOGDIR"
 
-HEADER="bots,expected_rooms,eligible_samples,window_start_sample,udp_recv_per_s,udp_send_per_s,tcp_send_per_s,json_serialize_per_s,connections,players,rooms,waiting_rooms,countdown_rooms,playing_rooms,ended_rooms,game_tcp_players,game_tcp_rooms,lobby_players,lobby_rooms,random_players,random_rooms,random_matched_rooms,random_in_game_rooms,exceptions_per_s,gc_collections_per_s,gc_alloc_mb_per_s,gc_pause_ms_per_s,lock_contentions_per_s,cpu_s_per_s,working_set_mb,tp_queue,tp_threads,network_total_per_s,bot_failures,bot_connected,server_log,bot_log"
+HEADER="bots,expected_rooms,eligible_samples,window_start_sample,udp_recv_per_s,udp_send_per_s,udp_recv_bytes_per_s,udp_send_bytes_per_s,udp_recv_avg_bytes,udp_send_avg_bytes,tcp_send_per_s,json_serialize_per_s,connections,players,rooms,waiting_rooms,countdown_rooms,playing_rooms,ended_rooms,game_tcp_players,game_tcp_rooms,lobby_players,lobby_rooms,random_players,random_rooms,random_matched_rooms,random_in_game_rooms,exceptions_per_s,gc_collections_per_s,gc_alloc_mb_per_s,gc_pause_ms_per_s,lock_contentions_per_s,cpu_s_per_s,working_set_mb,tp_queue,tp_threads,network_total_per_s,udp_total_bytes_per_s,bot_failures,bot_connected,server_log,bot_log"
 printf '%s\n' "$HEADER" > "$RESULT_CSV"
 
 stop_pid() {
@@ -105,7 +105,7 @@ append_best_window_summary() {
     -v server_log="$logfile" \
     -v bot_log="$botlog" '
     BEGIN {
-      keys = "udp_recv/s udp_send/s tcp_send/s json_serialize/s connections players rooms waiting_rooms countdown_rooms playing_rooms ended_rooms game_tcp_players game_tcp_rooms lobby_players lobby_rooms random_players random_rooms random_matched_rooms random_in_game_rooms exceptions/s gc_collections/s gc_alloc_mb/s gc_pause_ms/s lock_contentions/s cpu_s/s working_set_mb tp_queue tp_threads"
+      keys = "udp_recv/s udp_send/s udp_recv_bytes/s udp_send_bytes/s udp_recv_avg_bytes udp_send_avg_bytes tcp_send/s json_serialize/s connections players rooms waiting_rooms countdown_rooms playing_rooms ended_rooms game_tcp_players game_tcp_rooms lobby_players lobby_rooms random_players random_rooms random_matched_rooms random_in_game_rooms exceptions/s gc_collections/s gc_alloc_mb/s gc_pause_ms/s lock_contentions/s cpu_s/s working_set_mb tp_queue tp_threads"
       split(keys, keyList, " ")
     }
     /\[LoadMetrics\]/ {
@@ -123,6 +123,7 @@ append_best_window_summary() {
           value[n, keyList[i]] = kv[keyList[i]]
         }
         total[n] = kv["udp_recv/s"] + kv["udp_send/s"] + kv["tcp_send/s"]
+        bytesTotal[n] = kv["udp_recv_bytes/s"] + kv["udp_send_bytes/s"]
       }
     }
     END {
@@ -151,8 +152,12 @@ append_best_window_summary() {
         else printf ","
       }
 
-      if (usableWindow > 0) printf ",%.2f", bestScore / usableWindow
-      else printf ","
+      if (usableWindow > 0) {
+        bytesScore = 0
+        for (j = bestStart; j < bestStart + usableWindow; j++) bytesScore += bytesTotal[j]
+        printf ",%.2f,%.2f", bestScore / usableWindow, bytesScore / usableWindow
+      }
+      else printf ",,"
 
       printf ",%d,%d,%s,%s\n", bot_failures, bot_connected, server_log, bot_log
     }
@@ -171,7 +176,15 @@ write_markdown_summary() {
     printf '|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|\n'
     awk -F, 'NR > 1 {
       printf "| %d | %d | %.0f | %.0f | %.0f | %.0f | %.0f | %.0f | %.0f | %d |\n",
-        $1, $2, $5, $6, $7, $8, $9, $10, $33, $34
+        $1, $2, $5, $6, $11, $12, $13, $14, $37, $39
+    }' "$RESULT_CSV"
+
+    printf '\n## UDP Bytes\n\n'
+    printf '| Bots | UDP recv bytes/s | UDP send bytes/s | Total UDP bytes/s | Avg recv bytes | Avg send bytes |\n'
+    printf '|---:|---:|---:|---:|---:|---:|\n'
+    awk -F, 'NR > 1 {
+      printf "| %d | %.0f | %.0f | %.0f | %.1f | %.1f |\n",
+        $1, $7, $8, $38, $9, $10
     }' "$RESULT_CSV"
 
     printf '\n## Runtime\n\n'
@@ -179,12 +192,12 @@ write_markdown_summary() {
     printf '|---:|---:|---:|---:|---:|---:|---:|---:|---:|\n'
     awk -F, 'NR > 1 {
       printf "| %d | %.2f | %.0f | %.2f | %.2f | %.2f | %.2f | %.2f | %.0f |\n",
-        $1, $29, $30, $26, $25, $27, $28, $31, $32
+        $1, $33, $34, $30, $29, $31, $32, $35, $36
     }' "$RESULT_CSV"
 
     printf '\n## Raw Logs\n\n'
     awk -F, 'NR > 1 {
-      printf "- %d bots: server `%s`, bot `%s`\n", $1, $36, $37
+      printf "- %d bots: server `%s`, bot `%s`\n", $1, $41, $42
     }' "$RESULT_CSV"
   } > "$RESULT_MD"
 }
