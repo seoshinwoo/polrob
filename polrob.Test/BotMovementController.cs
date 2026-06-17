@@ -13,6 +13,8 @@ public sealed class BotMovementController
     private readonly Random _random;
     private Vector2 _wanderDirection;
     private DateTime _nextDirectionChangeUtc = DateTime.MinValue;
+    private DateTime _pausedUntilUtc = DateTime.MinValue;
+    private DateTime _nextPauseCheckUtc = DateTime.MinValue;
 
     public BotMovementController(string botId)
     {
@@ -40,13 +42,34 @@ public sealed class BotMovementController
                 return false;
             }
 
+            _pausedUntilUtc = DateTime.MinValue;
             return Move(localPlayer, Vector2.Normalize(toTarget), elapsed);
         }
 
-        if (DateTime.UtcNow >= _nextDirectionChangeUtc)
+        var now = DateTime.UtcNow;
+        if (now < _pausedUntilUtc)
+        {
+            localPlayer.IsMoving = false;
+            return false;
+        }
+
+        if (now >= _nextPauseCheckUtc && ShouldPause(localPlayer.Role))
+        {
+            _pausedUntilUtc = now.Add(GetPauseDuration(localPlayer.Role));
+            _nextPauseCheckUtc = _pausedUntilUtc.AddMilliseconds(_random.Next(1200, 3200));
+            localPlayer.IsMoving = false;
+            return false;
+        }
+
+        if (now >= _nextPauseCheckUtc)
+        {
+            _nextPauseCheckUtc = now.AddMilliseconds(_random.Next(1200, 3200));
+        }
+
+        if (now >= _nextDirectionChangeUtc)
         {
             _wanderDirection = CreateRandomDirection();
-            _nextDirectionChangeUtc = DateTime.UtcNow.AddMilliseconds(
+            _nextDirectionChangeUtc = now.AddMilliseconds(
                 _random.Next(900, 2800));
         }
 
@@ -56,9 +79,23 @@ public sealed class BotMovementController
         }
 
         _wanderDirection = CreateRandomDirection();
-        _nextDirectionChangeUtc = DateTime.UtcNow.AddMilliseconds(
+        _nextDirectionChangeUtc = now.AddMilliseconds(
             _random.Next(500, 1400));
         return Move(localPlayer, _wanderDirection, elapsed);
+    }
+
+    private bool ShouldPause(PlayerRole role)
+    {
+        var chance = role == PlayerRole.Robber ? 0.22d : 0.08d;
+        return _random.NextDouble() < chance;
+    }
+
+    private TimeSpan GetPauseDuration(PlayerRole role)
+    {
+        var milliseconds = role == PlayerRole.Robber
+            ? _random.Next(800, 2400)
+            : _random.Next(400, 1200);
+        return TimeSpan.FromMilliseconds(milliseconds);
     }
 
     private bool TryGetRescueTarget(
