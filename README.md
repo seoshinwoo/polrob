@@ -1,4 +1,4 @@
-$$\Huge\color{#00C0FF}{\textbf{Pol}}\color{#FFAA00}{\textbf{Rob}}$$
+$$\scalebox{3.8}{\color{#00C0FF}{\mathbf{Pol}}\color{#FFAA00}{\mathbf{Rob}}}$$
 
 <p align="center">
   <b>🚨 6명이 한 방에서 펼치는 실시간 체포와 탈옥의 숨막히는 추격전!</b><br/>
