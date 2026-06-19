@@ -1,4 +1,4 @@
-<img width="2172" height="724" alt="PolRob_README_Image" src="https://github.com/user-attachments/assets/0d7c1f20-153c-453e-8b17-ff4112909459" />
+<img width="1916" height="821" alt="PolRob_README" src="https://github.com/user-attachments/assets/e2b3b52f-91d4-499f-911c-a9c6e1b355a9" />
 
 
 <p align="center">
