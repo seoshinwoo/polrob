@@ -1,6 +1,10 @@
-<h1 align="center" style="font-family: sans-serif; font-weight: bold; margin-top: 30px; margin-bottom: 10px;">
-  <span style="color: #00c0ff; font-weight: bold; font-size: 48px;">Pol</span><span style="color: #ffaa00; font-weight: bold; font-size: 48px;">Rob</span>
-</h1>
+<p align="center">
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 70" width="350">
+    <text x="50%" y="52" font-family="system-ui, -apple-system, sans-serif" font-weight="900" font-size="52" text-anchor="middle" letter-spacing="1">
+      <tspan fill="#00C0FF">Pol</tspan><tspan fill="#FFAA00">Rob</tspan>
+    </text>
+  </svg>
+</p>
 
 <p align="center">
   <b>🚨 6명이 한 방에서 펼치는 실시간 체포와 탈옥의 숨막히는 추격전!</b><br/>
@@ -9,10 +13,16 @@
 </p>
 
 <p align="center">
-  <code>.NET 10</code> · <code>C#</code> · <code>.NET MAUI</code> · <code>ASP.NET Core Web API</code> · <code>SignalR</code> · <code>Azure Cosmos DB</code> · <code>Redis</code>
+  <img src="https://img.shields.io/badge/.NET_10-512BD4?style=for-the-badge&logo=.net&logoColor=white">
+  <img src="https://img.shields.io/badge/C%23-239120?style=for-the-badge&logo=c-sharp&logoColor=white">
+  <img src="https://img.shields.io/badge/.NET_MAUI-512BD4?style=for-the-badge&logo=dotnet&logoColor=white"><br/>
+  <img src="https://img.shields.io/badge/ASP.NET_Core_API-512BD4?style=for-the-badge&logo=dotnet&logoColor=white">
+  <img src="https://img.shields.io/badge/SignalR-512BD4?style=for-the-badge&logo=dotnet&logoColor=white"><br/>
+  <img src="https://img.shields.io/badge/Azure_Cosmos_DB-0089D6?style=for-the-badge&logo=microsoftazure&logoColor=white">
+  <img src="https://img.shields.io/badge/Redis-DC382D?style=for-the-badge&logo=redis&logoColor=white">
 </p>
 
----
+<br/>
 
 ## 🎮 게임 소개 (Game Overview)
 
@@ -30,18 +40,16 @@
 [게임 결과 판정 및 재대결] <── [5분간의 실시간 추격전] <── [3초 카운트다운]
 ```
 
----
+<br/>
 
-## 🧭 프로젝트 핵심 아키텍처 및 지향점
+> [!NOTE]
+> ### 🧭 프로젝트 핵심 아키텍처 및 지향점
+> 이 프로젝트의 진가는 단순한 화면 구현을 넘어 **실시간 게임 서버의 명확한 책임 분리와 대용량 데이터 흐름의 최적화**에 있습니다.
+> * **혼합 프로토콜 설계 (Hybrid Protocol)**: 신뢰성이 필수적인 이벤트는 **TCP**로, 빈번한 데이터(위치 동기화)는 **UDP**로 분리하여 효율을 극대화했습니다.
+> * **방 단위 게임 루프 (Room-Scoped Tick Loop)**: 게임 룸을 `roomId` 기반으로 완벽히 격리하고, 독립적인 명령 큐(Command Queue)를 도입해 상태 오염을 방지했습니다.
+> * **서버 권위 체제 (Server-Authoritative)**: 클라이언트 변조를 차단하기 위해 체포, 수감, 탈옥 판정 등 모든 게임 룰은 서버가 판정합니다.
 
-이 프로젝트의 진가는 화면 구현을 넘어 **실시간 게임 서버의 명확한 책임 분리와 대용량 데이터 흐름의 최적화**에 있습니다.
-
-* **혼합 프로토콜 설계 (Hybrid Protocol)**: 신뢰성이 필수적인 이벤트(체포, 탈옥, Phase 변경)는 **TCP**로, 빈번하고 즉각적인 데이터(위치/이동 동기화)는 **UDP**로 분리하여 네트워크 효율을 극대화했습니다.
-* **방 단위 게임 루프 (Room-Scoped Tick Loop)**: 각 게임 룸을 `roomId` 기반으로 완벽히 격리하고, 독립적인 명령 큐(Command Queue)와 멀티 티킹 주기를 도입하여 상태 오염을 방지했습니다.
-* **서버 권위 체제 (Server-Authoritative)**: 클라이언트의 변조 가능성을 차단하기 위해 체포 진행률, 감옥 수감, 탈옥 판정, 승패 조건 등 모든 핵심 게임 룰은 서버가 판정하고 통제합니다.
-* **수치 기반 최적화 검증**: 대규모 접속 상황을 모사하는 Headless Bot 하네스를 자체 구축하여, 아키텍처 개선 전후의 성능 메트릭을 정량적으로 비교 분석했습니다.
-
----
+<br/>
 
 ## 🏗️ 시스템 아키텍처 (System Architecture)
 
@@ -84,7 +92,7 @@ flowchart LR
 | **TCP (`7777`)** | 세션 접속/퇴장, 초기화 상태, Phase 전환, 체포/탈옥 이벤트 | 패킷 유실이 없어야 하며 순서 보장이 절대적으로 필요한 데이터 |
 | **UDP (`7778`)** | 플레이어 실시간 이동 입력 및 위치 좌표 전파 | 초당 수십 번 발생하는 데이터로, 패킷 유실보다 최신성이 중요 |
 
----
+<br/>
 
 ## ⚙️ 서버 코어 메커니즘 구현
 
@@ -96,44 +104,38 @@ flowchart LR
 * **1000 ms (1s)**: 타이머 동기화 및 전반적인 Game State의 전체 동기화 패킷 전송
 
 ### 2. Server-Authoritative Validation
-클라이언트는 오직 조이스틱 입력 전달และ SkiaSharp을 통한 부드러운 렌더링에만 집중합니다. 
+클라이언트는 오직 조이스틱 입력 전달과 SkiaSharp을 통한 부드러운 렌더링에만 집중합니다. 
 ```text
 Client Input ──> UDP Receive ──> Room Command Queue ──> Validation / Rule Tick
                                                                │
 Client Render <── Visible Clients Only <── Authoritative State ┘
 ```
 
----
+<br/>
 
-## 📈 고부하 부하 테스트 및 단계별 최적화 성과
+> [!TIP]
+> ### 📈 고부하 부하 테스트 및 단계별 최적화 성과 (Baseline 대비)
+> 최대 **900대의 가상 Headless Bot**을 동시 구동하며 CPU 사용량, 패킷 처리량(PPS), GC 할당량을 정밀 추적하여 도출한 독립 실험 성과 지표입니다.
 
-실제 그래픽 리소스 없이 프로토콜 명세를 기반으로 랜덤 매칭 및 실시간 게임 플레이 동기화를 가상으로 수행하는 **Headless Bot 테스트 환경**을 구축했습니다. 최대 **900대의 가상 봇**을 동시에 구동하며 CPU 사용량, 패킷 처리량(PPS), GC 할당량을 정밀 추적했습니다.
+```diff
++ [실험 1] Lightweight UDP Payload
+  ■ UDP Traffic   ███████████████ 53% 감소
+  ■ GC Allocation ███████████ 39% 감소
+  (이동 관련 패킷에서 정적/불변 필드를 완전히 도려내어 페이로드 최소화)
 
-> 📊 **독립 최적화 실험 결과 (Baseline 대비)**
-> 본 지표는 로컬 벤치마크 환경에서 각 최적화 기법을 **독립적으로 적용**하여 얻은 정량적 수치입니다.
++ [실험 2] Room Send Tick Batching
+  ■ CPU Usage     ██████████████████████ 76% 감소
+  ■ Total PPS     ████████ 14% 감소
+  (입력 발생 즉시 BroadCast 하지 않고, 서버의 100ms 틱 주기에 맞춰 일괄 배치 전송)
 
-```
-[실험 1] Lightweight UDP Payload
-───────────────────────────────────────────────────────
-■ UDP Traffic   ███████████████ 53% 감소
-■ GC Allocation ███████████ 39% 감소
-(이동 관련 패킷에서 정적/불변 필드를 완전히 도려내어 페이로드 최소화)
-
-[실험 2] Room Send Tick Batching
-───────────────────────────────────────────────────────
-■ CPU Usage     ██████████████████████ 76% 감소
-■ Total PPS     ████████ 14% 감소
-(입력 발생 즉시 BroadCast 하지 않고, 서버의 100ms 틱 주기에 맞춰 일괄 배치 전송)
-
-[실험 3] Movement Input Coalescing
-───────────────────────────────────────────────────────
-■ CPU Usage     ██████████████ 50% 감소
-(큐에 쌓인 동일 플레이어의 누적 입력 중 불필요한 과거 값을 버리고 최신 입력값만 병합 처리)
++ [실험 3] Movement Input Coalescing
+  ■ CPU Usage     ██████████████ 50% 감소
+  (큐에 쌓인 동일 플레이어의 누적 입력 중 불필요한 과거 값을 버리고 최신 입력값만 병합 처리)
 ```
 
 Detailed Report ──> 자세한 분석 데이터는 [`docs/server_optimization_report.md`](docs/server_optimization_report.md)에서 확인하실 수 있습니다.
 
----
+<br/>
 
 ## 🛠️ 기술 스택 (Tech Stack)
 
@@ -144,7 +146,7 @@ Detailed Report ──> 자세한 분석 데이터는 [`docs/server_optimization
 * **Persistence**: Azure Cosmos DB
 * **Platforms**: Android, iOS 지원
 
----
+<br/>
 
 ## 🚀 실행 방법 (Getting Started)
 
@@ -166,7 +168,7 @@ dotnet build polrob.Client/polrob.Client.csproj -f net10.0-android -t:Run
 dotnet build polrob.Client/polrob.Client.csproj -f net10.0-ios -t:Run
 ```
 
----
+<br/>
 
 ## 🧩 주요 기술적 고민 (Deep Dive)
 
