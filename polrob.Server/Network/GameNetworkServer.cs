@@ -29,7 +29,7 @@ public class GameNetworkServer : BackgroundService
     private long _jsonSerializationsThisSecond;
     private int _currentTcpConnections;
     private static readonly TimeSpan RoomTickInterval = TimeSpan.FromMilliseconds(50);
-    private static readonly TimeSpan UdpMovementBroadcastInterval = TimeSpan.FromMilliseconds(100);
+    private static readonly TimeSpan UdpMovementBroadcastInterval = TimeSpan.FromMilliseconds(50);
     private static readonly TimeSpan GameRuleTickInterval = TimeSpan.FromMilliseconds(100);
     private static readonly TimeSpan GameStateSyncInterval = TimeSpan.FromSeconds(1);
     private static readonly TimeSpan EmptyRoomStopDelay = TimeSpan.FromSeconds(2);
@@ -522,20 +522,27 @@ public class GameNetworkServer : BackgroundService
         var playerId = player.Id;
 
         PositionPlayerForRoom(player, gameSession);
-        gameSession.Sessions[playerId] = new PlayerSession
+        var playerSession = new PlayerSession
         {
             Client = command.Client,
             Writer = command.Writer,
             PlayerState = player
         };
+        gameSession.Sessions[playerId] = playerSession;
         gameSession.HasHadPlayers = true;
         gameSession.EmptySinceUtc = null;
         _playerRooms[playerId] = roomId;
 
         var visiblePlayers = gameSession.Sessions.Values
             .Select(s => s.PlayerState)
-            .Where(p => p.Role == player.Role)
+            .Where(p => p.Role == player.Role ||
+                        IsPlayerVisibleToTeam(gameSession.Sessions.Values, player.Role, p))
             .ToList();
+
+        foreach (var visibleOpponent in visiblePlayers.Where(p => p.Role != player.Role))
+        {
+            playerSession.VisibleOpponentPlayerIds.Add(visibleOpponent.Id);
+        }
 
         Console.WriteLine($"Player Connected [TCP]: {playerId} / room {roomId}");
 
@@ -559,6 +566,7 @@ public class GameNetworkServer : BackgroundService
             TcpMessageType.Joined,
             SerializeForMetrics(player),
             playerId);
+        RefreshOpponentVisibility(gameSession);
         Console.WriteLine($"{roomId} 방 {player.Role} 역할에 플레이어 입장 브로드캐스트!!");
     }
 
@@ -595,6 +603,14 @@ public class GameNetworkServer : BackgroundService
             TcpMessageType.Left,
             command.PlayerId,
             null);
+
+        foreach (var remainingSession in gameSession.Sessions.Values)
+        {
+            if (remainingSession.VisibleOpponentPlayerIds.Remove(command.PlayerId))
+            {
+                TrySendTcp(remainingSession.Writer, TcpMessageType.Left, command.PlayerId);
+            }
+        }
     }
 
     private bool TryAbortRandomGameStart(string roomId, GameSession gameSession, string leavingPlayerId)
@@ -651,13 +667,7 @@ public class GameNetworkServer : BackgroundService
         {
             session.PlayerState.IsMoving = false;
             gameSession.PendingUdpMovementPlayerIds.Remove(movement.Id);
-            var authoritativePlayerJson = SerializeForMetrics(session.PlayerState);
-            BroadcastTcpToRole(
-                gameSession,
-                session.PlayerState.Role,
-                TcpMessageType.PlayerState,
-                authoritativePlayerJson,
-                null);
+            BroadcastPlayerState(gameSession, session.PlayerState);
             return;
         }
 
@@ -679,6 +689,7 @@ public class GameNetworkServer : BackgroundService
 
         var playerIds = gameSession.PendingUdpMovementPlayerIds.ToList();
         gameSession.PendingUdpMovementPlayerIds.Clear();
+        RefreshOpponentVisibility(gameSession);
 
         foreach (var playerId in playerIds)
         {
@@ -689,11 +700,7 @@ public class GameNetworkServer : BackgroundService
 
             var authoritativePlayerJson = SerializeForMetrics(PlayerMovementSync.FromPlayer(session.PlayerState));
             var authoritativeBuffer = System.Text.Encoding.UTF8.GetBytes(authoritativePlayerJson);
-            BroadcastUdpToRole(
-                gameSession,
-                session.PlayerState.Role,
-                authoritativeBuffer,
-                playerId);
+            BroadcastUdpToVisiblePlayers(gameSession, session.PlayerState, authoritativeBuffer);
         }
     }
 
@@ -1224,15 +1231,77 @@ public class GameNetworkServer : BackgroundService
         }
     }
 
-    // 위치 상태는 해당 플레이어와 같은 역할의 클라이언트에만 보냅니다.
+    // 위치 상태는 같은 역할 또는 현재 이 플레이어를 보고 있는 상대에게 보냅니다.
     private void BroadcastPlayerState(GameSession gameSession, Player player)
     {
-        BroadcastTcpToRole(
-            gameSession,
-            player.Role,
-            TcpMessageType.PlayerState,
-            SerializeForMetrics(player),
-            null);
+        RefreshOpponentVisibility(gameSession);
+        var payload = SerializeForMetrics(player);
+
+        foreach (var session in gameSession.Sessions.Values)
+        {
+            if (session.PlayerState.Role == player.Role ||
+                session.VisibleOpponentPlayerIds.Contains(player.Id))
+            {
+                TrySendTcp(session.Writer, TcpMessageType.PlayerState, payload);
+            }
+        }
+    }
+
+    // 팀원 중 한 명이라도 상대를 보면 팀 전체의 클라이언트 목록에 추가하고, 아무도 못 보면 제거합니다.
+    private void RefreshOpponentVisibility(GameSession gameSession)
+    {
+        var sessions = gameSession.Sessions.Values.ToList();
+
+        foreach (var role in Enum.GetValues<PlayerRole>())
+        {
+            var teamSessions = sessions
+                .Where(s => s.PlayerState.Role == role)
+                .ToList();
+            var opponentSessions = sessions
+                .Where(s => s.PlayerState.Role != role)
+                .ToList();
+
+            foreach (var targetSession in opponentSessions)
+            {
+                var target = targetSession.PlayerState;
+                var isVisibleToTeam = IsPlayerVisibleToTeam(teamSessions, role, target);
+
+                foreach (var recipientSession in teamSessions)
+                {
+                    if (isVisibleToTeam)
+                    {
+                        if (recipientSession.VisibleOpponentPlayerIds.Add(target.Id))
+                        {
+                            TrySendTcp(
+                                recipientSession.Writer,
+                                TcpMessageType.Joined,
+                                SerializeForMetrics(target));
+                        }
+                    }
+                    else if (recipientSession.VisibleOpponentPlayerIds.Remove(target.Id))
+                    {
+                        TrySendTcp(recipientSession.Writer, TcpMessageType.Left, target.Id);
+                    }
+                }
+            }
+        }
+    }
+
+    private bool IsPlayerVisibleToTeam(
+        IEnumerable<PlayerSession> sessions,
+        PlayerRole teamRole,
+        Player target)
+    {
+        if (teamRole == PlayerRole.Police &&
+            target.Role == PlayerRole.Robber &&
+            IsInJail(target))
+        {
+            return true;
+        }
+
+        return sessions.Any(session =>
+            session.PlayerState.Role == teamRole &&
+            IsPointInVision(session.PlayerState, target.X, target.Y));
     }
 
     // 한 방에서 지정한 역할의 TCP 클라이언트들에게만 메시지를 보냅니다.
@@ -1290,23 +1359,29 @@ public class GameNetworkServer : BackgroundService
         }
     }
 
-    // 한 방에서 같은 역할의 UDP endpoint들에게만 이동 데이터를 보냅니다.
-    private void BroadcastUdpToRole(
+    // 같은 역할과 현재 이동 플레이어를 보고 있는 상대의 UDP endpoint에 위치를 보냅니다.
+    private void BroadcastUdpToVisiblePlayers(
         GameSession gameSession,
-        PlayerRole role,
-        byte[] buffer,
-        string excludeId)
+        Player movingPlayer,
+        byte[] buffer)
     {
         foreach (var kvp in gameSession.Sessions)
         {
-            if (kvp.Key == excludeId || kvp.Value.PlayerState.Role != role)
+            if (kvp.Key == movingPlayer.Id)
             {
                 continue;
             }
 
-            if (kvp.Value.UdpEndPoint != null)
+            var recipient = kvp.Value;
+            if (recipient.PlayerState.Role != movingPlayer.Role &&
+                !recipient.VisibleOpponentPlayerIds.Contains(movingPlayer.Id))
             {
-                _ = _udpClient.SendAsync(buffer, buffer.Length, kvp.Value.UdpEndPoint);
+                continue;
+            }
+
+            if (recipient.UdpEndPoint != null)
+            {
+                _ = _udpClient.SendAsync(buffer, buffer.Length, recipient.UdpEndPoint);
                 Interlocked.Increment(ref _udpPacketsSentThisSecond);
                 Interlocked.Add(ref _udpBytesSentThisSecond, buffer.Length);
             }
@@ -1370,6 +1445,7 @@ public class PlayerSession
     public BinaryWriter Writer { get; set; } = null!;
     public Player PlayerState { get; set; } = null!;
     public IPEndPoint? UdpEndPoint { get; set; }
+    public HashSet<string> VisibleOpponentPlayerIds { get; } = new();
 }
 
 public sealed class RuntimeMetricSampler : IDisposable

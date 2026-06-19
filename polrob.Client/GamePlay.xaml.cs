@@ -747,11 +747,6 @@ public partial class GamePlay : ContentPage
     {
         foreach (var player in _players.Values)
         {
-            if (!ShouldDrawPlayer(player))
-            {
-                continue;
-            }
-
             // 플레이어 렌더링
             SKBitmap? currentBitmap = null;
             bool isArrested = _arrestVisualTimers.TryGetValue(player.Id, out var arrestEnd) && DateTime.Now < arrestEnd;
@@ -987,51 +982,6 @@ public partial class GamePlay : ContentPage
         var jail = _gameMap.Jail;
         return x >= jail.LeftTop.X && x <= jail.RightBottom.X &&
                y >= jail.LeftTop.Y && y <= jail.RightBottom.Y;
-    }
-
-    private bool ShouldDrawPlayer(Player player)
-    {
-        if (player.Id == _player.Id)
-        {
-            return true;
-        }
-
-        if (player.Role == _player.Role)
-        {
-            return true;
-        }
-
-        if (player.Role == PlayerRole.Robber && IsInJail(player.X, player.Y))
-        {
-            return true;
-        }
-
-        // 체포 연출 중인 플레이어(경찰이든 도둑이든)는 양쪽 시야에 모두 무조건 표시됨
-        if (_arrestVisualTimers.TryGetValue(player.Id, out var arrestEnd) && DateTime.Now < arrestEnd)
-        {
-            return true;
-        }
-
-        return IsPointInVision(player.X, player.Y);
-    }
-
-    private bool IsPointInVision(float x, float y)
-    {
-        float dx = x - _player.X;
-        float dy = y - _player.Y;
-        float distanceSquared = dx * dx + dy * dy;
-        float visionRange = GetVisionRange(_player);
-
-        if (distanceSquared > visionRange * visionRange)
-        {
-            return false;
-        }
-
-        float targetAngle = NormalizeDegrees((float)(Math.Atan2(dy, dx) * 180f / Math.PI));
-        float facingAngle = GetFacingAngle(_player);
-        float angleDifference = Math.Abs(ShortestAngleDifference(facingAngle, targetAngle));
-
-        return angleDifference <= VisionConeAngleDegrees / 2f;
     }
 
     private SKPath CreateVisionPath(Player player)
