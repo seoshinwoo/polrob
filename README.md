@@ -1,9 +1,5 @@
-<p align="center">
-  <img src="./image.png" alt="PolRob Hero Banner" width="380px" style="border-radius: 20px; box-shadow: 0 8px 24px rgba(0,0,0,0.3); margin-bottom: 20px;"/>
-</p>
-
-<h1 align="center" style="font-family: sans-serif; font-weight: bold; margin-top: 10px; margin-bottom: 10px;">
-  <span style="color: #00c0ff; font-weight: bold; font-size: 46px;">Pol</span><span style="color: #ffaa00; font-weight: bold; font-size: 46px;">Rob</span>
+<h1 align="center" style="font-family: sans-serif; font-weight: bold; margin-top: 30px; margin-bottom: 10px;">
+  <span style="color: #00c0ff; font-weight: bold; font-size: 48px;">Pol</span><span style="color: #ffaa00; font-weight: bold; font-size: 48px;">Rob</span>
 </h1>
 
 <p align="center">
@@ -13,16 +9,10 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/.NET_10-512BD4?style=for-the-badge&logo=.net&logoColor=white">
-  <img src="https://img.shields.io/badge/C%23-239120?style=for-the-badge&logo=c-sharp&logoColor=white">
-  <img src="https://img.shields.io/badge/.NET_MAUI-512BD4?style=for-the-badge&logo=dotnet&logoColor=white"><br/>
-  <img src="https://img.shields.io/badge/ASP.NET_Core_Web_API-512BD4?style=for-the-badge&logo=dotnet&logoColor=white">
-  <img src="https://img.shields.io/badge/SignalR-512BD4?style=for-the-badge&logo=dotnet&logoColor=white"><br/>
-  <img src="https://img.shields.io/badge/Azure_Cosmos_DB-0089D6?style=for-the-badge&logo=microsoftazure&logoColor=white">
-  <img src="https://img.shields.io/badge/Redis-DC382D?style=for-the-badge&logo=redis&logoColor=white">
+  <code>.NET 10</code> · <code>C#</code> · <code>.NET MAUI</code> · <code>ASP.NET Core Web API</code> · <code>SignalR</code> · <code>Azure Cosmos DB</code> · <code>Redis</code>
 </p>
 
-<br/>
+---
 
 ## 🎮 게임 소개 (Game Overview)
 
@@ -40,7 +30,7 @@
 [게임 결과 판정 및 재대결] <── [5분간의 실시간 추격전] <── [3초 카운트다운]
 ```
 
-<br/>
+---
 
 ## 🧭 프로젝트 핵심 아키텍처 및 지향점
 
@@ -51,7 +41,7 @@
 * **서버 권위 체제 (Server-Authoritative)**: 클라이언트의 변조 가능성을 차단하기 위해 체포 진행률, 감옥 수감, 탈옥 판정, 승패 조건 등 모든 핵심 게임 룰은 서버가 판정하고 통제합니다.
 * **수치 기반 최적화 검증**: 대규모 접속 상황을 모사하는 Headless Bot 하네스를 자체 구축하여, 아키텍처 개선 전후의 성능 메트릭을 정량적으로 비교 분석했습니다.
 
-<br/>
+---
 
 ## 🏗️ 시스템 아키텍처 (System Architecture)
 
@@ -94,7 +84,7 @@ flowchart LR
 | **TCP (`7777`)** | 세션 접속/퇴장, 초기화 상태, Phase 전환, 체포/탈옥 이벤트 | 패킷 유실이 없어야 하며 순서 보장이 절대적으로 필요한 데이터 |
 | **UDP (`7778`)** | 플레이어 실시간 이동 입력 및 위치 좌표 전파 | 초당 수십 번 발생하는 데이터로, 패킷 유실보다 최신성이 중요 |
 
-<br/>
+---
 
 ## ⚙️ 서버 코어 메커니즘 구현
 
@@ -106,14 +96,14 @@ flowchart LR
 * **1000 ms (1s)**: 타이머 동기화 및 전반적인 Game State의 전체 동기화 패킷 전송
 
 ### 2. Server-Authoritative Validation
-클라이언트는 오직 조이스틱 입력 전달과 SkiaSharp을 통한 부드러운 렌더링에만 집중합니다. 
+클라이언트는 오직 조이스틱 입력 전달และ SkiaSharp을 통한 부드러운 렌더링에만 집중합니다. 
 ```text
 Client Input ──> UDP Receive ──> Room Command Queue ──> Validation / Rule Tick
                                                                │
 Client Render <── Visible Clients Only <── Authoritative State ┘
 ```
 
-<br/>
+---
 
 ## 📈 고부하 부하 테스트 및 단계별 최적화 성과
 
@@ -143,7 +133,7 @@ Client Render <── Visible Clients Only <── Authoritative State ┘
 
 Detailed Report ──> 자세한 분석 데이터는 [`docs/server_optimization_report.md`](docs/server_optimization_report.md)에서 확인하실 수 있습니다.
 
-<br/>
+---
 
 ## 🛠️ 기술 스택 (Tech Stack)
 
@@ -154,7 +144,7 @@ Detailed Report ──> 자세한 분석 데이터는 [`docs/server_optimization
 * **Persistence**: Azure Cosmos DB
 * **Platforms**: Android, iOS 지원
 
-<br/>
+---
 
 ## 🚀 실행 방법 (Getting Started)
 
@@ -176,7 +166,7 @@ dotnet build polrob.Client/polrob.Client.csproj -f net10.0-android -t:Run
 dotnet build polrob.Client/polrob.Client.csproj -f net10.0-ios -t:Run
 ```
 
-<br/>
+---
 
 ## 🧩 주요 기술적 고민 (Deep Dive)
 
