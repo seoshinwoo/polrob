@@ -1,6 +1,4 @@
-<p align="center">
-  <img src="assets/polrob-hero.svg" alt="PolRob — Police vs Robbers" width="100%" />
-</p>
+<h1 align="center">PolRob</h1>
 
 <p align="center">
   <b>6명이 한 방에서 추격하고, 체포하고, 탈옥하는 실시간 경찰과 도둑 게임</b><br/>
@@ -8,10 +6,8 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/.NET-10.0-512BD4?style=for-the-badge&logo=dotnet&logoColor=white" alt=".NET 10" />
-  <img src="https://img.shields.io/badge/.NET_MAUI-Android_%7C_iOS-512BD4?style=for-the-badge&logo=dotnet&logoColor=white" alt=".NET MAUI" />
-  <img src="https://img.shields.io/badge/TCP-7777-1685FF?style=for-the-badge" alt="TCP 7777" />
-  <img src="https://img.shields.io/badge/UDP-7778-FFC21C?style=for-the-badge&labelColor=282C34" alt="UDP 7778" />
+  <code>.NET</code> · <code>C#</code> · <code>.NET MAUI</code> · <code>ASP.NET Core</code> · <code>SkiaSharp</code><br/>
+  <code>REST API</code> · <code>SignalR</code> · <code>TCP</code> · <code>UDP</code> · <code>Azure Cosmos DB</code>
 </p>
 
 ---
