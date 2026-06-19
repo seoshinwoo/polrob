@@ -29,7 +29,7 @@ public class GameNetworkServer : BackgroundService
     private long _jsonSerializationsThisSecond;
     private int _currentTcpConnections;
     private static readonly TimeSpan RoomTickInterval = TimeSpan.FromMilliseconds(50);
-    private static readonly TimeSpan UdpMovementBroadcastInterval = TimeSpan.FromMilliseconds(50);
+    private static readonly TimeSpan UdpMovementBroadcastInterval = TimeSpan.FromMilliseconds(100);
     private static readonly TimeSpan GameRuleTickInterval = TimeSpan.FromMilliseconds(100);
     private static readonly TimeSpan GameStateSyncInterval = TimeSpan.FromSeconds(1);
     private static readonly TimeSpan EmptyRoomStopDelay = TimeSpan.FromSeconds(2);

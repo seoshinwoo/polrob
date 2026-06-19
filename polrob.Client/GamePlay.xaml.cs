@@ -33,11 +33,15 @@ public partial class GamePlay : ContentPage
     private GameNetworkClient? _networkClient;
     private DateTime _lastSyncTime = DateTime.MinValue;
     private bool _lastSyncedIsMoving;
+    private readonly Dictionary<string, RemotePlayerInterpolationState> _remotePlayerInterpolations = new();
     private GamePhase _gamePhase = GamePhase.Waiting;
     private int _remainingTime = 300;
     private bool _isGameOverTransitioning = false;
     private static readonly TimeSpan MovingUdpSyncInterval = TimeSpan.FromMilliseconds(50);
     private static readonly TimeSpan StoppedUdpSyncInterval = TimeSpan.FromMilliseconds(500);
+    private static readonly TimeSpan RemoteInterpolationDelay = TimeSpan.FromMilliseconds(120);
+    private static readonly TimeSpan RemoteSnapshotResetGap = TimeSpan.FromMilliseconds(250);
+    private const int MaxRemoteMovementSnapshots = 4;
     private const float VisionRangePlayerSizeMultiplier = 2.5f;
     private const float VisionConeAngleDegrees = 90f;
     private const byte FogOpacity = 120;
@@ -145,6 +149,7 @@ public partial class GamePlay : ContentPage
         _timer.Interval = TimeSpan.FromMilliseconds(16); // ~60 FPS
         _timer.Tick += (s, e) =>
         {
+            UpdateRemotePlayerInterpolation();
             UpdatePhysics();
             _canvas.InvalidateSurface();
             UpdateUI();
@@ -182,19 +187,28 @@ public partial class GamePlay : ContentPage
         _networkClient.OnInitialStateReceived += async (players) =>
         {
             _players.Clear();
+            _remotePlayerInterpolations.Clear();
             foreach (var p in players)
             {
                 _players[p.Id] = p;
             }
             // _players[_player.Id] = _player;
             _player = _players[_player.Id]; // Test
+            foreach (var remotePlayer in _players.Values.Where(p => p.Id != _player.Id))
+            {
+                ResetRemotePlayerInterpolation(remotePlayer);
+            }
             await LoadAssetsAsync(); // Test
             _isInitialized = true;
         };
 
         _networkClient.OnPlayerJoined += (p) =>
         {
-            if (p.Id != _player.Id) _players[p.Id] = p;
+            if (p.Id != _player.Id)
+            {
+                _players[p.Id] = p;
+                ResetRemotePlayerInterpolation(p);
+            }
         };
 
         _networkClient.OnPlayerMoved += (p) =>
@@ -226,6 +240,10 @@ public partial class GamePlay : ContentPage
                     _activeTouchId = -1;
                 }
             }
+            else
+            {
+                ResetRemotePlayerInterpolation(player);
+            }
         };
 
         _networkClient.OnPlayerMovementReceived += (movement) =>
@@ -235,21 +253,25 @@ public partial class GamePlay : ContentPage
                 return;
             }
 
-            movement.ApplyTo(player);
-
             if (movement.Id == _player.Id)
             {
+                movement.ApplyTo(player);
                 _player = player;
                 if (_player.Role == PlayerRole.Robber && IsInJail(_player.X, _player.Y))
                 {
                     _activeTouchId = -1;
                 }
             }
+            else
+            {
+                AddRemoteMovementSnapshot(player, movement);
+            }
         };
 
         _networkClient.OnPlayerLeft += (playerId) =>
         {
             _players.Remove(playerId);
+            _remotePlayerInterpolations.Remove(playerId);
         };
 
         _networkClient.OnPlayerArrested += (policeId, robberId) =>
@@ -359,6 +381,7 @@ public partial class GamePlay : ContentPage
         _timer.Stop();
         _networkClient?.Disconnect();
         _networkClient = null;
+        _remotePlayerInterpolations.Clear();
     }
 
     private string BuildGameOverRoute()
@@ -483,6 +506,123 @@ public partial class GamePlay : ContentPage
                 break;
         }
         e.Handled = true;
+    }
+
+    private void ResetRemotePlayerInterpolation(Player player)
+    {
+        if (player.Id == _player.Id)
+        {
+            _remotePlayerInterpolations.Remove(player.Id);
+            return;
+        }
+
+        var state = new RemotePlayerInterpolationState();
+        state.Snapshots.Add(RemoteMovementSnapshot.FromPlayer(player, DateTime.UtcNow));
+        _remotePlayerInterpolations[player.Id] = state;
+    }
+
+    private void AddRemoteMovementSnapshot(Player player, PlayerMovementSync movement)
+    {
+        var receivedAt = DateTime.UtcNow;
+        if (!_remotePlayerInterpolations.TryGetValue(player.Id, out var state))
+        {
+            state = new RemotePlayerInterpolationState();
+            _remotePlayerInterpolations[player.Id] = state;
+        }
+
+        if (state.Snapshots.Count == 0 ||
+            receivedAt - state.Snapshots[^1].ReceivedAt > RemoteSnapshotResetGap)
+        {
+            state.Snapshots.Clear();
+            state.Snapshots.Add(RemoteMovementSnapshot.FromPlayer(
+                player,
+                receivedAt - RemoteInterpolationDelay));
+        }
+
+        state.Snapshots.Add(new RemoteMovementSnapshot(
+            movement.X,
+            movement.Y,
+            movement.Angle,
+            movement.IsMoving,
+            receivedAt));
+
+        while (state.Snapshots.Count > MaxRemoteMovementSnapshots)
+        {
+            state.Snapshots.RemoveAt(0);
+        }
+    }
+
+    private void UpdateRemotePlayerInterpolation()
+    {
+        var renderAt = DateTime.UtcNow - RemoteInterpolationDelay;
+        List<string>? missingPlayerIds = null;
+
+        foreach (var (playerId, state) in _remotePlayerInterpolations)
+        {
+            if (!_players.TryGetValue(playerId, out var player))
+            {
+                missingPlayerIds ??= new List<string>();
+                missingPlayerIds.Add(playerId);
+                continue;
+            }
+
+            while (state.Snapshots.Count > 2 && state.Snapshots[1].ReceivedAt <= renderAt)
+            {
+                state.Snapshots.RemoveAt(0);
+            }
+
+            if (state.Snapshots.Count == 0)
+            {
+                continue;
+            }
+
+            if (state.Snapshots.Count == 1 || renderAt <= state.Snapshots[0].ReceivedAt)
+            {
+                ApplyRemoteSnapshot(player, state.Snapshots[0]);
+                continue;
+            }
+
+            var toIndex = state.Snapshots.FindIndex(snapshot => snapshot.ReceivedAt >= renderAt);
+            if (toIndex <= 0)
+            {
+                ApplyRemoteSnapshot(player, state.Snapshots[^1]);
+                continue;
+            }
+
+            var from = state.Snapshots[toIndex - 1];
+            var to = state.Snapshots[toIndex];
+            var durationMilliseconds = (to.ReceivedAt - from.ReceivedAt).TotalMilliseconds;
+            var progress = durationMilliseconds <= 0d
+                ? 1f
+                : (float)Math.Clamp(
+                    (renderAt - from.ReceivedAt).TotalMilliseconds / durationMilliseconds,
+                    0d,
+                    1d);
+
+            player.X = from.X + ((to.X - from.X) * progress);
+            player.Y = from.Y + ((to.Y - from.Y) * progress);
+            player.Angle = NormalizeDegrees(
+                from.Angle + (ShortestAngleDifference(from.Angle, to.Angle) * progress));
+            player.IsMoving = progress < 1f
+                ? from.IsMoving || to.IsMoving
+                : to.IsMoving;
+        }
+
+        if (missingPlayerIds != null)
+        {
+            foreach (var playerId in missingPlayerIds)
+            {
+                _remotePlayerInterpolations.Remove(playerId);
+            }
+        }
+    }
+
+    private static void ApplyRemoteSnapshot(Player player, RemoteMovementSnapshot snapshot)
+    {
+        player.X = snapshot.X;
+        player.Y = snapshot.Y;
+        player.Angle = snapshot.Angle;
+        player.IsMoving = snapshot.IsMoving;
     }
 
     private void UpdatePhysics()
@@ -1050,6 +1190,11 @@ public partial class GamePlay : ContentPage
         robber.Angle = 0f;
         robber.IsMoving = false;
 
+        if (robber.Id != _player.Id)
+        {
+            ResetRemotePlayerInterpolation(robber);
+        }
+
         _arrestVisualTimers.Remove(syncData.RobberId);
 
         if (_player.Id == syncData.RobberId)
@@ -1063,6 +1208,29 @@ public partial class GamePlay : ContentPage
 
         ResetJailBreakProgress();
         _canvas.InvalidateSurface();
+    }
+
+    private sealed class RemotePlayerInterpolationState
+    {
+        public List<RemoteMovementSnapshot> Snapshots { get; } = new();
+    }
+
+    private readonly record struct RemoteMovementSnapshot(
+        float X,
+        float Y,
+        float Angle,
+        bool IsMoving,
+        DateTime ReceivedAt)
+    {
+        public static RemoteMovementSnapshot FromPlayer(Player player, DateTime receivedAt)
+        {
+            return new RemoteMovementSnapshot(
+                player.X,
+                player.Y,
+                player.Angle,
+                player.IsMoving,
+                receivedAt);
+        }
     }
 
     private void TriggerArrestVisuals(string policeId, string robberId)
