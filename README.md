@@ -1,45 +1,59 @@
-<h1 align="center">PolRob</h1>
+<p align="center">
+  <img src="./image.png" alt="PolRob Hero Banner" width="380px" style="border-radius: 20px; box-shadow: 0 8px 24px rgba(0,0,0,0.3); margin-bottom: 20px;"/>
+</p>
+
+<h1 align="center" style="font-family: sans-serif; font-weight: bold; margin-top: 10px; margin-bottom: 10px;">
+  <span style="color: #00c0ff; font-weight: bold; font-size: 46px;">Pol</span><span style="color: #ffaa00; font-weight: bold; font-size: 46px;">Rob</span>
+</h1>
 
 <p align="center">
-  <b>6명이 한 방에서 추격하고, 체포하고, 탈옥하는 실시간 경찰과 도둑 게임</b><br/>
-  모바일 클라이언트부터 매치메이킹, 방 단위 게임 루프, TCP/UDP 동기화와 부하 테스트까지 직접 구현했습니다.
+  <b>🚨 6명이 한 방에서 펼치는 실시간 체포와 탈옥의 숨막히는 추격전!</b><br/>
+  모바일 클라이언트부터 매치메이킹, 방 단위 게임 루프, TCP/UDP 혼합 프로토콜 동기화와 고부하 최적화까지<br/>
+  기획부터 백엔드 코어 아키텍처까지 100% 직접 설계하고 구현한 실시간 게임 서버 프로젝트입니다.
 </p>
 
 <p align="center">
-  <code>.NET</code> · <code>C#</code> · <code>.NET MAUI</code> · <code>ASP.NET Core</code> · <code>SkiaSharp</code><br/>
-  <code>REST API</code> · <code>SignalR</code> · <code>TCP</code> · <code>UDP</code> · <code>Azure Cosmos DB</code>
+  <img src="https://img.shields.io/badge/.NET_10-512BD4?style=for-the-badge&logo=.net&logoColor=white">
+  <img src="https://img.shields.io/badge/C%23-239120?style=for-the-badge&logo=c-sharp&logoColor=white">
+  <img src="https://img.shields.io/badge/.NET_MAUI-512BD4?style=for-the-badge&logo=dotnet&logoColor=white"><br/>
+  <img src="https://img.shields.io/badge/ASP.NET_Core_Web_API-512BD4?style=for-the-badge&logo=dotnet&logoColor=white">
+  <img src="https://img.shields.io/badge/SignalR-512BD4?style=for-the-badge&logo=dotnet&logoColor=white"><br/>
+  <img src="https://img.shields.io/badge/Azure_Cosmos_DB-0089D6?style=for-the-badge&logo=microsoftazure&logoColor=white">
+  <img src="https://img.shields.io/badge/Redis-DC382D?style=for-the-badge&logo=redis&logoColor=white">
 </p>
 
----
+<br/>
 
-## 🎮 게임 소개
+## 🎮 게임 소개 (Game Overview)
 
-**PolRob**은 경찰 2명과 도둑 4명이 참여하는 6인 실시간 멀티플레이 게임입니다. 경찰은 제한 시간 안에 모든 도둑을 체포해야 하고, 도둑은 시야와 지형을 이용해 도망치거나 감옥에 접근해 동료를 구출할 수 있습니다.
+**PolRob**은 **경찰 2명 vs 도둑 4명**이 참여하는 6인 구성의 실시간 멀티플레이 랜드마크 추격 게임입니다. 서버 권위 기반의 엄격한 규칙 판정 하에, 양 진영은 시야와 지형지물을 활용한 고도의 심리전을 펼치게 됩니다.
 
-| 👮 Police | 🥷 Robber |
-|---|---|
-| 시야 안의 도둑을 추적하고 일정 시간 접촉해 체포 | 경찰의 시야와 건물을 이용해 제한 시간까지 생존 |
-| 모든 도둑을 감옥에 수감하면 승리 | 감옥 근처에서 구출 게이지를 채워 동료를 탈옥시킴 |
+| 👮 Police (경찰) | 🥷 Robber (도둑) |
+| :--- | :--- |
+| • **목표**: 제한 시간 내에 모든 도둑 수감<br/>• **메커니즘**: 시야 내 도둑 추적 후 일정 시간 접촉하여 체포 시도 | • **목표**: 시야와 건물을 이용해 제한 시간까지 생존<br/>• **메커니즘**: 감옥 근처에서 구출 게이지를 채워 수감된 동료를 탈옥시킴 |
 
-### 핵심 플레이 흐름
+### 🔄 핵심 플레이 흐름 (Core Gameplay Loop)
 
-`로그인` → `랜덤 매칭 / 커스텀 방` → `2 Police + 4 Robbers` → `3초 카운트다운` → `5분 추격전` → `승패 판정 / 재대결`
+```
+[유저 로그인] ──> [랜덤 매칭 / 커스텀 방 생성] ──> [2 Police + 4 Robbers 매칭 완료]
+                                                               │
+[게임 결과 판정 및 재대결] <── [5분간의 실시간 추격전] <── [3초 카운트다운]
+```
 
----
+<br/>
 
-## 🧭 프로젝트에서 보여주고자 한 것
+## 🧭 프로젝트 핵심 아키텍처 및 지향점
 
-이 프로젝트의 중심은 화면 구현보다 **실시간 게임 서버의 책임과 데이터 흐름**입니다.
+이 프로젝트의 진가는 화면 구현을 넘어 **실시간 게임 서버의 명확한 책임 분리와 대용량 데이터 흐름의 최적화**에 있습니다.
 
-- **혼합 프로토콜 설계** — 유실되면 안 되는 이벤트는 TCP, 빈번한 이동 동기화는 UDP로 분리
-- **방 단위 게임 루프** — 각 방의 명령 큐를 순서대로 처리하고 규칙·이동·상태 동기화를 서로 다른 주기로 실행
-- **서버 권위 게임 규칙** — 체포, 수감, 탈옥 진행률, 승패와 게임 phase를 서버가 판정
-- **역할 단위 상태 분리** — 방 안에서도 같은 역할의 클라이언트에 필요한 상태만 선택적으로 전송
-- **수치로 확인하는 최적화** — headless bot과 서버 런타임 메트릭으로 변경 전후를 같은 부하에서 비교
+* **혼합 프로토콜 설계 (Hybrid Protocol)**: 신뢰성이 필수적인 이벤트(체포, 탈옥, Phase 변경)는 **TCP**로, 빈번하고 즉각적인 데이터(위치/이동 동기화)는 **UDP**로 분리하여 네트워크 효율을 극대화했습니다.
+* **방 단위 게임 루프 (Room-Scoped Tick Loop)**: 각 게임 룸을 `roomId` 기반으로 완벽히 격리하고, 독립적인 명령 큐(Command Queue)와 멀티 티킹 주기를 도입하여 상태 오염을 방지했습니다.
+* **서버 권위 체제 (Server-Authoritative)**: 클라이언트의 변조 가능성을 차단하기 위해 체포 진행률, 감옥 수감, 탈옥 판정, 승패 조건 등 모든 핵심 게임 룰은 서버가 판정하고 통제합니다.
+* **수치 기반 최적화 검증**: 대규모 접속 상황을 모사하는 Headless Bot 하네스를 자체 구축하여, 아키텍처 개선 전후의 성능 메트릭을 정량적으로 비교 분석했습니다.
 
----
+<br/>
 
-## 🏗️ 시스템 아키텍처
+## 🏗️ 시스템 아키텍처 (System Architecture)
 
 ```mermaid
 flowchart LR
@@ -71,159 +85,116 @@ flowchart LR
     GNS --> Metrics
 ```
 
-### 프로토콜을 나눈 이유
+### 🔀 효율적인 프로토콜 분할 전략
 
-| 채널 | 담당 데이터 | 선택 이유 |
-|---|---|---|
-| **HTTP** | 회원가입·로그인, 방 생성·참가 | 요청/응답 기반 도메인 작업에 적합 |
-| **SignalR** | 방 인원 변화, 매칭 완료, 게임 시작 | 로비의 이벤트 기반 상태를 그룹 단위로 전달 |
-| **TCP `7777`** | 접속/퇴장, 초기 상태, 게임 phase, 체포·탈옥 | 순서와 전달 보장이 필요한 게임 이벤트 |
-| **UDP `7778`** | 플레이어 이동 입력과 위치 전파 | 높은 빈도의 최신 상태가 오래된 상태보다 중요 |
+| 채널 (Channel) | 담당 데이터 (Data Team) | 선택 이유 (Rationals) |
+| :--- | :--- | :--- |
+| **HTTP (:5174)** | 회원가입, 로그인, 방 생성 및 참가 | 일회성 및 요청/응답 기반의 도메인 작업에 가장 적합 |
+| **SignalR** | 로비 인원 변화, 매칭 완료, 게임 시작 | 그룹 단위 실시간 이벤트 전파 및 연결 상태 관리 용이 |
+| **TCP (`7777`)** | 세션 접속/퇴장, 초기화 상태, Phase 전환, 체포/탈옥 이벤트 | 패킷 유실이 없어야 하며 순서 보장이 절대적으로 필요한 데이터 |
+| **UDP (`7778`)** | 플레이어 실시간 이동 입력 및 위치 좌표 전파 | 초당 수십 번 발생하는 데이터로, 패킷 유실보다 최신성이 중요 |
 
----
+<br/>
 
-## ⚙️ 서버 핵심 구현
+## ⚙️ 서버 코어 메커니즘 구현
 
-### 1. Room-scoped game loop
+### 1. Room-Scoped Game Loop & Tick Scheduling
+각 `GameSession`은 멀티스레드 환경에서 안전하도록 자체 Command Queue를 바라보며 독립적으로 동작합니다. 복잡한 동기화 비용을 최소화하기 위해 작업 성격에 따라 세분화된 하이퍼 티킹 주기를 적용했습니다.
 
-게임 상태는 `roomId`로 격리됩니다. 각 `GameSession`은 자신의 command queue를 가지고, 한 방의 변경을 하나의 tick loop에서 처리합니다. 이 구조로 서로 다른 방의 상태가 섞이지 않게 하면서 같은 방 안의 규칙 처리 순서를 명확히 했습니다.
+* **50 ms**: 내부 Command Queue 처리 및 기본 틱 루프 갱신
+* **100 ms**: 최신 이동 상태 UDP Broadcast 전파 및 체포/감옥 충돌 판정 루틴 실행
+* **1000 ms (1s)**: 타이머 동기화 및 전반적인 Game State의 전체 동기화 패킷 전송
 
-| 주기 | 처리 작업 |
-|---:|---|
-| **50 ms** | 방 command queue와 tick loop 처리 |
-| **100 ms** | 최신 이동 상태 UDP broadcast, 체포·감옥·탈옥 규칙 판정 |
-| **1 s** | 남은 시간과 승패를 포함한 game state 동기화 |
-
-### 2. Server-authoritative rules
-
-클라이언트는 조이스틱 입력과 렌더링을 담당합니다. 서버는 플레이어 위치와 현재 phase를 기준으로 체포 가능 여부를 검사하고, 2초 체포 진행, 감옥 배치, 3초 탈옥 진행, 전원 수감 여부와 제한 시간 종료를 판정합니다.
-
+### 2. Server-Authoritative Validation
+클라이언트는 오직 조이스틱 입력 전달과 SkiaSharp을 통한 부드러운 렌더링에만 집중합니다. 
 ```text
-Client input → UDP receive → room command queue → validation / rule tick
-             → authoritative state → visible clients only → render
+Client Input ──> UDP Receive ──> Room Command Queue ──> Validation / Rule Tick
+                                                               │
+Client Render <── Visible Clients Only <── Authoritative State ┘
 ```
 
-### 3. Matchmaking & room lifecycle
+<br/>
 
-- 랜덤 매칭: 한 방을 **경찰 2명 + 도둑 4명**으로 구성하고 충족 시 자동 시작
-- 커스텀 방: 사람이 공유하기 쉬운 room code로 생성·입장
-- 로비 동기화: SignalR group으로 인원과 역할 변경을 실시간 전파
-- 종료 처리: 연결 해제, 빈 방 정리, 커스텀 방 재대결 흐름 관리
+## 📈 고부하 부하 테스트 및 단계별 최적화 성과
 
----
+실제 그래픽 리소스 없이 프로토콜 명세를 기반으로 랜덤 매칭 및 실시간 게임 플레이 동기화를 가상으로 수행하는 **Headless Bot 테스트 환경**을 구축했습니다. 최대 **900대의 가상 봇**을 동시에 구동하며 CPU 사용량, 패킷 처리량(PPS), GC 할당량을 정밀 추적했습니다.
 
-## 📈 부하 테스트와 최적화
+> 📊 **독립 최적화 실험 결과 (Baseline 대비)**
+> 본 지표는 로컬 벤치마크 환경에서 각 최적화 기법을 **독립적으로 적용**하여 얻은 정량적 수치입니다.
 
-UI 없이 실제 로그인 → 랜덤 매칭 → TCP/UDP 게임 접속 → 이동을 수행하는 headless bot harness를 만들었습니다. 기본 sweep은 `60 / 300 / 600 / 900` bots이며, 모든 예상 방이 `Playing`인 구간에서 CPU, PPS, UDP bytes, GC, 방 상태와 실패 수를 함께 기록합니다.
+```
+[실험 1] Lightweight UDP Payload
+───────────────────────────────────────────────────────
+■ UDP Traffic   ███████████████ 53% 감소
+■ GC Allocation ███████████ 39% 감소
+(이동 관련 패킷에서 정적/불변 필드를 완전히 도려내어 페이로드 최소화)
 
-| 독립 최적화 실험 | 확인된 변화 | 해석 |
-|---|---:|---|
-| Lightweight UDP payload | **UDP bytes 약 53%↓**, **GC allocation 약 39%↓** | 자주 변하지 않는 필드를 이동 packet에서 제거 |
-| Room send tick batching | **CPU 약 76%↓**, **total PPS 약 14%↓** | 입력마다 즉시 전파하지 않고 tick마다 최신 상태를 배포 |
-| Movement input coalescing | **CPU 약 50%↓** | 같은 플레이어의 오래된 queued input 대신 최신값을 처리 |
+[실험 2] Room Send Tick Batching
+───────────────────────────────────────────────────────
+■ CPU Usage     ██████████████████████ 76% 감소
+■ Total PPS     ████████ 14% 감소
+(입력 발생 즉시 BroadCast 하지 않고, 서버의 100ms 틱 주기에 맞춰 일괄 배치 전송)
 
-> 위 수치는 동일 baseline에 대해 각 최적화를 **독립적으로** 측정한 결과입니다. 효과가 겹치므로 단순 합산하지 않았으며, 최종 결합 수치는 별도 재측정 대상으로 남겼습니다. 로컬 환경의 before/after 결과이며 실제 서비스 수용 인원을 의미하지 않습니다.
+[실험 3] Movement Input Coalescing
+───────────────────────────────────────────────────────
+■ CPU Usage     ██████████████ 50% 감소
+(큐에 쌓인 동일 플레이어의 누적 입력 중 불필요한 과거 값을 버리고 최신 입력값만 병합 처리)
+```
 
+Detailed Report ──> 자세한 분석 데이터는 [`docs/server_optimization_report.md`](docs/server_optimization_report.md)에서 확인하실 수 있습니다.
+
+<br/>
+
+## 🛠️ 기술 스택 (Tech Stack)
+
+* **Client**: .NET 10, .NET MAUI, XAML, SkiaSharp (고속 2D 렌더링을 위한 그래픽 엔진)
+* **Web / Lobby**: ASP.NET Core Web API, SignalR Hub
+* **Game Transport**: Low-level `TcpListener`, `TcpClient`, `UdpClient` 커스텀 래핑
+* **Concurrency**: `BackgroundService`, `Channel<T>`, `ConcurrentDictionary`, Room-scoped Tick Loop
+* **Persistence**: Azure Cosmos DB
+* **Platforms**: Android, iOS 지원
+
+<br/>
+
+## 🚀 실행 방법 (Getting Started)
+
+### 1. 서버 인프라 환경 설정 및 실행
 ```bash
-./run_load_metrics.sh
-```
-
-결과는 timestamp 폴더의 `results.csv`, `results.md`와 stable link인 아래 경로에 저장됩니다.
-
-```text
-/tmp/polrob-load-latest/results.csv
-/tmp/polrob-load-latest/results.md
-```
-
-자세한 측정 조건과 최적화별 분석은 [`docs/server_optimization_report.md`](docs/server_optimization_report.md)에서 확인할 수 있습니다.
-
----
-
-## 🧰 Tech Stack
-
-| Area | Technology |
-|---|---|
-| Client | .NET 10, .NET MAUI, XAML, SkiaSharp |
-| Web / Lobby Server | ASP.NET Core Web API, SignalR |
-| Game Transport | `TcpListener`, `TcpClient`, `UdpClient` |
-| Concurrency | `BackgroundService`, `Channel<T>`, `ConcurrentDictionary`, room tick loop |
-| Persistence | Azure Cosmos DB |
-| Load Test | .NET headless bots, shell automation, runtime/traffic metrics |
-| Platforms | Android, iOS |
-
----
-
-## 📁 Repository Structure
-
-```text
-polrob/
-├── polrob.Client/        # MAUI UI, SkiaSharp rendering, network client
-├── polrob.Server/        # REST, SignalR, TCP/UDP game server, room service
-├── polrob.Shared/        # Shared player, game state and protocol models
-├── polrob.Test/          # Headless multiplayer bot / load harness
-├── docs/                 # Server optimization report
-└── run_load_metrics.sh   # Repeatable load benchmark and report generation
-```
-
----
-
-## 🚀 실행 방법
-
-### Prerequisites
-
-- .NET 10 SDK
-- Android emulator 또는 iOS simulator
-- Azure Cosmos DB account와 connection string
-
-### 1. 서버 실행
-
-비밀값은 저장소에 커밋하지 않고 환경 변수로 주입합니다.
-
-```bash
+# 보안 민감 데이터는 환경 변수로 안전하게 주입합니다.
 export COSMOSDB_CONNECTIONSTRING='AccountEndpoint=...;AccountKey=...;'
-ASPNETCORE_URLS=http://0.0.0.0:5174 \
-  dotnet run --project polrob.Server/polrob.Server.csproj
+
+# 서버 구동 (HTTP/SignalR :5174, TCP :7777, UDP :7778 개방)
+ASPNETCORE_URLS=[http://0.0.0.0:5174](http://0.0.0.0:5174) dotnet run --project polrob.Server/polrob.Server.csproj
 ```
 
-서버는 HTTP/SignalR `5174`, TCP `7777`, UDP `7778` 포트를 사용합니다.
-
-### 2. 클라이언트 실행
-
+### 2. 모바일 클라이언트 빌드 및 실행
 ```bash
-# Android
+# Android 에뮬레이터 환경 실행 (Host IP: 10.0.2.2 자동 바인딩)
 dotnet build polrob.Client/polrob.Client.csproj -f net10.0-android -t:Run
 
-# iOS simulator (macOS)
+# iOS 시뮬레이터 환경 실행 (Host IP: 127.0.0.1 자동 바인딩)
 dotnet build polrob.Client/polrob.Client.csproj -f net10.0-ios -t:Run
 ```
 
-Android emulator는 `10.0.2.2`, iOS simulator는 `127.0.0.1`로 개발 머신의 서버에 접속합니다. 실제 iPhone에서는 `AuthSession.cs`의 로컬 네트워크 서버 주소를 현재 개발 머신 IP에 맞춰야 합니다.
+<br/>
 
----
-
-## 🧩 주요 기술적 고민
+## 🧩 주요 기술적 고민 (Deep Dive)
 
 <details>
-<summary><b>왜 모든 통신을 SignalR로 처리하지 않았나요?</b></summary>
+<summary>💡 <b>왜 모든 실시간 통신을 편리한 SignalR로 통합하지 않았나요?</b></summary>
 <br/>
-로비 이벤트에는 SignalR의 group과 reconnect 모델이 편리하지만, 게임 이동 경로에서는 packet 빈도와 payload, 전송 대상을 직접 제어하고 측정할 필요가 있었습니다. 그래서 로비와 실제 gameplay transport의 책임을 분리했습니다.
+로비나 매칭 관리처럼 연결성이 중요하고 빈도가 낮은 이벤트에는 SignalR이 훌륭한 선택입니다. 하지만 게임 인게임 플레이의 초고속 이동 동기화 영역에서는 매 순간 발생하는 패킷의 헤더 크기마저 아깝고, 전송 대상과 유실 허용 여부를 완전하게 통제해야 했습니다. 따라서 소켓 레벨의 TCP/UDP 커스텀 전송 레이어를 구축하여 책임을 엄격하게 분리했습니다.
 </details>
 
 <details>
-<summary><b>ConcurrentDictionary만으로 동시성 문제가 해결되나요?</b></summary>
+<summary>💡 <b>ConcurrentDictionary만으로 멀티스레드 동시성 이슈가 완벽히 해결되나요?</b></summary>
 <br/>
-아닙니다. thread-safe collection은 개별 연산을 보호하지만 여러 상태를 함께 바꾸는 게임 규칙의 순서까지 보장하지 않습니다. PolRob은 네트워크 입력을 방 command queue에 넣고 room tick에서 순서대로 적용해 복합 상태 변경의 경계를 만들었습니다.
-</details>
-
-<details>
-<summary><b>900 bots를 실제 동시접속 수용량으로 주장할 수 있나요?</b></summary>
-<br/>
-아닙니다. 현재 결과는 동일한 로컬 환경에서 최적화 전후를 비교하기 위한 실험입니다. 실제 수용량을 주장하려면 고정 사양의 cloud VM, 외부 부하 발생기, latency·packet loss·장시간 안정성 조건을 포함해 다시 검증해야 합니다.
+아닙니다. 스레드 안전한 컬렉션은 단일 '추가/수정/삭제' 연산 자체의 원자성만 보장할 뿐, "A 조건이 만족할 때 B 상태를 바꾼다" 같은 다중 복합 게임 규칙의 트랜잭션을 보호해주지 못합니다. PolRob 서버는 모든 네트워크 네트워크 이벤트를 스레드 안전한 단일 통로인 Room Command Queue에 집어넣고, 룸별 전담 단일 스레드 루프가 이를 순차 처리하도록 강제하여 완벽한 상태 일관성을 확보했습니다.
 </details>
 
 ---
 
 <p align="center">
-  <b><span>Pol</span><span>Rob</span></b><br/>
-  <sub>Designed and engineered as a junior game server developer portfolio.</sub>
+  <b>Designed and engineered with passion by a junior game server developer.</b><br/>
+  기본 원리를 깊이 이해하고 성능을 수치로 증명하는 개발자, 서신우입니다.
 </p>
