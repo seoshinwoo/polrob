@@ -2,89 +2,312 @@
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              x:Class="polrob.Client.MainPage"
-             BackgroundColor="#555555"
+             BackgroundColor="#050B1D"
              Shell.NavBarIsVisible="False">
 
     <Grid>
-        <Button x:Name="LoginButton"
-                Text="Login"
-                HorizontalOptions="End"
-                VerticalOptions="Start"
-                Margin="20"
-                CornerRadius="20"
-                FontAttributes="Bold"
-                FontSize="18"
-                TextColor="White"
-                Padding="30, 8"
-                BackgroundColor="#5984ef"
-                Clicked="OnLoginClicked"/>
+        <!-- 배경과 캐릭터는 장식용 이미지로 두고, 모든 조작 UI는 MAUI 컨트롤로 올립니다. -->
+        <Image Source="mainpage_background.png"
+               Aspect="AspectFill"
+               HorizontalOptions="Fill"
+               VerticalOptions="Fill"
+               InputTransparent="True" />
 
-        <Button x:Name="ProfileButton"
-                Text=""
-                HorizontalOptions="End"
-                VerticalOptions="Start"
-                Margin="20"
-                CornerRadius="20"
-                FontAttributes="Bold"
-                FontSize="18"
-                TextColor="Black"
-                Padding="24,8"
-                BackgroundColor="#76d859"
-                IsVisible="False"
-                Clicked="OnProfileClicked"/>
+        <!-- 상하단 컨트롤의 가독성을 확보하는 아주 약한 비네트입니다. -->
+        <BoxView InputTransparent="True">
+            <BoxView.Background>
+                <LinearGradientBrush StartPoint="0,0"
+                                     EndPoint="0,1">
+                    <GradientStop Color="#18020A20"
+                                  Offset="0" />
+                    <GradientStop Color="#00020A20"
+                                  Offset="0.55" />
+                    <GradientStop Color="#B8050A17"
+                                  Offset="1" />
+                </LinearGradientBrush>
+            </BoxView.Background>
+        </BoxView>
 
-        <!-- Center content -->
-        <VerticalStackLayout HorizontalOptions="Center"
-                             VerticalOptions="Center"
-                             Spacing="60">
-            <Label Text="PolRob"
-                   FontSize="72"
-                   TextColor="White"
-                   FontFamily="OpenSansRegular"
-                   HorizontalOptions="Center"/>
+        <Grid Padding="18,22,18,30"
+              RowDefinitions="Auto,*,Auto">
 
-            <HorizontalStackLayout Spacing="25"
-                                   HorizontalOptions="Center">
-                <Button x:Name="CreateButton"
-                        Text="Create"
-                        FontAttributes="Bold"
-                        FontSize="24"
-                        TextColor="White"
-                        WidthRequest="150"
-                        HeightRequest="160"
-                        CornerRadius="25"
-                        Clicked="OnCreateClicked">
-                    <Button.Background>
-                        <LinearGradientBrush StartPoint="0,0"
-                                             EndPoint="0,1">
-                            <GradientStop Color="#1e3e96"
-                                          Offset="0.0"/>
-                            <GradientStop Color="#5e89f8"
-                                          Offset="1.0"/>
-                        </LinearGradientBrush>
-                    </Button.Background>
-                </Button>
+            <!-- 상단 메뉴 -->
+            <Grid Grid.Row="0"
+                  ColumnDefinitions="Auto,*,Auto">
+                <Border WidthRequest="64"
+                        HeightRequest="64"
+                        Padding="0"
+                        BackgroundColor="#171A22"
+                        Stroke="#6D7380"
+                        StrokeThickness="3"
+                        SemanticProperties.Description="설정">
+                    <Border.StrokeShape>
+                        <RoundRectangle CornerRadius="18" />
+                    </Border.StrokeShape>
+                    <Border.Shadow>
+                        <Shadow Brush="#CC000000"
+                                Offset="0,6"
+                                Radius="8"
+                                Opacity="0.75" />
+                    </Border.Shadow>
+                    <Border.GestureRecognizers>
+                        <TapGestureRecognizer Tapped="OnSettingsClicked" />
+                    </Border.GestureRecognizers>
 
-                <Button Text="Join"
-                        FontAttributes="Bold"
-                        FontSize="24"
-                        TextColor="White"
-                        WidthRequest="150"
-                        HeightRequest="160"
-                        CornerRadius="25"
-                        Clicked="OnJoinClicked">
-                    <Button.Background>
-                        <LinearGradientBrush StartPoint="0,0"
-                                             EndPoint="0,1">
-                            <GradientStop Color="#32851a"
-                                          Offset="0.0"/>
-                            <GradientStop Color="#3dcd14"
-                                          Offset="1.0"/>
-                        </LinearGradientBrush>
-                    </Button.Background>
-                </Button>
-            </HorizontalStackLayout>
-        </VerticalStackLayout>
+                    <Border Padding="5"
+                            BackgroundColor="#1477E8"
+                            Stroke="#55C7FF"
+                            StrokeThickness="2">
+                        <Border.StrokeShape>
+                            <RoundRectangle CornerRadius="15" />
+                        </Border.StrokeShape>
+                        <Image Source="main_settings.png"
+                               WidthRequest="46"
+                               HeightRequest="46"
+                               Aspect="AspectFit" />
+                    </Border>
+                </Border>
+
+                <Grid Grid.Column="2">
+                    <Border x:Name="LoginButton"
+                            HeightRequest="64"
+                            MinimumWidthRequest="172"
+                            Padding="0"
+                            BackgroundColor="#171A22"
+                            Stroke="#6D7380"
+                            StrokeThickness="3"
+                            SemanticProperties.Description="로그인">
+                        <Border.StrokeShape>
+                            <RoundRectangle CornerRadius="21" />
+                        </Border.StrokeShape>
+                        <Border.Shadow>
+                            <Shadow Brush="#CC000000"
+                                    Offset="0,6"
+                                    Radius="8"
+                                    Opacity="0.75" />
+                        </Border.Shadow>
+                        <Border.GestureRecognizers>
+                            <TapGestureRecognizer Tapped="OnLoginClicked" />
+                        </Border.GestureRecognizers>
+
+                        <Border Padding="9,5"
+                                BackgroundColor="#1266CF"
+                                Stroke="#5CC8FF"
+                                StrokeThickness="2">
+                            <Border.StrokeShape>
+                                <RoundRectangle CornerRadius="18" />
+                            </Border.StrokeShape>
+                            <Grid ColumnDefinitions="36,*"
+                                  ColumnSpacing="10">
+                                <Image Source="main_login_user.png"
+                                       WidthRequest="32"
+                                       HeightRequest="32"
+                                       Aspect="AspectFit" />
+                                <Label Grid.Column="1"
+                                       Text="로그인"
+                                       FontFamily="OpenSansSemibold"
+                                       FontAttributes="Bold"
+                                       FontSize="22"
+                                       TextColor="#FFF8E8"
+                                       VerticalTextAlignment="Center"
+                                       HorizontalTextAlignment="Center">
+                                    <Label.Shadow>
+                                        <Shadow Brush="#AA001735"
+                                                Offset="0,2"
+                                                Radius="2"
+                                                Opacity="1" />
+                                    </Label.Shadow>
+                                </Label>
+                            </Grid>
+                        </Border>
+                    </Border>
+
+                    <Border x:Name="ProfileButton"
+                            IsVisible="False"
+                            HeightRequest="64"
+                            MinimumWidthRequest="172"
+                            Padding="0"
+                            BackgroundColor="#171A22"
+                            Stroke="#6D7380"
+                            StrokeThickness="3"
+                            SemanticProperties.Description="프로필">
+                        <Border.StrokeShape>
+                            <RoundRectangle CornerRadius="21" />
+                        </Border.StrokeShape>
+                        <Border.Shadow>
+                            <Shadow Brush="#CC000000"
+                                    Offset="0,6"
+                                    Radius="8"
+                                    Opacity="0.75" />
+                        </Border.Shadow>
+                        <Border.GestureRecognizers>
+                            <TapGestureRecognizer Tapped="OnProfileClicked" />
+                        </Border.GestureRecognizers>
+
+                        <Border Padding="9,5"
+                                BackgroundColor="#1266CF"
+                                Stroke="#5CC8FF"
+                                StrokeThickness="2">
+                            <Border.StrokeShape>
+                                <RoundRectangle CornerRadius="18" />
+                            </Border.StrokeShape>
+                            <Grid ColumnDefinitions="36,*"
+                                  ColumnSpacing="10">
+                                <!-- 추후 사용자가 고른 프로필 이미지의 Source만 교체하면 됩니다. -->
+                                <Image x:Name="ProfileImage"
+                                       Source="main_login_user.png"
+                                       WidthRequest="32"
+                                       HeightRequest="32"
+                                       Aspect="AspectFit" />
+                                <Label x:Name="ProfileNameLabel"
+                                       Grid.Column="1"
+                                       FontFamily="OpenSansSemibold"
+                                       FontAttributes="Bold"
+                                       FontSize="18"
+                                       TextColor="#FFF8E8"
+                                       MaxLines="1"
+                                       LineBreakMode="TailTruncation"
+                                       VerticalTextAlignment="Center"
+                                       HorizontalTextAlignment="Center">
+                                    <Label.Shadow>
+                                        <Shadow Brush="#AA001735"
+                                                Offset="0,2"
+                                                Radius="2"
+                                                Opacity="1" />
+                                    </Label.Shadow>
+                                </Label>
+                            </Grid>
+                        </Border>
+                    </Border>
+                </Grid>
+            </Grid>
+
+            <!-- 방 만들기 / 참가 -->
+            <Grid Grid.Row="2"
+                  ColumnDefinitions="*,*"
+                  ColumnSpacing="14"
+                  MaximumWidthRequest="620"
+                  HorizontalOptions="Fill">
+                <Border x:Name="CreateButton"
+                        Grid.Column="0"
+                        HeightRequest="168"
+                        Padding="0"
+                        BackgroundColor="#171A22"
+                        Stroke="#F7D9A0"
+                        StrokeThickness="4"
+                        SemanticProperties.Description="방 만들기">
+                    <Border.StrokeShape>
+                        <RoundRectangle CornerRadius="29" />
+                    </Border.StrokeShape>
+                    <Border.Shadow>
+                        <Shadow Brush="#E0000000"
+                                Offset="0,9"
+                                Radius="12"
+                                Opacity="0.85" />
+                    </Border.Shadow>
+                    <Border.GestureRecognizers>
+                        <TapGestureRecognizer Tapped="OnCreateClicked" />
+                    </Border.GestureRecognizers>
+
+                    <Border Padding="8,7"
+                            Stroke="#62D4FF"
+                            StrokeThickness="2">
+                        <Border.StrokeShape>
+                            <RoundRectangle CornerRadius="25" />
+                        </Border.StrokeShape>
+                        <Border.Background>
+                            <LinearGradientBrush StartPoint="0,0"
+                                                 EndPoint="0,1">
+                                <GradientStop Color="#178DF5"
+                                              Offset="0" />
+                                <GradientStop Color="#0751BB"
+                                              Offset="1" />
+                            </LinearGradientBrush>
+                        </Border.Background>
+                        <Grid RowDefinitions="*,Auto">
+                            <Image Source="main_create_room.png"
+                                   WidthRequest="102"
+                                   HeightRequest="102"
+                                   Aspect="AspectFit"
+                                   HorizontalOptions="Center" />
+                            <Label Grid.Row="1"
+                                   Text="방 만들기"
+                                   FontFamily="OpenSansSemibold"
+                                   FontAttributes="Bold"
+                                   FontSize="25"
+                                   TextColor="#FFF8E8"
+                                   HorizontalTextAlignment="Center">
+                                <Label.Shadow>
+                                    <Shadow Brush="#B500173C"
+                                            Offset="0,3"
+                                            Radius="2"
+                                            Opacity="1" />
+                                </Label.Shadow>
+                            </Label>
+                        </Grid>
+                    </Border>
+                </Border>
+
+                <Border Grid.Column="1"
+                        HeightRequest="168"
+                        Padding="0"
+                        BackgroundColor="#171A22"
+                        Stroke="#F7D9A0"
+                        StrokeThickness="4"
+                        SemanticProperties.Description="방 참가">
+                    <Border.StrokeShape>
+                        <RoundRectangle CornerRadius="29" />
+                    </Border.StrokeShape>
+                    <Border.Shadow>
+                        <Shadow Brush="#E0000000"
+                                Offset="0,9"
+                                Radius="12"
+                                Opacity="0.85" />
+                    </Border.Shadow>
+                    <Border.GestureRecognizers>
+                        <TapGestureRecognizer Tapped="OnJoinClicked" />
+                    </Border.GestureRecognizers>
+
+                    <Border Padding="8,7"
+                            Stroke="#FFB052"
+                            StrokeThickness="2">
+                        <Border.StrokeShape>
+                            <RoundRectangle CornerRadius="25" />
+                        </Border.StrokeShape>
+                        <Border.Background>
+                            <LinearGradientBrush StartPoint="0,0"
+                                                 EndPoint="0,1">
+                                <GradientStop Color="#FF741B"
+                                              Offset="0" />
+                                <GradientStop Color="#D83A0D"
+                                              Offset="1" />
+                            </LinearGradientBrush>
+                        </Border.Background>
+                        <Grid RowDefinitions="*,Auto">
+                            <Image Source="main_join_room.png"
+                                   WidthRequest="102"
+                                   HeightRequest="102"
+                                   Aspect="AspectFit"
+                                   HorizontalOptions="Center" />
+                            <Label Grid.Row="1"
+                                   Text="방 참가"
+                                   FontFamily="OpenSansSemibold"
+                                   FontAttributes="Bold"
+                                   FontSize="25"
+                                   TextColor="#FFF8E8"
+                                   HorizontalTextAlignment="Center">
+                                <Label.Shadow>
+                                    <Shadow Brush="#B5360700"
+                                            Offset="0,3"
+                                            Radius="2"
+                                            Opacity="1" />
+                                </Label.Shadow>
+                            </Label>
+                        </Grid>
+                    </Border>
+                </Border>
+            </Grid>
+        </Grid>
     </Grid>
 
 </ContentPage>

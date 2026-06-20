@@ -35,6 +35,11 @@ public partial class MainPage : ContentPage
 		await Shell.Current.GoToAsync("Profile");
 	}
 
+	private async void OnSettingsClicked(object? sender, TappedEventArgs e)
+	{
+		await DisplayAlertAsync("설정", "설정 화면은 준비 중입니다.", "확인");
+	}
+
 	private async void OnCreateClicked(object? sender, EventArgs e)
 	{
 		await AuthSession.LoadAsync();
@@ -92,7 +97,7 @@ public partial class MainPage : ContentPage
 	{
 		LoginButton.IsVisible = !AuthSession.IsLoggedIn;
 		ProfileButton.IsVisible = AuthSession.IsLoggedIn;
-		ProfileButton.Text = AuthSession.Name ?? string.Empty;
+		ProfileNameLabel.Text = AuthSession.Name ?? string.Empty;
 	}
 
 	private static async Task<string> ReadErrorMessageAsync(HttpResponseMessage response)

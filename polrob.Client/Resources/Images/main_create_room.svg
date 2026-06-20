@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <defs>
+    <linearGradient id="door" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#eaf8ff"/>
+      <stop offset="1" stop-color="#a9cced"/>
+    </linearGradient>
+    <linearGradient id="plus" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fff46b"/>
+      <stop offset="1" stop-color="#ffb300"/>
+    </linearGradient>
+  </defs>
+  <path d="M23 110V31c0-6 5-11 11-11h51c6 0 11 5 11 11v79" fill="url(#door)" stroke="#172033" stroke-width="8" stroke-linejoin="round"/>
+  <path d="M39 110V38h40v72" fill="#1678dc" stroke="#172033" stroke-width="7" stroke-linejoin="round"/>
+  <circle cx="69" cy="76" r="5" fill="#ffd34d" stroke="#172033" stroke-width="3"/>
+  <path d="M18 108h87" stroke="#172033" stroke-width="10" stroke-linecap="round"/>
+  <circle cx="95" cy="35" r="25" fill="#172033"/>
+  <path d="M95 20v30M80 35h30" stroke="url(#plus)" stroke-width="11" stroke-linecap="round"/>
+  <path d="M34 31h37" stroke="#ffffff" stroke-width="5" opacity=".55" stroke-linecap="round"/>
+</svg>
