@@ -36,6 +36,7 @@ public partial class GamePlay : ContentPage
     private readonly Dictionary<string, RemotePlayerInterpolationState> _remotePlayerInterpolations = new();
     private GamePhase _gamePhase = GamePhase.Waiting;
     private int _remainingTime = 300;
+    private PlayerRole? _winnerRole;
     private bool _isGameOverTransitioning = false;
     private static readonly TimeSpan MovingUdpSyncInterval = TimeSpan.FromMilliseconds(50);
     private static readonly TimeSpan StoppedUdpSyncInterval = TimeSpan.FromMilliseconds(500);
@@ -310,6 +311,7 @@ public partial class GamePlay : ContentPage
             {
                 _gamePhase = syncData.Phase;
                 _remainingTime = syncData.GameTime;
+                _winnerRole = syncData.WinnerRole;
 
                 if (_gamePhase == GamePhase.Countdown)
                 {
@@ -391,8 +393,18 @@ public partial class GamePlay : ContentPage
         var gameType = Uri.EscapeDataString(_gameType);
         var roomCode = Uri.EscapeDataString(_roomCode);
         var isHost = _isHost.ToString().ToLowerInvariant();
+        var winnerRole = Uri.EscapeDataString((_winnerRole ?? PlayerRole.Robber).ToString());
+        var robbers = _players.Values.Where(player => player.Role == PlayerRole.Robber).ToList();
+        var totalRobbers = robbers.Count;
+        var capturedRobbers = _gameMap?.Jail == null
+            ? 0
+            : robbers.Count(player =>
+                player.X >= _gameMap.Jail.LeftTop.X &&
+                player.X <= _gameMap.Jail.RightBottom.X &&
+                player.Y >= _gameMap.Jail.LeftTop.Y &&
+                player.Y <= _gameMap.Jail.RightBottom.Y);
 
-        return $"GameOver?roomId={roomId}&role={role}&gameType={gameType}&roomCode={roomCode}&isHost={isHost}";
+        return $"GameOver?roomId={roomId}&role={role}&gameType={gameType}&roomCode={roomCode}&isHost={isHost}&winnerRole={winnerRole}&remainingTime={_remainingTime}&capturedRobbers={capturedRobbers}&totalRobbers={totalRobbers}";
     }
 
     private string BuildRematchingRoute()

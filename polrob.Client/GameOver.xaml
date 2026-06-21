@@ -2,66 +2,372 @@
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              x:Class="polrob.Client.GameOver"
-             BackgroundColor="#555555"
+             BackgroundColor="#050B1D"
              Shell.NavBarIsVisible="False">
 
-    <Grid RowDefinitions="Auto, *, Auto">
+    <Grid>
+        <Image Source="gamejoin_background.png"
+               Aspect="AspectFill"
+               HorizontalOptions="Fill"
+               VerticalOptions="Fill"
+               InputTransparent="True" />
 
-        <!-- Top Left Home Button -->
-        <Frame Grid.Row="0"
-               HorizontalOptions="Start"
-               VerticalOptions="Start"
-               Margin="20"
-               Padding="12,10"
-               BackgroundColor="#76d859"
-               CornerRadius="15"
-               BorderColor="Transparent"
-               HasShadow="False">
-            <Frame.GestureRecognizers>
-                <TapGestureRecognizer Tapped="OnHomeClicked"/>
-            </Frame.GestureRecognizers>
-            <Path Data="M10,20V14H14V20H19V12H22L12,3L2,12H5V20H10Z"
-                  Fill="Black"
-                  Aspect="Uniform"
-                  WidthRequest="35"
-                  HeightRequest="35"/>
-        </Frame>
+        <BoxView InputTransparent="True">
+            <BoxView.Background>
+                <LinearGradientBrush StartPoint="0,0"
+                                     EndPoint="0,1">
+                    <GradientStop Color="#4D020817"
+                                  Offset="0" />
+                    <GradientStop Color="#14020817"
+                                  Offset="0.46" />
+                    <GradientStop Color="#D1040915"
+                                  Offset="1" />
+                </LinearGradientBrush>
+            </BoxView.Background>
+        </BoxView>
 
-        <Button x:Name="ProfileButton"
-                Grid.Row="0"
-                Text=""
-                HorizontalOptions="End"
-                VerticalOptions="Start"
-                Margin="20"
-                CornerRadius="20"
-                FontAttributes="Bold"
-                FontSize="18"
-                TextColor="Black"
-                Padding="24,8"
-                BackgroundColor="#76d859"
-                IsVisible="False"
-                Clicked="OnProfileClicked"/>
+        <ScrollView x:Name="ContentScrollView">
+            <VerticalStackLayout x:Name="GameOverContent"
+                                 Padding="18,102,18,30"
+                                 Spacing="13">
 
-        <!-- Center Text -->
-        <Label Grid.Row="1"
-               Text="Game End"
-               FontSize="46"
-               FontAttributes="Bold"
-               TextColor="White"
-               HorizontalOptions="Center"
-               VerticalOptions="Center"/>
+                <!-- 승리 진영에 따라 제목, 내부 색상, 이미지가 함께 변경됩니다. -->
+                <Border x:Name="ResultBannerFrame"
+                        Padding="5"
+                        MaximumWidthRequest="430"
+                        BackgroundColor="#17191E"
+                        Stroke="#F2D292"
+                        StrokeThickness="4"
+                        HorizontalOptions="Fill">
+                    <Border.StrokeShape>
+                        <RoundRectangle CornerRadius="30" />
+                    </Border.StrokeShape>
+                    <Border.Shadow>
+                        <Shadow Brush="#E6000000"
+                                Offset="0,10"
+                                Radius="12"
+                                Opacity="0.9" />
+                    </Border.Shadow>
+                    <Border x:Name="ResultBannerInner"
+                            HeightRequest="84"
+                            Padding="10"
+                            BackgroundColor="#0D58C5"
+                            Stroke="#FFD45E"
+                            StrokeThickness="3">
+                        <Border.StrokeShape>
+                            <RoundRectangle CornerRadius="23" />
+                        </Border.StrokeShape>
+                        <Grid ColumnDefinitions="50,*"
+                              ColumnSpacing="8">
+                            <Label x:Name="VictoryBadgeLabel"
+                                   Text="◆"
+                                   FontSize="37"
+                                   TextColor="#FFD11A"
+                                   HorizontalTextAlignment="Center"
+                                   VerticalTextAlignment="Center">
+                                <Label.Shadow>
+                                    <Shadow Brush="#A0502A00"
+                                            Offset="0,3"
+                                            Radius="2"
+                                            Opacity="1" />
+                                </Label.Shadow>
+                            </Label>
+                            <Label x:Name="ResultTitleLabel"
+                                   Grid.Column="1"
+                                   Text="경찰 승리!"
+                                   FontFamily="OpenSansSemibold"
+                                   FontAttributes="Bold"
+                                   FontSize="38"
+                                   TextColor="#FFF8E8"
+                                   HorizontalTextAlignment="Center"
+                                   VerticalTextAlignment="Center">
+                                <Label.Shadow>
+                                    <Shadow Brush="#D0000000"
+                                            Offset="0,4"
+                                            Radius="3"
+                                            Opacity="1" />
+                                </Label.Shadow>
+                            </Label>
+                        </Grid>
+                    </Border>
+                </Border>
 
-        <!-- Bottom Play Again Button -->
-        <Button Grid.Row="2"
-                Text="Play Again"
-                FontAttributes="Bold"
-                FontSize="24"
-                TextColor="Black"
-                BackgroundColor="#e2a8ec"
-                HeightRequest="80"
-                CornerRadius="20"
-                Margin="30,40,30,80"
-                Clicked="OnPlayAgainClicked"/>
+                <Grid x:Name="HeroGrid"
+                      HeightRequest="286"
+                      MaximumWidthRequest="430"
+                      HorizontalOptions="Fill">
+                    <Border x:Name="VictoryBackdrop"
+                            WidthRequest="258"
+                            HeightRequest="258"
+                            BackgroundColor="#62115DDE"
+                            Stroke="#8CCBFF"
+                            StrokeThickness="3"
+                            HorizontalOptions="Center"
+                            VerticalOptions="Center">
+                        <Border.StrokeShape>
+                            <RoundRectangle CornerRadius="129" />
+                        </Border.StrokeShape>
+                        <Border.Shadow>
+                            <Shadow x:Name="VictoryGlow"
+                                    Brush="#D0188EFF"
+                                    Offset="0,0"
+                                    Radius="32"
+                                    Opacity="0.95" />
+                        </Border.Shadow>
+                    </Border>
+                    <Image x:Name="VictoryImage"
+                           Source="gameover_police_victory.png"
+                           HeightRequest="286"
+                           Aspect="AspectFit"
+                           HorizontalOptions="Center"
+                           VerticalOptions="Center" />
+                </Grid>
+
+                <Border x:Name="StatsFrame"
+                        Padding="5"
+                        MaximumWidthRequest="430"
+                        BackgroundColor="#17191E"
+                        Stroke="#F2D292"
+                        StrokeThickness="4"
+                        HorizontalOptions="Fill">
+                    <Border.StrokeShape>
+                        <RoundRectangle CornerRadius="27" />
+                    </Border.StrokeShape>
+                    <Border.Shadow>
+                        <Shadow Brush="#DB000000"
+                                Offset="0,8"
+                                Radius="10"
+                                Opacity="0.85" />
+                    </Border.Shadow>
+                    <Border Padding="0"
+                            BackgroundColor="#08245A"
+                            Stroke="#3D79C3"
+                            StrokeThickness="2">
+                        <Border.StrokeShape>
+                            <RoundRectangle CornerRadius="21" />
+                        </Border.StrokeShape>
+                        <Grid x:Name="StatsGrid"
+                              RowDefinitions="58,1,58"
+                              ColumnDefinitions="48,*,Auto"
+                              Padding="14,2"
+                              ColumnSpacing="10">
+                            <Image x:Name="TimerIcon"
+                                   Source="gameover_timer.png"
+                                   WidthRequest="36"
+                                   HeightRequest="36"
+                                   Aspect="AspectFit"
+                                   VerticalOptions="Center" />
+                            <Label x:Name="RemainingTimeCaption"
+                                   Grid.Column="1"
+                                   Text="남은 시간"
+                                   FontFamily="OpenSansSemibold"
+                                   FontAttributes="Bold"
+                                   FontSize="20"
+                                   TextColor="#FFF8E8"
+                                   VerticalTextAlignment="Center" />
+                            <Label x:Name="RemainingTimeLabel"
+                                   Grid.Column="2"
+                                   Text="00:00"
+                                   FontFamily="OpenSansSemibold"
+                                   FontAttributes="Bold"
+                                   FontSize="26"
+                                   TextColor="#FFD118"
+                                   VerticalTextAlignment="Center" />
+
+                            <BoxView Grid.Row="1"
+                                     Grid.ColumnSpan="3"
+                                     Color="#245393" />
+
+                            <Image x:Name="HandcuffsIcon"
+                                   Grid.Row="2"
+                                   Source="gameover_handcuffs.png"
+                                   WidthRequest="37"
+                                   HeightRequest="37"
+                                   Aspect="AspectFit"
+                                   VerticalOptions="Center" />
+                            <Label x:Name="CapturedCaption"
+                                   Grid.Row="2"
+                                   Grid.Column="1"
+                                   Text="체포"
+                                   FontFamily="OpenSansSemibold"
+                                   FontAttributes="Bold"
+                                   FontSize="20"
+                                   TextColor="#FFF8E8"
+                                   VerticalTextAlignment="Center" />
+                            <Label x:Name="CapturedRobbersLabel"
+                                   Grid.Row="2"
+                                   Grid.Column="2"
+                                   Text="0 / 0"
+                                   FontFamily="OpenSansSemibold"
+                                   FontAttributes="Bold"
+                                   FontSize="26"
+                                   TextColor="#FFD118"
+                                   VerticalTextAlignment="Center" />
+                        </Grid>
+                    </Border>
+                </Border>
+
+                <Border x:Name="PlayAgainFrame"
+                        HeightRequest="78"
+                        Margin="12,3,12,0"
+                        Padding="5"
+                        MaximumWidthRequest="405"
+                        BackgroundColor="#17191E"
+                        Stroke="#F4D89D"
+                        StrokeThickness="4"
+                        HorizontalOptions="Fill">
+                    <Border.StrokeShape>
+                        <RoundRectangle CornerRadius="25" />
+                    </Border.StrokeShape>
+                    <Border.Shadow>
+                        <Shadow Brush="#D8000000"
+                                Offset="0,8"
+                                Radius="9"
+                                Opacity="0.9" />
+                    </Border.Shadow>
+                    <Button x:Name="PlayAgainButton"
+                            Text="다시 하기"
+                            FontFamily="OpenSansSemibold"
+                            FontAttributes="Bold"
+                            FontSize="31"
+                            TextColor="#FFF8E8"
+                            BorderColor="#52C9FF"
+                            BorderWidth="2"
+                            CornerRadius="18"
+                            Padding="8,0"
+                            Clicked="OnPlayAgainClicked">
+                        <Button.Background>
+                            <LinearGradientBrush StartPoint="0,0"
+                                                 EndPoint="0,1">
+                                <GradientStop Color="#168DF8"
+                                              Offset="0" />
+                                <GradientStop Color="#0647AD"
+                                              Offset="1" />
+                            </LinearGradientBrush>
+                        </Button.Background>
+                    </Button>
+                </Border>
+
+                <Border x:Name="BottomHomeFrame"
+                        WidthRequest="210"
+                        HeightRequest="58"
+                        Padding="4"
+                        BackgroundColor="#17191E"
+                        Stroke="#E6CC99"
+                        StrokeThickness="3"
+                        HorizontalOptions="Center"
+                        SemanticProperties.Description="홈으로">
+                    <Border.StrokeShape>
+                        <RoundRectangle CornerRadius="21" />
+                    </Border.StrokeShape>
+                    <Border.GestureRecognizers>
+                        <TapGestureRecognizer Tapped="OnHomeClicked" />
+                    </Border.GestureRecognizers>
+                    <Border BackgroundColor="#353943"
+                            Stroke="#777E8B"
+                            StrokeThickness="2">
+                        <Border.StrokeShape>
+                            <RoundRectangle CornerRadius="16" />
+                        </Border.StrokeShape>
+                        <Label x:Name="BottomHomeLabel"
+                               Text="홈으로"
+                               FontFamily="OpenSansSemibold"
+                               FontAttributes="Bold"
+                               FontSize="23"
+                               TextColor="#FFF8E8"
+                               HorizontalTextAlignment="Center"
+                               VerticalTextAlignment="Center" />
+                    </Border>
+                </Border>
+            </VerticalStackLayout>
+        </ScrollView>
+
+        <!-- 상단 홈 / 프로필 -->
+        <Grid Padding="18,22,18,0"
+              ColumnDefinitions="Auto,*,Auto"
+              VerticalOptions="Start"
+              ZIndex="10">
+            <Border WidthRequest="64"
+                    HeightRequest="64"
+                    Padding="0"
+                    BackgroundColor="#171A22"
+                    Stroke="#6D7380"
+                    StrokeThickness="3"
+                    SemanticProperties.Description="홈으로">
+                <Border.StrokeShape>
+                    <RoundRectangle CornerRadius="18" />
+                </Border.StrokeShape>
+                <Border.Shadow>
+                    <Shadow Brush="#CC000000"
+                            Offset="0,6"
+                            Radius="8"
+                            Opacity="0.75" />
+                </Border.Shadow>
+                <Border.GestureRecognizers>
+                    <TapGestureRecognizer Tapped="OnHomeClicked" />
+                </Border.GestureRecognizers>
+                <Border Padding="6"
+                        BackgroundColor="#1477E8"
+                        Stroke="#55C7FF"
+                        StrokeThickness="2">
+                    <Border.StrokeShape>
+                        <RoundRectangle CornerRadius="15" />
+                    </Border.StrokeShape>
+                    <Image Source="game_home.png"
+                           WidthRequest="45"
+                           HeightRequest="45"
+                           Aspect="AspectFit" />
+                </Border>
+            </Border>
+
+            <Border x:Name="ProfileButton"
+                    Grid.Column="2"
+                    IsVisible="False"
+                    HeightRequest="64"
+                    MinimumWidthRequest="172"
+                    Padding="0"
+                    BackgroundColor="#171A22"
+                    Stroke="#6D7380"
+                    StrokeThickness="3"
+                    SemanticProperties.Description="프로필">
+                <Border.StrokeShape>
+                    <RoundRectangle CornerRadius="21" />
+                </Border.StrokeShape>
+                <Border.Shadow>
+                    <Shadow Brush="#CC000000"
+                            Offset="0,6"
+                            Radius="8"
+                            Opacity="0.75" />
+                </Border.Shadow>
+                <Border.GestureRecognizers>
+                    <TapGestureRecognizer Tapped="OnProfileClicked" />
+                </Border.GestureRecognizers>
+                <Border Padding="9,5"
+                        BackgroundColor="#1266CF"
+                        Stroke="#5CC8FF"
+                        StrokeThickness="2">
+                    <Border.StrokeShape>
+                        <RoundRectangle CornerRadius="18" />
+                    </Border.StrokeShape>
+                    <Grid ColumnDefinitions="36,*"
+                          ColumnSpacing="10">
+                        <Image Source="main_login_user.png"
+                               WidthRequest="32"
+                               HeightRequest="32"
+                               Aspect="AspectFit" />
+                        <Label x:Name="ProfileNameLabel"
+                               Grid.Column="1"
+                               FontFamily="OpenSansSemibold"
+                               FontAttributes="Bold"
+                               FontSize="18"
+                               TextColor="#FFF8E8"
+                               MaxLines="1"
+                               LineBreakMode="TailTruncation"
+                               VerticalTextAlignment="Center"
+                               HorizontalTextAlignment="Center" />
+                    </Grid>
+                </Border>
+            </Border>
+        </Grid>
     </Grid>
-
 </ContentPage>
