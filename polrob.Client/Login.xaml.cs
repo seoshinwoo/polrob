@@ -50,9 +50,9 @@ public partial class Login : ContentPage
     private void SetMode(bool isSignUpMode)
     {
         _isSignUpMode = isSignUpMode;
-        ConfirmPasswordEntry.IsVisible = isSignUpMode;
+        ConfirmPasswordField.IsVisible = isSignUpMode;
 
-        ContinueButton.Text = isSignUpMode ? "Sign Up" : "Login";
+        ContinueButton.Text = isSignUpMode ? "회원가입" : "로그인";
         StatusLabel.Text = string.Empty;
 
         SignInButton.Opacity = isSignUpMode ? 0.65 : 1;
@@ -143,7 +143,7 @@ public partial class Login : ContentPage
         ContinueButton.IsEnabled = !isBusy;
         SignInButton.IsEnabled = !isBusy;
         SignUpButton.IsEnabled = !isBusy;
-        ContinueButton.Text = isBusy ? "처리 중..." : (_isSignUpMode ? "Sign Up" : "Login");
+        ContinueButton.Text = isBusy ? "처리 중..." : (_isSignUpMode ? "회원가입" : "로그인");
     }
 
     private void ShowStatus(string message, bool isError)

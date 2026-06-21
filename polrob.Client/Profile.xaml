@@ -2,74 +2,331 @@
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              x:Class="polrob.Client.Profile"
-             BackgroundColor="#555555"
+             BackgroundColor="#050B1D"
              Shell.NavBarIsVisible="False">
 
-    <Grid RowDefinitions="Auto,*"
-          Padding="0">
-        <Frame Grid.Row="0"
-               HorizontalOptions="Start"
-               VerticalOptions="Start"
-               Margin="20"
-               Padding="12,10"
-               BackgroundColor="#76d859"
-               CornerRadius="15"
-               BorderColor="Transparent"
-               HasShadow="False">
-            <Frame.GestureRecognizers>
-                <TapGestureRecognizer Tapped="OnBackClicked"/>
-            </Frame.GestureRecognizers>
-            <Path Data="M20,11H7.83L13.42,5.41L12,4L4,12L12,20L13.42,18.59L7.83,13H20V11Z"
-                  Fill="Black"
-                  Aspect="Uniform"
-                  WidthRequest="35"
-                  HeightRequest="35"/>
-        </Frame>
+    <Grid>
+        <Image Source="gamejoin_background.png"
+               Aspect="AspectFill"
+               HorizontalOptions="Fill"
+               VerticalOptions="Fill"
+               InputTransparent="True" />
 
-        <VerticalStackLayout Grid.Row="1"
-                             Spacing="18"
-                             WidthRequest="320"
-                             MaximumWidthRequest="380"
-                             HorizontalOptions="Center"
-                             VerticalOptions="Center">
-            <Label Text="Profile"
-                   FontSize="46"
-                   FontAttributes="Bold"
-                   TextColor="White"
-                   HorizontalOptions="Center"/>
+        <BoxView InputTransparent="True">
+            <BoxView.Background>
+                <LinearGradientBrush StartPoint="0,0"
+                                     EndPoint="0,1">
+                    <GradientStop Color="#4A020817"
+                                  Offset="0" />
+                    <GradientStop Color="#27020817"
+                                  Offset="0.45" />
+                    <GradientStop Color="#C2020711"
+                                  Offset="1" />
+                </LinearGradientBrush>
+            </BoxView.Background>
+        </BoxView>
 
-            <VerticalStackLayout Spacing="8"
-                                 Margin="0,12,0,14">
-                <Label Text="이름"
-                       FontSize="14"
-                       FontAttributes="Bold"
-                       TextColor="#d7d7d7"/>
-                <Label x:Name="NameLabel"
-                       Text=""
-                       FontSize="28"
-                       FontAttributes="Bold"
-                       TextColor="White"/>
+        <ScrollView>
+            <VerticalStackLayout Padding="18,104,18,36"
+                                 Spacing="18">
 
-                <Label Text="사용자 ID"
-                       FontSize="14"
-                       FontAttributes="Bold"
-                       TextColor="#d7d7d7"
-                       Margin="0,12,0,0"/>
-                <Label x:Name="UserIdLabel"
-                       Text=""
-                       FontSize="20"
-                       TextColor="White"/>
+                <Grid HeightRequest="116"
+                      MaximumWidthRequest="390"
+                      HorizontalOptions="Fill">
+                    <Image Source="lobby_police_avatar.png"
+                           WidthRequest="76"
+                           HeightRequest="76"
+                           Margin="42,0,0,0"
+                           HorizontalOptions="Start"
+                           VerticalOptions="Start"
+                           Aspect="AspectFit"
+                           Opacity="0.9" />
+                    <Image Source="lobby_robber_avatar.png"
+                           WidthRequest="76"
+                           HeightRequest="76"
+                           Margin="0,0,42,0"
+                           HorizontalOptions="End"
+                           VerticalOptions="Start"
+                           Aspect="AspectFit"
+                           Opacity="0.9" />
+
+                    <Border HeightRequest="76"
+                            Margin="38,38,38,0"
+                            Padding="10"
+                            BackgroundColor="#102F66"
+                            Stroke="#F1D49A"
+                            StrokeThickness="4"
+                            VerticalOptions="End">
+                        <Border.StrokeShape>
+                            <RoundRectangle CornerRadius="24" />
+                        </Border.StrokeShape>
+                        <Border.Shadow>
+                            <Shadow Brush="#D8000000"
+                                    Offset="0,8"
+                                    Radius="10"
+                                    Opacity="0.85" />
+                        </Border.Shadow>
+                        <Label Text="내 프로필"
+                               FontFamily="OpenSansSemibold"
+                               FontAttributes="Bold"
+                               FontSize="34"
+                               TextColor="#FFF8E8"
+                               HorizontalTextAlignment="Center"
+                               VerticalTextAlignment="Center">
+                            <Label.Shadow>
+                                <Shadow Brush="#CB020816"
+                                        Offset="0,4"
+                                        Radius="3"
+                                        Opacity="1" />
+                            </Label.Shadow>
+                        </Label>
+                    </Border>
+                </Grid>
+
+                <Border Padding="5"
+                        MaximumWidthRequest="430"
+                        BackgroundColor="#17191E"
+                        Stroke="#F2D292"
+                        StrokeThickness="4"
+                        HorizontalOptions="Fill">
+                    <Border.StrokeShape>
+                        <RoundRectangle CornerRadius="32" />
+                    </Border.StrokeShape>
+                    <Border.Shadow>
+                        <Shadow Brush="#E6000000"
+                                Offset="0,12"
+                                Radius="14"
+                                Opacity="0.9" />
+                    </Border.Shadow>
+
+                    <Border Padding="20,24,20,20"
+                            BackgroundColor="#071A36"
+                            Stroke="#344A6B"
+                            StrokeThickness="2">
+                        <Border.StrokeShape>
+                            <RoundRectangle CornerRadius="27" />
+                        </Border.StrokeShape>
+
+                        <VerticalStackLayout Spacing="17">
+                            <!-- 추후 사용자가 고른 프로필 이미지의 Source만 교체하면 됩니다. -->
+                            <Border WidthRequest="118"
+                                    HeightRequest="118"
+                                    Padding="6"
+                                    BackgroundColor="#17191E"
+                                    Stroke="#F3D392"
+                                    StrokeThickness="4"
+                                    HorizontalOptions="Center">
+                                <Border.StrokeShape>
+                                    <RoundRectangle CornerRadius="59" />
+                                </Border.StrokeShape>
+                                <Border.Shadow>
+                                    <Shadow Brush="#B81589FF"
+                                            Offset="0,0"
+                                            Radius="12"
+                                            Opacity="0.7" />
+                                </Border.Shadow>
+                                <Border Padding="15"
+                                        BackgroundColor="#116DDB"
+                                        Stroke="#58CCFF"
+                                        StrokeThickness="3">
+                                    <Border.StrokeShape>
+                                        <RoundRectangle CornerRadius="52" />
+                                    </Border.StrokeShape>
+                                    <Image Source="main_login_user.png"
+                                           WidthRequest="76"
+                                           HeightRequest="76"
+                                           Aspect="AspectFit" />
+                                </Border>
+                            </Border>
+
+                            <Label x:Name="NameLabel"
+                                   Text=""
+                                   FontFamily="OpenSansSemibold"
+                                   FontAttributes="Bold"
+                                   FontSize="30"
+                                   TextColor="#FFF8E8"
+                                   MaxLines="1"
+                                   LineBreakMode="TailTruncation"
+                                   HorizontalTextAlignment="Center">
+                                <Label.Shadow>
+                                    <Shadow Brush="#D0000000"
+                                            Offset="0,3"
+                                            Radius="3"
+                                            Opacity="1" />
+                                </Label.Shadow>
+                            </Label>
+
+                            <BoxView HeightRequest="2"
+                                     Margin="18,0"
+                                     Color="#284467" />
+
+                            <VerticalStackLayout Spacing="7">
+                                <Label Text="이름"
+                                       Margin="5,0,0,0"
+                                       FontFamily="OpenSansSemibold"
+                                       FontAttributes="Bold"
+                                       FontSize="18"
+                                       TextColor="#FFF8E8" />
+                                <Border HeightRequest="60"
+                                        Padding="4"
+                                        BackgroundColor="#030913"
+                                        Stroke="#03060C"
+                                        StrokeThickness="3">
+                                    <Border.StrokeShape>
+                                        <RoundRectangle CornerRadius="17" />
+                                    </Border.StrokeShape>
+                                    <Border Padding="12,0"
+                                            BackgroundColor="#10223E"
+                                            Stroke="#38537A"
+                                            StrokeThickness="2">
+                                        <Border.StrokeShape>
+                                            <RoundRectangle CornerRadius="13" />
+                                        </Border.StrokeShape>
+                                        <Grid ColumnDefinitions="30,*"
+                                              ColumnSpacing="10">
+                                            <Image Source="login_name.png"
+                                                   WidthRequest="27"
+                                                   HeightRequest="27"
+                                                   Aspect="AspectFit"
+                                                   VerticalOptions="Center" />
+                                            <Label x:Name="NameValueLabel"
+                                                   Grid.Column="1"
+                                                   FontFamily="OpenSansSemibold"
+                                                   FontAttributes="Bold"
+                                                   FontSize="18"
+                                                   TextColor="#FFF8E8"
+                                                   MaxLines="1"
+                                                   LineBreakMode="TailTruncation"
+                                                   VerticalTextAlignment="Center" />
+                                        </Grid>
+                                    </Border>
+                                </Border>
+                            </VerticalStackLayout>
+
+                            <VerticalStackLayout Spacing="7">
+                                <Label Text="사용자 ID"
+                                       Margin="5,0,0,0"
+                                       FontFamily="OpenSansSemibold"
+                                       FontAttributes="Bold"
+                                       FontSize="18"
+                                       TextColor="#FFF8E8" />
+                                <Border HeightRequest="60"
+                                        Padding="4"
+                                        BackgroundColor="#030913"
+                                        Stroke="#03060C"
+                                        StrokeThickness="3">
+                                    <Border.StrokeShape>
+                                        <RoundRectangle CornerRadius="17" />
+                                    </Border.StrokeShape>
+                                    <Border Padding="12,0"
+                                            BackgroundColor="#10223E"
+                                            Stroke="#38537A"
+                                            StrokeThickness="2">
+                                        <Border.StrokeShape>
+                                            <RoundRectangle CornerRadius="13" />
+                                        </Border.StrokeShape>
+                                        <Grid ColumnDefinitions="30,*"
+                                              ColumnSpacing="10">
+                                            <Label Text="#"
+                                                   FontFamily="OpenSansSemibold"
+                                                   FontAttributes="Bold"
+                                                   FontSize="27"
+                                                   TextColor="#39B8FF"
+                                                   HorizontalTextAlignment="Center"
+                                                   VerticalTextAlignment="Center" />
+                                            <Label x:Name="UserIdLabel"
+                                                   Grid.Column="1"
+                                                   FontFamily="OpenSansSemibold"
+                                                   FontSize="16"
+                                                   TextColor="#B9C7DB"
+                                                   MaxLines="1"
+                                                   LineBreakMode="MiddleTruncation"
+                                                   VerticalTextAlignment="Center" />
+                                        </Grid>
+                                    </Border>
+                                </Border>
+                            </VerticalStackLayout>
+
+                            <Border HeightRequest="72"
+                                    Margin="5,7,5,0"
+                                    Padding="5"
+                                    BackgroundColor="#17120E"
+                                    Stroke="#F4D89D"
+                                    StrokeThickness="4">
+                                <Border.StrokeShape>
+                                    <RoundRectangle CornerRadius="24" />
+                                </Border.StrokeShape>
+                                <Border.Shadow>
+                                    <Shadow Brush="#D8000000"
+                                            Offset="0,7"
+                                            Radius="8"
+                                            Opacity="0.85" />
+                                </Border.Shadow>
+                                <Button Text="로그아웃"
+                                        FontFamily="OpenSansSemibold"
+                                        FontAttributes="Bold"
+                                        FontSize="27"
+                                        TextColor="#FFF8E8"
+                                        BorderColor="#FF9A49"
+                                        BorderWidth="2"
+                                        CornerRadius="17"
+                                        Padding="8,0"
+                                        Clicked="OnLogoutClicked">
+                                    <Button.Background>
+                                        <LinearGradientBrush StartPoint="0,0"
+                                                             EndPoint="0,1">
+                                            <GradientStop Color="#F05A27"
+                                                          Offset="0" />
+                                            <GradientStop Color="#9D240B"
+                                                          Offset="1" />
+                                        </LinearGradientBrush>
+                                    </Button.Background>
+                                </Button>
+                            </Border>
+                        </VerticalStackLayout>
+                    </Border>
+                </Border>
             </VerticalStackLayout>
+        </ScrollView>
 
-            <Button Text="Logout"
-                    FontAttributes="Bold"
-                    FontSize="20"
-                    TextColor="White"
-                    BackgroundColor="#d64a4a"
-                    HeightRequest="56"
-                    CornerRadius="18"
-                    Clicked="OnLogoutClicked"/>
-        </VerticalStackLayout>
+        <Border WidthRequest="64"
+                HeightRequest="64"
+                Margin="18,22,0,0"
+                Padding="0"
+                BackgroundColor="#171A22"
+                Stroke="#6D7380"
+                StrokeThickness="3"
+                HorizontalOptions="Start"
+                VerticalOptions="Start"
+                ZIndex="10"
+                SemanticProperties.Description="뒤로가기">
+            <Border.StrokeShape>
+                <RoundRectangle CornerRadius="18" />
+            </Border.StrokeShape>
+            <Border.Shadow>
+                <Shadow Brush="#CC000000"
+                        Offset="0,6"
+                        Radius="8"
+                        Opacity="0.75" />
+            </Border.Shadow>
+            <Border.GestureRecognizers>
+                <TapGestureRecognizer Tapped="OnBackClicked" />
+            </Border.GestureRecognizers>
+            <Border Padding="9"
+                    BackgroundColor="#1477E8"
+                    Stroke="#55C7FF"
+                    StrokeThickness="2">
+                <Border.StrokeShape>
+                    <RoundRectangle CornerRadius="15" />
+                </Border.StrokeShape>
+                <Path Data="M20,11H7.83L13.42,5.41L12,4L4,12L12,20L13.42,18.59L7.83,13H20V11Z"
+                      Fill="#FFFDF4"
+                      Stroke="#17243A"
+                      StrokeThickness="0.7"
+                      Aspect="Uniform"
+                      WidthRequest="42"
+                      HeightRequest="42" />
+            </Border>
+        </Border>
     </Grid>
-
 </ContentPage>

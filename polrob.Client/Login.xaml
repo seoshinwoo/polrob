@@ -2,151 +2,427 @@
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              x:Class="polrob.Client.Login"
-             BackgroundColor="#555555"
+             BackgroundColor="#050B1D"
              Shell.NavBarIsVisible="False">
 
-    <Grid Padding="0">
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="*"/>
-            <RowDefinition Height="Auto"/>
-        </Grid.RowDefinitions>
+    <Grid>
+        <Image Source="gamejoin_background.png"
+               Aspect="AspectFill"
+               HorizontalOptions="Fill"
+               VerticalOptions="Fill"
+               InputTransparent="True" />
 
-        <Frame Grid.Row="0"
-               HorizontalOptions="Start"
-               VerticalOptions="Start"
-               Margin="20"
-               Padding="12,10"
-               BackgroundColor="#76d859"
-               CornerRadius="15"
-               BorderColor="Transparent"
-               HasShadow="False">
-            <Frame.GestureRecognizers>
-                <TapGestureRecognizer Tapped="OnHomeClicked"/>
-            </Frame.GestureRecognizers>
-            <Path Data="M10,20V14H14V20H19V12H22L12,3L2,12H5V20H10Z"
-                  Fill="Black"
-                  Aspect="Uniform"
-                  WidthRequest="35"
-                  HeightRequest="35"/>
-        </Frame>
+        <BoxView InputTransparent="True">
+            <BoxView.Background>
+                <LinearGradientBrush StartPoint="0,0"
+                                     EndPoint="0,1">
+                    <GradientStop Color="#4A020817"
+                                  Offset="0" />
+                    <GradientStop Color="#22020817"
+                                  Offset="0.42" />
+                    <GradientStop Color="#BD020711"
+                                  Offset="1" />
+                </LinearGradientBrush>
+            </BoxView.Background>
+        </BoxView>
 
-        <ScrollView Grid.Row="1">
-            <VerticalStackLayout Spacing="28"
-                                 HorizontalOptions="Center"
-                                 VerticalOptions="Center"
-                                 Padding="24,16">
-            <VerticalStackLayout Spacing="8"
-                                 HorizontalOptions="Center">
-                <Label Text="PolRob"
-                       FontSize="64"
-                       TextColor="White"
-                       FontFamily="OpenSansRegular"
-                       HorizontalOptions="Center"/>
+        <!-- 키보드가 올라오거나 화면 높이가 작아도 모든 입력 항목에 접근할 수 있습니다. -->
+        <ScrollView>
+            <VerticalStackLayout Padding="18,94,18,32"
+                                 Spacing="14">
 
-                <Label Text="계정으로 게임에 들어가기"
-                       FontSize="20"
-                       FontAttributes="Bold"
-                       TextColor="#d7d7d7"
-                       HorizontalOptions="Center"/>
-            </VerticalStackLayout>
+                <!-- 기존 캐릭터 자산과 텍스트로 구성한 화면 로고 -->
+                <Grid HeightRequest="128"
+                      MaximumWidthRequest="390"
+                      HorizontalOptions="Fill">
+                    <Image Source="lobby_police_avatar.png"
+                           WidthRequest="82"
+                           HeightRequest="82"
+                           Margin="42,0,0,0"
+                           HorizontalOptions="Start"
+                           VerticalOptions="Start"
+                           Aspect="AspectFit" />
+                    <Image Source="lobby_robber_avatar.png"
+                           WidthRequest="82"
+                           HeightRequest="82"
+                           Margin="0,0,42,0"
+                           HorizontalOptions="End"
+                           VerticalOptions="Start"
+                           Aspect="AspectFit" />
 
-            <Grid ColumnDefinitions="*,*"
-                  ColumnSpacing="25"
-                  HorizontalOptions="Center">
-                <Button x:Name="SignInButton"
-                        Grid.Column="0"
-                        Text="Login"
-                        FontAttributes="Bold"
-                        FontSize="24"
-                        TextColor="White"
-                        WidthRequest="150"
-                        HeightRequest="150"
-                        CornerRadius="25"
-                        Clicked="OnSignInClicked">
-                    <Button.Background>
-                        <LinearGradientBrush StartPoint="0,0"
-                                             EndPoint="0,1">
-                            <GradientStop Color="#1e3e96"
-                                          Offset="0.0"/>
-                            <GradientStop Color="#5e89f8"
-                                          Offset="1.0"/>
-                        </LinearGradientBrush>
-                    </Button.Background>
-                </Button>
+                    <Border WidthRequest="54"
+                            HeightRequest="60"
+                            Padding="0"
+                            Margin="0,0,0,42"
+                            BackgroundColor="#191A1D"
+                            Stroke="#F0C66E"
+                            StrokeThickness="3"
+                            HorizontalOptions="Center"
+                            VerticalOptions="Center">
+                        <Border.StrokeShape>
+                            <RoundRectangle CornerRadius="20" />
+                        </Border.StrokeShape>
+                        <Label Text="◆"
+                               FontSize="35"
+                               TextColor="#FFD21B"
+                               HorizontalTextAlignment="Center"
+                               VerticalTextAlignment="Center" />
+                    </Border>
 
-                <Button x:Name="SignUpButton"
-                        Grid.Column="1"
-                        Text="Sign Up"
-                        FontAttributes="Bold"
-                        FontSize="24"
-                        TextColor="Black"
-                        BackgroundColor="#f9d955"
-                        WidthRequest="150"
-                        HeightRequest="150"
-                        CornerRadius="25"
-                        Clicked="OnSignUpClicked"/>
-            </Grid>
+                    <Label Margin="0,50,0,0"
+                           FontFamily="OpenSansSemibold"
+                           FontAttributes="Bold"
+                           FontSize="58"
+                           CharacterSpacing="-3"
+                           HorizontalTextAlignment="Center"
+                           VerticalTextAlignment="Center">
+                        <Label.FormattedText>
+                            <FormattedString>
+                                <Span Text="POL"
+                                      TextColor="#168DFF" />
+                                <Span Text="ROB"
+                                      TextColor="#FF5A0A" />
+                            </FormattedString>
+                        </Label.FormattedText>
+                        <Label.Shadow>
+                            <Shadow Brush="#F0000000"
+                                    Offset="0,5"
+                                    Radius="5"
+                                    Opacity="1" />
+                        </Label.Shadow>
+                    </Label>
+                </Grid>
 
-            <VerticalStackLayout x:Name="FormPanel"
-                                 Spacing="12"
-                                 WidthRequest="320"
-                                 MaximumWidthRequest="360">
-                <Entry x:Name="NameEntry"
-                       Placeholder="이름"
-                       FontSize="17"
-                       TextColor="White"
-                       PlaceholderColor="#cfcfcf"
-                       BackgroundColor="#666666"
-                       HeightRequest="50"/>
+                <!-- 로그인 카드: 바깥 금색 프레임과 안쪽 남색 패널을 분리해 게임 UI 깊이감을 만듭니다. -->
+                <Border Padding="5"
+                        MaximumWidthRequest="430"
+                        BackgroundColor="#17191E"
+                        Stroke="#F2D292"
+                        StrokeThickness="4"
+                        HorizontalOptions="Fill">
+                    <Border.StrokeShape>
+                        <RoundRectangle CornerRadius="32" />
+                    </Border.StrokeShape>
+                    <Border.Shadow>
+                        <Shadow Brush="#E6000000"
+                                Offset="0,12"
+                                Radius="14"
+                                Opacity="0.9" />
+                    </Border.Shadow>
 
-                <Entry x:Name="PasswordEntry"
-                       Placeholder="비밀번호"
-                       IsPassword="True"
-                       FontSize="17"
-                       TextColor="White"
-                       PlaceholderColor="#cfcfcf"
-                       BackgroundColor="#666666"
-                       HeightRequest="50"/>
+                    <Border Padding="18,20,18,18"
+                            BackgroundColor="#071A36"
+                            Stroke="#344A6B"
+                            StrokeThickness="2">
+                        <Border.StrokeShape>
+                            <RoundRectangle CornerRadius="27" />
+                        </Border.StrokeShape>
 
-                <Entry x:Name="ConfirmPasswordEntry"
-                       Placeholder="비밀번호 확인"
-                       IsPassword="True"
-                       FontSize="17"
-                       TextColor="White"
-                       PlaceholderColor="#cfcfcf"
-                       BackgroundColor="#666666"
-                       HeightRequest="50"/>
-            </VerticalStackLayout>
+                        <VerticalStackLayout Spacing="13">
+                            <Label Text="계정으로 게임에 들어가기"
+                                   FontFamily="OpenSansSemibold"
+                                   FontAttributes="Bold"
+                                   FontSize="22"
+                                   TextColor="#FFF8E8"
+                                   HorizontalTextAlignment="Center">
+                                <Label.Shadow>
+                                    <Shadow Brush="#D0000000"
+                                            Offset="0,3"
+                                            Radius="3"
+                                            Opacity="1" />
+                                </Label.Shadow>
+                            </Label>
 
-            <Button x:Name="ContinueButton"
-                    Text="Login"
-                    FontAttributes="Bold"
-                    FontSize="20"
-                    TextColor="Black"
-                    BackgroundColor="#76d859"
-                    WidthRequest="320"
-                    HeightRequest="56"
-                    CornerRadius="18"
-                    Clicked="OnContinueClicked"/>
+                            <!-- 기존 Button을 유지하므로 탭 전환/비활성화 로직도 그대로 동작합니다. -->
+                            <Border HeightRequest="66"
+                                    Padding="5"
+                                    BackgroundColor="#16191F"
+                                    Stroke="#F1D397"
+                                    StrokeThickness="3">
+                                <Border.StrokeShape>
+                                    <RoundRectangle CornerRadius="23" />
+                                </Border.StrokeShape>
+                                <Grid ColumnDefinitions="*,*"
+                                      ColumnSpacing="3">
+                                    <Button x:Name="SignInButton"
+                                            Grid.Column="0"
+                                            Text="로그인"
+                                            FontFamily="OpenSansSemibold"
+                                            FontAttributes="Bold"
+                                            FontSize="23"
+                                            TextColor="#FFF8E8"
+                                            BorderColor="#4CC7FF"
+                                            BorderWidth="2"
+                                            CornerRadius="17"
+                                            Padding="4,0"
+                                            Clicked="OnSignInClicked">
+                                        <Button.Background>
+                                            <LinearGradientBrush StartPoint="0,0"
+                                                                 EndPoint="0,1">
+                                                <GradientStop Color="#178CF5"
+                                                              Offset="0" />
+                                                <GradientStop Color="#0748AF"
+                                                              Offset="1" />
+                                            </LinearGradientBrush>
+                                        </Button.Background>
+                                    </Button>
 
-            <Label x:Name="StatusLabel"
-                   Text=""
-                   FontSize="15"
-                   FontAttributes="Bold"
-                   HorizontalTextAlignment="Center"
-                   HorizontalOptions="Center"
-                   MaximumWidthRequest="340"
-                   TextColor="#d7d7d7"/>
+                                    <Button x:Name="SignUpButton"
+                                            Grid.Column="1"
+                                            Text="회원가입"
+                                            FontFamily="OpenSansSemibold"
+                                            FontAttributes="Bold"
+                                            FontSize="23"
+                                            TextColor="#FFF8E8"
+                                            BorderColor="#FFD55A"
+                                            BorderWidth="2"
+                                            CornerRadius="17"
+                                            Padding="4,0"
+                                            Clicked="OnSignUpClicked">
+                                        <Button.Background>
+                                            <LinearGradientBrush StartPoint="0,0"
+                                                                 EndPoint="0,1">
+                                                <GradientStop Color="#FFBF20"
+                                                              Offset="0" />
+                                                <GradientStop Color="#D97B00"
+                                                              Offset="1" />
+                                            </LinearGradientBrush>
+                                        </Button.Background>
+                                    </Button>
+                                </Grid>
+                            </Border>
+
+                            <VerticalStackLayout x:Name="FormPanel"
+                                                 Spacing="11">
+                                <VerticalStackLayout Spacing="5">
+                                    <Label Text="이름"
+                                           Margin="5,0,0,0"
+                                           FontFamily="OpenSansSemibold"
+                                           FontAttributes="Bold"
+                                           FontSize="20"
+                                           TextColor="#FFF8E8" />
+                                    <Border HeightRequest="58"
+                                            Padding="4"
+                                            BackgroundColor="#030913"
+                                            Stroke="#03060C"
+                                            StrokeThickness="3">
+                                        <Border.StrokeShape>
+                                            <RoundRectangle CornerRadius="17" />
+                                        </Border.StrokeShape>
+                                        <Border Padding="12,0"
+                                                BackgroundColor="#10223E"
+                                                Stroke="#38537A"
+                                                StrokeThickness="2">
+                                            <Border.StrokeShape>
+                                                <RoundRectangle CornerRadius="13" />
+                                            </Border.StrokeShape>
+                                            <Grid ColumnDefinitions="30,*"
+                                                  ColumnSpacing="9">
+                                                <Image Source="login_name.png"
+                                                       WidthRequest="27"
+                                                       HeightRequest="27"
+                                                       Aspect="AspectFit"
+                                                       VerticalOptions="Center" />
+                                                <Entry x:Name="NameEntry"
+                                                       Grid.Column="1"
+                                                       Placeholder="이름을 입력하세요"
+                                                       ReturnType="Next"
+                                                       ClearButtonVisibility="WhileEditing"
+                                                       FontSize="17"
+                                                       TextColor="#FFF8E8"
+                                                       PlaceholderColor="#8291A8"
+                                                       BackgroundColor="Transparent"
+                                                       VerticalTextAlignment="Center" />
+                                            </Grid>
+                                        </Border>
+                                    </Border>
+                                </VerticalStackLayout>
+
+                                <VerticalStackLayout Spacing="5">
+                                    <Label Text="비밀번호"
+                                           Margin="5,0,0,0"
+                                           FontFamily="OpenSansSemibold"
+                                           FontAttributes="Bold"
+                                           FontSize="20"
+                                           TextColor="#FFF8E8" />
+                                    <Border HeightRequest="58"
+                                            Padding="4"
+                                            BackgroundColor="#030913"
+                                            Stroke="#03060C"
+                                            StrokeThickness="3">
+                                        <Border.StrokeShape>
+                                            <RoundRectangle CornerRadius="17" />
+                                        </Border.StrokeShape>
+                                        <Border Padding="12,0"
+                                                BackgroundColor="#10223E"
+                                                Stroke="#38537A"
+                                                StrokeThickness="2">
+                                            <Border.StrokeShape>
+                                                <RoundRectangle CornerRadius="13" />
+                                            </Border.StrokeShape>
+                                            <Grid ColumnDefinitions="30,*"
+                                                  ColumnSpacing="9">
+                                                <Image Source="login_lock.png"
+                                                       WidthRequest="27"
+                                                       HeightRequest="27"
+                                                       Aspect="AspectFit"
+                                                       VerticalOptions="Center" />
+                                                <Entry x:Name="PasswordEntry"
+                                                       Grid.Column="1"
+                                                       Placeholder="비밀번호를 입력하세요"
+                                                       IsPassword="True"
+                                                       ReturnType="Done"
+                                                       FontSize="17"
+                                                       TextColor="#FFF8E8"
+                                                       PlaceholderColor="#8291A8"
+                                                       BackgroundColor="Transparent"
+                                                       VerticalTextAlignment="Center" />
+                                            </Grid>
+                                        </Border>
+                                    </Border>
+                                </VerticalStackLayout>
+
+                                <VerticalStackLayout x:Name="ConfirmPasswordField"
+                                                     Spacing="5">
+                                    <Label Text="비밀번호 확인"
+                                           Margin="5,0,0,0"
+                                           FontFamily="OpenSansSemibold"
+                                           FontAttributes="Bold"
+                                           FontSize="20"
+                                           TextColor="#FFF8E8" />
+                                    <Border HeightRequest="58"
+                                            Padding="4"
+                                            BackgroundColor="#030913"
+                                            Stroke="#03060C"
+                                            StrokeThickness="3">
+                                        <Border.StrokeShape>
+                                            <RoundRectangle CornerRadius="17" />
+                                        </Border.StrokeShape>
+                                        <Border Padding="12,0"
+                                                BackgroundColor="#10223E"
+                                                Stroke="#38537A"
+                                                StrokeThickness="2">
+                                            <Border.StrokeShape>
+                                                <RoundRectangle CornerRadius="13" />
+                                            </Border.StrokeShape>
+                                            <Grid ColumnDefinitions="30,*"
+                                                  ColumnSpacing="9">
+                                                <Image Source="login_lock.png"
+                                                       WidthRequest="27"
+                                                       HeightRequest="27"
+                                                       Aspect="AspectFit"
+                                                       VerticalOptions="Center" />
+                                                <Entry x:Name="ConfirmPasswordEntry"
+                                                       Grid.Column="1"
+                                                       Placeholder="비밀번호를 다시 입력하세요"
+                                                       IsPassword="True"
+                                                       ReturnType="Done"
+                                                       FontSize="17"
+                                                       TextColor="#FFF8E8"
+                                                       PlaceholderColor="#8291A8"
+                                                       BackgroundColor="Transparent"
+                                                       VerticalTextAlignment="Center" />
+                                            </Grid>
+                                        </Border>
+                                    </Border>
+                                </VerticalStackLayout>
+                            </VerticalStackLayout>
+
+                            <Border HeightRequest="78"
+                                    Margin="5,4,5,0"
+                                    Padding="5"
+                                    BackgroundColor="#17191E"
+                                    Stroke="#F4D89D"
+                                    StrokeThickness="4">
+                                <Border.StrokeShape>
+                                    <RoundRectangle CornerRadius="25" />
+                                </Border.StrokeShape>
+                                <Border.Shadow>
+                                    <Shadow Brush="#D8000000"
+                                            Offset="0,7"
+                                            Radius="8"
+                                            Opacity="0.85" />
+                                </Border.Shadow>
+                                <Button x:Name="ContinueButton"
+                                        Text="로그인"
+                                        FontFamily="OpenSansSemibold"
+                                        FontAttributes="Bold"
+                                        FontSize="31"
+                                        TextColor="#FFF8E8"
+                                        BorderColor="#52C9FF"
+                                        BorderWidth="2"
+                                        CornerRadius="18"
+                                        Padding="8,0"
+                                        Clicked="OnContinueClicked">
+                                    <Button.Background>
+                                        <LinearGradientBrush StartPoint="0,0"
+                                                             EndPoint="0,1">
+                                            <GradientStop Color="#168DF8"
+                                                          Offset="0" />
+                                            <GradientStop Color="#0647AD"
+                                                          Offset="1" />
+                                        </LinearGradientBrush>
+                                    </Button.Background>
+                                </Button>
+                            </Border>
+
+                            <Label x:Name="StatusLabel"
+                                   Text=""
+                                   MinimumHeightRequest="20"
+                                   FontFamily="OpenSansSemibold"
+                                   FontAttributes="Bold"
+                                   FontSize="14"
+                                   HorizontalTextAlignment="Center"
+                                   HorizontalOptions="Fill"
+                                   TextColor="#9FB0C9" />
+
+                            <Label Text="이름과 비밀번호로 계속"
+                                   FontFamily="OpenSansSemibold"
+                                   FontSize="14"
+                                   HorizontalTextAlignment="Center"
+                                   TextColor="#8194B0" />
+                        </VerticalStackLayout>
+                    </Border>
+                </Border>
             </VerticalStackLayout>
         </ScrollView>
 
-        <Label Grid.Row="2"
-               Text="이름과 비밀번호로 계속"
-               Margin="24,0,24,26"
-               FontSize="13"
-               HorizontalTextAlignment="Center"
-               TextColor="#bdbdbd"/>
+        <!-- 스크롤 콘텐츠와 독립시켜 항상 같은 위치에서 홈으로 돌아갈 수 있습니다. -->
+        <Border WidthRequest="64"
+                HeightRequest="64"
+                Margin="18,22,0,0"
+                Padding="0"
+                BackgroundColor="#171A22"
+                Stroke="#6D7380"
+                StrokeThickness="3"
+                HorizontalOptions="Start"
+                VerticalOptions="Start"
+                ZIndex="10"
+                SemanticProperties.Description="홈으로">
+            <Border.StrokeShape>
+                <RoundRectangle CornerRadius="18" />
+            </Border.StrokeShape>
+            <Border.Shadow>
+                <Shadow Brush="#CC000000"
+                        Offset="0,6"
+                        Radius="8"
+                        Opacity="0.75" />
+            </Border.Shadow>
+            <Border.GestureRecognizers>
+                <TapGestureRecognizer Tapped="OnHomeClicked" />
+            </Border.GestureRecognizers>
+            <Border Padding="6"
+                    BackgroundColor="#1477E8"
+                    Stroke="#55C7FF"
+                    StrokeThickness="2">
+                <Border.StrokeShape>
+                    <RoundRectangle CornerRadius="15" />
+                </Border.StrokeShape>
+                <Image Source="game_home.png"
+                       WidthRequest="45"
+                       HeightRequest="45"
+                       Aspect="AspectFit" />
+            </Border>
+        </Border>
     </Grid>
-
 </ContentPage>
