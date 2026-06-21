@@ -254,8 +254,10 @@ public class GameRoomService
             {
                 return new ServerResponse
                 {
-                    Success = false,
-                    Message = "방을 찾을 수 없습니다.",
+                    // 재시도 전에 방이 이미 정리되었더라도 사용자가 방에 없는
+                    // 최종 상태는 동일하므로 성공 응답을 돌려줍니다.
+                    Success = true,
+                    Message = "이미 방에서 나간 상태입니다.",
                     RoomId = roomId
                 };
             }

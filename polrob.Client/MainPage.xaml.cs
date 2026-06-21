@@ -5,6 +5,11 @@ namespace polrob.Client;
 
 public partial class MainPage : ContentPage
 {
+	private static readonly HttpClient HttpClient = new()
+	{
+		BaseAddress = new Uri(AuthSession.ApiBaseUrl)
+	};
+
 	public MainPage()
 	{
 		InitializeComponent();
@@ -52,8 +57,7 @@ public partial class MainPage : ContentPage
 		try
 		{
 			CreateButton.IsEnabled = false;
-			using var httpClient = new HttpClient { BaseAddress = new Uri(AuthSession.ApiBaseUrl) };
-			var response = await httpClient.PostAsJsonAsync(
+			var response = await HttpClient.PostAsJsonAsync(
 				"game/create",
 				new CreateRoomRequest(AuthSession.UserId, "custom", PlayerRole.Police, true));
 
@@ -72,7 +76,7 @@ public partial class MainPage : ContentPage
 
 			var roomId = Uri.EscapeDataString(serverResponse.RoomId);
 			var roomCode = Uri.EscapeDataString(serverResponse.RoomCode ?? string.Empty);
-			await Shell.Current.GoToAsync($"GameLobby?roomId={roomId}&roomCode={roomCode}&role={PlayerRole.Police}&isHost=true");
+			await Shell.Current.GoToAsync($"GameLobby?roomId={roomId}&roomCode={roomCode}&role={PlayerRole.Police}&isHost=true", false);
 		}
 		catch (HttpRequestException)
 		{

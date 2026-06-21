@@ -59,6 +59,9 @@
 		<!-- Images -->
 		<MauiImage Include="Resources\Images\*" />
 		<MauiImage Update="Resources\Images\dotnet_bot.png" Resize="True" BaseSize="300,185" />
+		<!-- 로비에서는 46dp로 표시하므로 1024px 원본을 그대로 디코딩하지 않습니다. -->
+		<MauiImage Update="Resources\Images\lobby_police_avatar.png" Resize="True" BaseSize="64,64" />
+		<MauiImage Update="Resources\Images\lobby_robber_avatar.png" Resize="True" BaseSize="64,64" />
 		<MauiImage Include="Resources\Splash\splashpolrob_new.png" Link="Resources\Images\splashpolrob_full.png" Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'" />
 		
 		<!-- Custom Fonts -->

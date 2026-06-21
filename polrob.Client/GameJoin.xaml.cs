@@ -34,27 +34,31 @@ public partial class GameJoin : ContentPage
 
     private void OnRandomClicked(object? sender, EventArgs e)
     {
+        ClearRandomSelection();
         ClearCustomSelection();
-
-        if (RoleSelectionLayout.IsVisible)
-        {
-            ClearRandomSelection();
-            return;
-        }
-
-        RoleSelectionLayout.IsVisible = true;
+        ModeSelectionLayout.IsVisible = false;
+        RandomJoinLayout.IsVisible = true;
+        ChangeMethodButton.IsVisible = true;
     }
 
     private void OnCustomClicked(object? sender, EventArgs e)
     {
         ClearRandomSelection();
-        CustomStatusLabel.Text = string.Empty;
-        CustomJoinLayout.IsVisible = !CustomJoinLayout.IsVisible;
+        ClearCustomSelection();
+        ModeSelectionLayout.IsVisible = false;
+        CustomJoinLayout.IsVisible = true;
+        ChangeMethodButton.IsVisible = true;
 
-        if (CustomJoinLayout.IsVisible)
-        {
-            RoomCodeEntry.Focus();
-        }
+        Dispatcher.Dispatch(() => RoomCodeEntry.Focus());
+    }
+
+    private void OnChangeMethodClicked(object? sender, EventArgs e)
+    {
+        ClearRandomSelection();
+        ClearCustomSelection();
+        RoomCodeEntry.Text = string.Empty;
+        ModeSelectionLayout.IsVisible = true;
+        ChangeMethodButton.IsVisible = false;
     }
 
     private async void OnJoinCustomClicked(object? sender, EventArgs e)
@@ -147,24 +151,38 @@ public partial class GameJoin : ContentPage
     private void UpdateAuthHeader()
     {
         ProfileButton.IsVisible = AuthSession.IsLoggedIn;
-        ProfileButton.Text = AuthSession.Name ?? string.Empty;
+        ProfileNameLabel.Text = AuthSession.Name ?? string.Empty;
     }
 
     private void SelectRole(PlayerRole role)
     {
         _selectedRole = role;
-        PoliceRoleFrame.BackgroundColor = role == PlayerRole.Police ? Colors.Red : Colors.Transparent;
-        RobberRoleFrame.BackgroundColor = role == PlayerRole.Robber ? Colors.Red : Colors.Transparent;
-        MatchingButton.IsVisible = true;
+        PoliceRoleFrame.BackgroundColor = role == PlayerRole.Police
+            ? Color.FromArgb("#145FAD")
+            : Color.FromArgb("#132D56");
+        RobberRoleFrame.BackgroundColor = role == PlayerRole.Robber
+            ? Color.FromArgb("#9B3518")
+            : Color.FromArgb("#132D56");
+        PoliceRoleFrame.Stroke = role == PlayerRole.Police
+            ? Color.FromArgb("#FFD95A")
+            : Color.FromArgb("#506B91");
+        RobberRoleFrame.Stroke = role == PlayerRole.Robber
+            ? Color.FromArgb("#FFD95A")
+            : Color.FromArgb("#506B91");
+        MatchingButton.IsEnabled = true;
+        MatchingButton.Opacity = 1;
     }
 
     private void ClearRandomSelection()
     {
         _selectedRole = null;
-        RoleSelectionLayout.IsVisible = false;
-        MatchingButton.IsVisible = false;
-        PoliceRoleFrame.BackgroundColor = Colors.Transparent;
-        RobberRoleFrame.BackgroundColor = Colors.Transparent;
+        RandomJoinLayout.IsVisible = false;
+        MatchingButton.IsEnabled = false;
+        MatchingButton.Opacity = 0.55;
+        PoliceRoleFrame.BackgroundColor = Color.FromArgb("#132D56");
+        RobberRoleFrame.BackgroundColor = Color.FromArgb("#132D56");
+        PoliceRoleFrame.Stroke = Color.FromArgb("#506B91");
+        RobberRoleFrame.Stroke = Color.FromArgb("#506B91");
     }
 
     private void ClearCustomSelection()

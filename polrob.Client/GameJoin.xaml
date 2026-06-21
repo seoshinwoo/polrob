@@ -1,175 +1,593 @@
-<?xml version="1.0" encoding="utf-8" ?>
+﻿<?xml version="1.0" encoding="utf-8" ?>
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              x:Class="polrob.Client.GameJoin"
-             BackgroundColor="#555555"
+             BackgroundColor="#050B1D"
              Shell.NavBarIsVisible="False">
 
     <Grid>
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="*"/>
-            <RowDefinition Height="*"/>
-        </Grid.RowDefinitions>
+        <Image Source="gamejoin_background.png"
+               Aspect="AspectFill"
+               HorizontalOptions="Fill"
+               VerticalOptions="Fill"
+               InputTransparent="True" />
 
-        <!-- Top Left Home Button -->
-        <Frame Grid.Row="0"
-               HorizontalOptions="Start"
-               VerticalOptions="Start"
-               Margin="20"
-               Padding="12,10"
-               BackgroundColor="#76d859"
-               CornerRadius="15"
-               BorderColor="Transparent"
-               HasShadow="False">
-            <Frame.GestureRecognizers>
-                <TapGestureRecognizer Tapped="OnHomeClicked"/>
-            </Frame.GestureRecognizers>
-            <Path Data="M10,20V14H14V20H19V12H22L12,3L2,12H5V20H10Z"
-                  Fill="Black"
-                  Aspect="Uniform"
-                  WidthRequest="35"
-                  HeightRequest="35"/>
-        </Frame>
+        <BoxView InputTransparent="True">
+            <BoxView.Background>
+                <LinearGradientBrush StartPoint="0,0"
+                                     EndPoint="0,1">
+                    <GradientStop Color="#12030A20"
+                                  Offset="0" />
+                    <GradientStop Color="#34030A18"
+                                  Offset="0.56" />
+                    <GradientStop Color="#98020712"
+                                  Offset="1" />
+                </LinearGradientBrush>
+            </BoxView.Background>
+        </BoxView>
 
-        <Button x:Name="ProfileButton"
-                Grid.Row="0"
-                Text=""
-                HorizontalOptions="End"
-                VerticalOptions="Start"
-                Margin="20"
-                CornerRadius="20"
-                FontAttributes="Bold"
-                FontSize="18"
-                TextColor="Black"
-                Padding="24,8"
-                BackgroundColor="#76d859"
-                IsVisible="False"
-                Clicked="OnProfileClicked"/>
+        <Grid Padding="18,22,18,24"
+              RowDefinitions="Auto,*">
 
-        <!-- Center Text -->
-        <Label Grid.Row="1"
-               Text="Join Room"
-               FontSize="46"
-               FontAttributes="Bold"
-               TextColor="White"
-               HorizontalOptions="Center"
-               VerticalOptions="Center"/>
+            <!-- 상단 홈 / 프로필 -->
+            <Grid Grid.Row="0"
+                  ColumnDefinitions="Auto,*,Auto">
+                <Border WidthRequest="64"
+                        HeightRequest="64"
+                        Padding="0"
+                        BackgroundColor="#171A22"
+                        Stroke="#6D7380"
+                        StrokeThickness="3"
+                        SemanticProperties.Description="홈으로">
+                    <Border.StrokeShape>
+                        <RoundRectangle CornerRadius="18" />
+                    </Border.StrokeShape>
+                    <Border.Shadow>
+                        <Shadow Brush="#CC000000"
+                                Offset="0,6"
+                                Radius="8"
+                                Opacity="0.75" />
+                    </Border.Shadow>
+                    <Border.GestureRecognizers>
+                        <TapGestureRecognizer Tapped="OnHomeClicked" />
+                    </Border.GestureRecognizers>
+                    <Border Padding="6"
+                            BackgroundColor="#1477E8"
+                            Stroke="#55C7FF"
+                            StrokeThickness="2">
+                        <Border.StrokeShape>
+                            <RoundRectangle CornerRadius="15" />
+                        </Border.StrokeShape>
+                        <Image Source="game_home.png"
+                               WidthRequest="45"
+                               HeightRequest="45"
+                               Aspect="AspectFit" />
+                    </Border>
+                </Border>
 
-        <!-- Buttons -->
-        <HorizontalStackLayout Grid.Row="2"
-                               Spacing="30"
-                               HorizontalOptions="Center"
-                               VerticalOptions="Start">
-            <VerticalStackLayout Spacing="12"
-                                 WidthRequest="150"
-                                 VerticalOptions="Start">
-                <Button Text="Random"
-                        FontAttributes="Bold"
-                        FontSize="24"
-                        TextColor="Black"
-                        BackgroundColor="#76d859"
-                        WidthRequest="150"
-                        HeightRequest="150"
-                        CornerRadius="25"
-                        Clicked="OnRandomClicked"/>
-
-                <HorizontalStackLayout x:Name="RoleSelectionLayout"
-                                       IsVisible="False"
-                                       Spacing="0"
-                                       HorizontalOptions="Center">
-                    <Frame x:Name="PoliceRoleFrame"
-                           WidthRequest="75"
-                           HeightRequest="75"
-                           Padding="8"
-                           BackgroundColor="Transparent"
-                           BorderColor="#76d859"
-                           CornerRadius="12"
-                           HasShadow="False">
-                        <Frame.GestureRecognizers>
-                            <TapGestureRecognizer Tapped="OnPoliceRoleClicked"/>
-                        </Frame.GestureRecognizers>
-                        <Image x:Name="PoliceRoleImage"
-                               Aspect="AspectFit"/>
-                    </Frame>
-
-                    <Frame x:Name="RobberRoleFrame"
-                           WidthRequest="75"
-                           HeightRequest="75"
-                           Padding="8"
-                           BackgroundColor="Transparent"
-                           BorderColor="#76d859"
-                           CornerRadius="12"
-                           HasShadow="False">
-                        <Frame.GestureRecognizers>
-                            <TapGestureRecognizer Tapped="OnRobberRoleClicked"/>
-                        </Frame.GestureRecognizers>
-                        <Image x:Name="RobberRoleImage"
-                               Aspect="AspectFit"/>
-                    </Frame>
-                </HorizontalStackLayout>
-
-                <Button x:Name="MatchingButton"
-                        Text="Matching"
+                <Border x:Name="ProfileButton"
+                        Grid.Column="2"
                         IsVisible="False"
-                        FontAttributes="Bold"
-                        FontSize="16"
-                        TextColor="Black"
-                        BackgroundColor="#76d859"
-                        WidthRequest="150"
-                        HeightRequest="44"
-                        CornerRadius="14"
-                        Clicked="OnMatchingClicked"/>
-            </VerticalStackLayout>
+                        HeightRequest="64"
+                        MinimumWidthRequest="172"
+                        Padding="0"
+                        BackgroundColor="#171A22"
+                        Stroke="#6D7380"
+                        StrokeThickness="3"
+                        SemanticProperties.Description="프로필">
+                    <Border.StrokeShape>
+                        <RoundRectangle CornerRadius="21" />
+                    </Border.StrokeShape>
+                    <Border.Shadow>
+                        <Shadow Brush="#CC000000"
+                                Offset="0,6"
+                                Radius="8"
+                                Opacity="0.75" />
+                    </Border.Shadow>
+                    <Border.GestureRecognizers>
+                        <TapGestureRecognizer Tapped="OnProfileClicked" />
+                    </Border.GestureRecognizers>
+                    <Border Padding="9,5"
+                            BackgroundColor="#1266CF"
+                            Stroke="#5CC8FF"
+                            StrokeThickness="2">
+                        <Border.StrokeShape>
+                            <RoundRectangle CornerRadius="18" />
+                        </Border.StrokeShape>
+                        <Grid ColumnDefinitions="36,*"
+                              ColumnSpacing="10">
+                            <!-- MainPage와 같은 기본 사용자 이미지입니다. -->
+                            <Image Source="main_login_user.png"
+                                   WidthRequest="32"
+                                   HeightRequest="32"
+                                   Aspect="AspectFit" />
+                            <Label x:Name="ProfileNameLabel"
+                                   Grid.Column="1"
+                                   FontFamily="OpenSansSemibold"
+                                   FontAttributes="Bold"
+                                   FontSize="18"
+                                   TextColor="#FFF8E8"
+                                   MaxLines="1"
+                                   LineBreakMode="TailTruncation"
+                                   VerticalTextAlignment="Center"
+                                   HorizontalTextAlignment="Center">
+                                <Label.Shadow>
+                                    <Shadow Brush="#AA001735"
+                                            Offset="0,2"
+                                            Radius="2"
+                                            Opacity="1" />
+                                </Label.Shadow>
+                            </Label>
+                        </Grid>
+                    </Border>
+                </Border>
+            </Grid>
 
-            <VerticalStackLayout Spacing="12"
-                                 WidthRequest="150"
-                                 VerticalOptions="Start">
-                <Button x:Name="CustomButton"
-                        Text="Custom"
-                        FontAttributes="Bold"
-                        FontSize="24"
-                        TextColor="Black"
-                        BackgroundColor="#f9d955"
-                        WidthRequest="150"
-                        HeightRequest="150"
-                        CornerRadius="25"
-                        VerticalOptions="Start"
-                        Clicked="OnCustomClicked"/>
-
-                <VerticalStackLayout x:Name="CustomJoinLayout"
-                                     IsVisible="False"
-                                     Spacing="10">
-                    <Entry x:Name="RoomCodeEntry"
-                           Placeholder="Room Code"
-                           TextColor="White"
-                           PlaceholderColor="#dddddd"
-                           BackgroundColor="#444444"
-                           FontSize="18"
+            <!-- 제목과 현재 참가 화면을 한 그룹으로 묶어 최초 시안의 간격을 유지합니다. -->
+            <VerticalStackLayout Grid.Row="1"
+                                 Spacing="0"
+                                 VerticalOptions="Center">
+            <Grid
+                  HeightRequest="100"
+                  Margin="54,0,54,20"
+                  TranslationY="-10">
+                <Border Padding="12"
+                        BackgroundColor="#102F66"
+                        Stroke="#F1D49A"
+                        StrokeThickness="4">
+                    <Border.StrokeShape>
+                        <RoundRectangle CornerRadius="24" />
+                    </Border.StrokeShape>
+                    <Border.Shadow>
+                        <Shadow Brush="#D8000000"
+                                Offset="0,8"
+                                Radius="10"
+                                Opacity="0.8" />
+                    </Border.Shadow>
+                    <Label Text="게임 참가"
+                           FontFamily="OpenSansSemibold"
                            FontAttributes="Bold"
-                           MaxLength="6"
+                           FontSize="36"
+                           TextColor="#FFF8E8"
                            HorizontalTextAlignment="Center"
-                           TextChanged="OnRoomCodeTextChanged"/>
+                           VerticalTextAlignment="Center">
+                        <Label.Shadow>
+                            <Shadow Brush="#CB020816"
+                                    Offset="0,4"
+                                    Radius="3"
+                                    Opacity="1" />
+                        </Label.Shadow>
+                    </Label>
+                </Border>
+            </Grid>
 
-                    <Button x:Name="JoinCustomButton"
-                            Text="Join"
-                            FontAttributes="Bold"
-                            FontSize="16"
-                            TextColor="Black"
-                            BackgroundColor="#f9d955"
-                            WidthRequest="150"
-                            HeightRequest="44"
-                            CornerRadius="14"
-                            Clicked="OnJoinCustomClicked"/>
+            <Grid RowDefinitions="Auto,Auto"
+                  MaximumWidthRequest="620"
+                  HorizontalOptions="Fill">
 
-                    <Label x:Name="CustomStatusLabel"
-                           Text=""
-                           FontSize="13"
-                           TextColor="White"
-                           HorizontalTextAlignment="Center"/>
-                </VerticalStackLayout>
+                <!-- 최초 진입: 참가 방식 선택 -->
+                <Grid x:Name="ModeSelectionLayout"
+                      Grid.Row="0"
+                      ColumnDefinitions="*,*"
+                      ColumnSpacing="14"
+                      VerticalOptions="Center">
+                    <Border Grid.Column="0"
+                            HeightRequest="292"
+                            Padding="0"
+                            BackgroundColor="#171A22"
+                            Stroke="#F7D9A0"
+                            StrokeThickness="4"
+                            SemanticProperties.Description="랜덤 방 선택">
+                        <Border.StrokeShape>
+                            <RoundRectangle CornerRadius="30" />
+                        </Border.StrokeShape>
+                        <Border.Shadow>
+                            <Shadow Brush="#E0000000"
+                                    Offset="0,9"
+                                    Radius="12"
+                                    Opacity="0.85" />
+                        </Border.Shadow>
+                        <Border.GestureRecognizers>
+                            <TapGestureRecognizer Tapped="OnRandomClicked" />
+                        </Border.GestureRecognizers>
+                        <Border Padding="12,14"
+                                Stroke="#62D4FF"
+                                StrokeThickness="2">
+                            <Border.StrokeShape>
+                                <RoundRectangle CornerRadius="26" />
+                            </Border.StrokeShape>
+                            <Border.Background>
+                                <LinearGradientBrush StartPoint="0,0"
+                                                     EndPoint="0,1">
+                                    <GradientStop Color="#168EF7"
+                                                  Offset="0" />
+                                    <GradientStop Color="#064AAF"
+                                                  Offset="1" />
+                                </LinearGradientBrush>
+                            </Border.Background>
+                            <Grid RowDefinitions="*,Auto,Auto"
+                                  RowSpacing="6">
+                                <!-- 경찰서는 제외하고 주사위만 표시합니다. -->
+                                <Image Source="join_random_dice.png"
+                                       WidthRequest="126"
+                                       HeightRequest="126"
+                                       HorizontalOptions="Center"
+                                       Aspect="AspectFit" />
+                                <Label Grid.Row="1"
+                                       Text="랜덤 방"
+                                       FontFamily="OpenSansSemibold"
+                                       FontAttributes="Bold"
+                                       FontSize="28"
+                                       TextColor="#FFF8E8"
+                                       HorizontalTextAlignment="Center">
+                                    <Label.Shadow>
+                                        <Shadow Brush="#B500173C"
+                                                Offset="0,3"
+                                                Radius="2"
+                                                Opacity="1" />
+                                    </Label.Shadow>
+                                </Label>
+                                <Border Grid.Row="2"
+                                        Padding="10,7"
+                                        Margin="8,4,8,0"
+                                        BackgroundColor="#163D82"
+                                        Stroke="#0A2A66"
+                                        StrokeThickness="2">
+                                    <Border.StrokeShape>
+                                        <RoundRectangle CornerRadius="11" />
+                                    </Border.StrokeShape>
+                                    <Label Text="바로 매칭"
+                                           FontFamily="OpenSansSemibold"
+                                           FontAttributes="Bold"
+                                           FontSize="16"
+                                           TextColor="#FFF8E8"
+                                           HorizontalTextAlignment="Center" />
+                                </Border>
+                            </Grid>
+                        </Border>
+                    </Border>
+
+                    <Border Grid.Column="1"
+                            HeightRequest="292"
+                            Padding="0"
+                            BackgroundColor="#171A22"
+                            Stroke="#F7D9A0"
+                            StrokeThickness="4"
+                            SemanticProperties.Description="커스텀 방 선택">
+                        <Border.StrokeShape>
+                            <RoundRectangle CornerRadius="30" />
+                        </Border.StrokeShape>
+                        <Border.Shadow>
+                            <Shadow Brush="#E0000000"
+                                    Offset="0,9"
+                                    Radius="12"
+                                    Opacity="0.85" />
+                        </Border.Shadow>
+                        <Border.GestureRecognizers>
+                            <TapGestureRecognizer Tapped="OnCustomClicked" />
+                        </Border.GestureRecognizers>
+                        <Border Padding="12,14"
+                                Stroke="#FFB052"
+                                StrokeThickness="2">
+                            <Border.StrokeShape>
+                                <RoundRectangle CornerRadius="26" />
+                            </Border.StrokeShape>
+                            <Border.Background>
+                                <LinearGradientBrush StartPoint="0,0"
+                                                     EndPoint="0,1">
+                                    <GradientStop Color="#FF9A16"
+                                                  Offset="0" />
+                                    <GradientStop Color="#DE430D"
+                                                  Offset="1" />
+                                </LinearGradientBrush>
+                            </Border.Background>
+                            <Grid RowDefinitions="*,Auto,Auto"
+                                  RowSpacing="6">
+                                <Image Source="join_custom_key.png"
+                                       WidthRequest="126"
+                                       HeightRequest="126"
+                                       HorizontalOptions="Center"
+                                       Aspect="AspectFit" />
+                                <Label Grid.Row="1"
+                                       Text="커스텀 방"
+                                       FontFamily="OpenSansSemibold"
+                                       FontAttributes="Bold"
+                                       FontSize="28"
+                                       TextColor="#FFF8E8"
+                                       HorizontalTextAlignment="Center">
+                                    <Label.Shadow>
+                                        <Shadow Brush="#B5360700"
+                                                Offset="0,3"
+                                                Radius="2"
+                                                Opacity="1" />
+                                    </Label.Shadow>
+                                </Label>
+                                <Border Grid.Row="2"
+                                        Padding="10,7"
+                                        Margin="8,4,8,0"
+                                        BackgroundColor="#9A320F"
+                                        Stroke="#642006"
+                                        StrokeThickness="2">
+                                    <Border.StrokeShape>
+                                        <RoundRectangle CornerRadius="11" />
+                                    </Border.StrokeShape>
+                                    <Label Text="코드로 참가"
+                                           FontFamily="OpenSansSemibold"
+                                           FontAttributes="Bold"
+                                           FontSize="16"
+                                           TextColor="#FFF8E8"
+                                           HorizontalTextAlignment="Center" />
+                                </Border>
+                            </Grid>
+                        </Border>
+                    </Border>
+                </Grid>
+
+                <!-- 랜덤 방: 역할 선택 후 참가 -->
+                <Border x:Name="RandomJoinLayout"
+                        Grid.Row="0"
+                        IsVisible="False"
+                        Padding="0"
+                        Margin="22,8"
+                        VerticalOptions="Center"
+                        BackgroundColor="#171A22"
+                        Stroke="#F7D9A0"
+                        StrokeThickness="4">
+                    <Border.StrokeShape>
+                        <RoundRectangle CornerRadius="30" />
+                    </Border.StrokeShape>
+                    <Border.Shadow>
+                        <Shadow Brush="#E0000000"
+                                Offset="0,9"
+                                Radius="12"
+                                Opacity="0.85" />
+                    </Border.Shadow>
+                    <Border Padding="20"
+                            BackgroundColor="#0E3F86"
+                            Stroke="#62D4FF"
+                            StrokeThickness="2">
+                        <Border.StrokeShape>
+                            <RoundRectangle CornerRadius="26" />
+                        </Border.StrokeShape>
+                        <VerticalStackLayout Spacing="16">
+                            <Label Text="역할을 선택하세요"
+                                   FontFamily="OpenSansSemibold"
+                                   FontAttributes="Bold"
+                                   FontSize="26"
+                                   TextColor="#FFF8E8"
+                                   HorizontalTextAlignment="Center" />
+
+                            <Grid x:Name="RoleSelectionLayout"
+                                  ColumnDefinitions="*,*"
+                                  ColumnSpacing="14">
+                                <Border x:Name="PoliceRoleFrame"
+                                        Grid.Column="0"
+                                        HeightRequest="172"
+                                        Padding="10"
+                                        BackgroundColor="#132D56"
+                                        Stroke="#506B91"
+                                        StrokeThickness="3"
+                                        SemanticProperties.Description="경찰 역할">
+                                    <Border.StrokeShape>
+                                        <RoundRectangle CornerRadius="20" />
+                                    </Border.StrokeShape>
+                                    <Border.GestureRecognizers>
+                                        <TapGestureRecognizer Tapped="OnPoliceRoleClicked" />
+                                    </Border.GestureRecognizers>
+                                    <Grid RowDefinitions="*,Auto">
+                                        <Image x:Name="PoliceRoleImage"
+                                               Margin="4"
+                                               Aspect="AspectFit" />
+                                        <Label Grid.Row="1"
+                                               Text="경찰"
+                                               FontFamily="OpenSansSemibold"
+                                               FontAttributes="Bold"
+                                               FontSize="23"
+                                               TextColor="White"
+                                               HorizontalTextAlignment="Center" />
+                                    </Grid>
+                                </Border>
+
+                                <Border x:Name="RobberRoleFrame"
+                                        Grid.Column="1"
+                                        HeightRequest="172"
+                                        Padding="10"
+                                        BackgroundColor="#132D56"
+                                        Stroke="#506B91"
+                                        StrokeThickness="3"
+                                        SemanticProperties.Description="도둑 역할">
+                                    <Border.StrokeShape>
+                                        <RoundRectangle CornerRadius="20" />
+                                    </Border.StrokeShape>
+                                    <Border.GestureRecognizers>
+                                        <TapGestureRecognizer Tapped="OnRobberRoleClicked" />
+                                    </Border.GestureRecognizers>
+                                    <Grid RowDefinitions="*,Auto">
+                                        <Image x:Name="RobberRoleImage"
+                                               Margin="4"
+                                               Aspect="AspectFit" />
+                                        <Label Grid.Row="1"
+                                               Text="도둑"
+                                               FontFamily="OpenSansSemibold"
+                                               FontAttributes="Bold"
+                                               FontSize="23"
+                                               TextColor="White"
+                                               HorizontalTextAlignment="Center" />
+                                    </Grid>
+                                </Border>
+                            </Grid>
+
+                            <Border x:Name="MatchingButton"
+                                    IsEnabled="False"
+                                    Opacity="0.55"
+                                    HeightRequest="58"
+                                    Padding="0"
+                                    BackgroundColor="#172016"
+                                    Stroke="#F7D9A0"
+                                    StrokeThickness="3"
+                                    SemanticProperties.Description="랜덤 매칭 참가">
+                                <Border.StrokeShape>
+                                    <RoundRectangle CornerRadius="18" />
+                                </Border.StrokeShape>
+                                <Border.GestureRecognizers>
+                                    <TapGestureRecognizer Tapped="OnMatchingClicked" />
+                                </Border.GestureRecognizers>
+                                <Border BackgroundColor="#3FCB37"
+                                        Stroke="#8AF56F"
+                                        StrokeThickness="2">
+                                    <Border.StrokeShape>
+                                        <RoundRectangle CornerRadius="15" />
+                                    </Border.StrokeShape>
+                                    <Label Text="참가"
+                                           FontFamily="OpenSansSemibold"
+                                           FontAttributes="Bold"
+                                           FontSize="25"
+                                           TextColor="#FFF8E8"
+                                           HorizontalTextAlignment="Center"
+                                           VerticalTextAlignment="Center" />
+                                </Border>
+                            </Border>
+                        </VerticalStackLayout>
+                    </Border>
+                </Border>
+
+                <!-- 커스텀 방: 코드 입력 후 참가 -->
+                <Border x:Name="CustomJoinLayout"
+                        Grid.Row="0"
+                        IsVisible="False"
+                        Padding="0"
+                        Margin="22,8"
+                        VerticalOptions="Center"
+                        BackgroundColor="#171A22"
+                        Stroke="#F7D9A0"
+                        StrokeThickness="4">
+                    <Border.StrokeShape>
+                        <RoundRectangle CornerRadius="30" />
+                    </Border.StrokeShape>
+                    <Border.Shadow>
+                        <Shadow Brush="#E0000000"
+                                Offset="0,9"
+                                Radius="12"
+                                Opacity="0.85" />
+                    </Border.Shadow>
+                    <Border Padding="22"
+                            Stroke="#FFB052"
+                            StrokeThickness="2">
+                        <Border.StrokeShape>
+                            <RoundRectangle CornerRadius="26" />
+                        </Border.StrokeShape>
+                        <Border.Background>
+                            <LinearGradientBrush StartPoint="0,0"
+                                                 EndPoint="0,1">
+                                <GradientStop Color="#D85811"
+                                              Offset="0" />
+                                <GradientStop Color="#8E270D"
+                                              Offset="1" />
+                            </LinearGradientBrush>
+                        </Border.Background>
+                        <VerticalStackLayout Spacing="16">
+                            <Image Source="join_custom_key.png"
+                                   WidthRequest="92"
+                                   HeightRequest="92"
+                                   HorizontalOptions="Center"
+                                   Aspect="AspectFit" />
+                            <Label Text="방 코드를 입력하세요"
+                                   FontFamily="OpenSansSemibold"
+                                   FontAttributes="Bold"
+                                   FontSize="25"
+                                   TextColor="#FFF8E8"
+                                   HorizontalTextAlignment="Center" />
+
+                            <Border HeightRequest="62"
+                                    Padding="15,0"
+                                    BackgroundColor="#E20B1020"
+                                    Stroke="#F7D9A0"
+                                    StrokeThickness="3">
+                                <Border.StrokeShape>
+                                    <RoundRectangle CornerRadius="16" />
+                                </Border.StrokeShape>
+                                <Entry x:Name="RoomCodeEntry"
+                                       Placeholder="방 코드 6자리"
+                                       TextColor="White"
+                                       PlaceholderColor="#AEB8CA"
+                                       BackgroundColor="Transparent"
+                                       FontFamily="OpenSansSemibold"
+                                       FontSize="21"
+                                       FontAttributes="Bold"
+                                       CharacterSpacing="4"
+                                       MaxLength="6"
+                                       HorizontalTextAlignment="Center"
+                                       ReturnType="Done"
+                                       TextChanged="OnRoomCodeTextChanged" />
+                            </Border>
+
+                            <Border x:Name="JoinCustomButton"
+                                    HeightRequest="58"
+                                    Padding="0"
+                                    BackgroundColor="#172016"
+                                    Stroke="#F7D9A0"
+                                    StrokeThickness="3"
+                                    SemanticProperties.Description="커스텀 방 참가">
+                                <Border.StrokeShape>
+                                    <RoundRectangle CornerRadius="18" />
+                                </Border.StrokeShape>
+                                <Border.GestureRecognizers>
+                                    <TapGestureRecognizer Tapped="OnJoinCustomClicked" />
+                                </Border.GestureRecognizers>
+                                <Border BackgroundColor="#FF8616"
+                                        Stroke="#FFC35B"
+                                        StrokeThickness="2">
+                                    <Border.StrokeShape>
+                                        <RoundRectangle CornerRadius="15" />
+                                    </Border.StrokeShape>
+                                    <Label Text="참가"
+                                           FontFamily="OpenSansSemibold"
+                                           FontAttributes="Bold"
+                                           FontSize="25"
+                                           TextColor="#FFF8E8"
+                                           HorizontalTextAlignment="Center"
+                                           VerticalTextAlignment="Center" />
+                                </Border>
+                            </Border>
+
+                            <Label x:Name="CustomStatusLabel"
+                                   Text=""
+                                   MinimumHeightRequest="20"
+                                   FontFamily="OpenSansSemibold"
+                                   FontSize="14"
+                                   TextColor="#FFF1B5"
+                                   HorizontalTextAlignment="Center" />
+                        </VerticalStackLayout>
+                    </Border>
+                </Border>
+
+                <!-- 선택한 참가 방식을 취소하고 처음 화면으로 돌아갑니다. -->
+                <Border x:Name="ChangeMethodButton"
+                        Grid.Row="1"
+                        IsVisible="False"
+                        HeightRequest="42"
+                        Margin="0,10,0,0"
+                        Padding="16,0"
+                        HorizontalOptions="Center"
+                        BackgroundColor="#D8171A22"
+                        Stroke="#8D95A5"
+                        StrokeThickness="2"
+                        SemanticProperties.Description="참가 방식 변경">
+                    <Border.StrokeShape>
+                        <RoundRectangle CornerRadius="14" />
+                    </Border.StrokeShape>
+                    <Border.GestureRecognizers>
+                        <TapGestureRecognizer Tapped="OnChangeMethodClicked" />
+                    </Border.GestureRecognizers>
+                    <Label Text="‹  참가 방식 변경"
+                           FontFamily="OpenSansSemibold"
+                           FontAttributes="Bold"
+                           FontSize="15"
+                           TextColor="#FFF8E8"
+                           VerticalTextAlignment="Center" />
+                </Border>
+            </Grid>
             </VerticalStackLayout>
-        </HorizontalStackLayout>
+        </Grid>
     </Grid>
-
 </ContentPage>

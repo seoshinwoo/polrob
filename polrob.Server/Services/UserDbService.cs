@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Net;
 using System.Security.Cryptography;
 using System.Text.Json.Serialization;
@@ -6,6 +7,7 @@ using Microsoft.Azure.Cosmos;
 public class UserDbService
 {
     private readonly CosmosClient _cosmosClient;
+    private readonly ConcurrentDictionary<string, User> _usersById = new();
     private Database _database = null!;
     private Container _container = null!;
 
@@ -56,7 +58,9 @@ public class UserDbService
         try
         {
             await _container.CreateItemAsync(document, new PartitionKey(document.Id));
-            return document.ToUser();
+            var user = document.ToUser();
+            _usersById[user.Id] = user;
+            return user;
         }
         catch (CosmosException ex) when (ex.StatusCode == HttpStatusCode.Conflict)
         {
@@ -72,15 +76,24 @@ public class UserDbService
             return null;
         }
 
-        return document.ToUser();
+        var user = document.ToUser();
+        _usersById[user.Id] = user;
+        return user;
     }
 
     public async Task<User?> GetUserAsync(string id)
     {
+        if (_usersById.TryGetValue(id, out var cachedUser))
+        {
+            return cachedUser;
+        }
+
         try
         {
             var response = await _container.ReadItemAsync<UserDocument>(id, new PartitionKey(id));
-            return response.Resource.ToUser();
+            var user = response.Resource.ToUser();
+            _usersById[user.Id] = user;
+            return user;
         }
         catch (CosmosException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
         {

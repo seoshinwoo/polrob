@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96">
+  <defs>
+    <linearGradient id="house" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fffdf5"/>
+      <stop offset="1" stop-color="#d6dde8"/>
+    </linearGradient>
+  </defs>
+  <path d="M10 45L48 11l38 34-9 10-7-6v34H55V61H41v22H26V49l-7 6z" fill="url(#house)" stroke="#17243a" stroke-width="7" stroke-linejoin="round"/>
+  <path d="M33 43h30" stroke="#ffffff" stroke-width="4" opacity=".45" stroke-linecap="round"/>
+</svg>

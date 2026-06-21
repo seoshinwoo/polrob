@@ -1,137 +1,391 @@
-<?xml version="1.0" encoding="utf-8" ?>
+﻿<?xml version="1.0" encoding="utf-8" ?>
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              x:Class="polrob.Client.GameLobby"
-             BackgroundColor="#555555"
+             BackgroundColor="#050B1D"
              Shell.NavBarIsVisible="False">
 
-    <Grid RowDefinitions="Auto, Auto, *, Auto"
-            Padding="0,20,0,0">
+    <Grid>
+        <Image Source="gamejoin_background.png"
+               Aspect="AspectFill"
+               HorizontalOptions="Fill"
+               VerticalOptions="Fill"
+               InputTransparent="True" />
 
-        <!-- Top Left Home Button -->
-        <Frame Grid.Row="0"
-               HorizontalOptions="Start"
-               VerticalOptions="Start"
-               Margin="20,0,0,0"
-               Padding="12,10"
-               BackgroundColor="#76d859"
-               CornerRadius="15"
-               BorderColor="Transparent"
-               HasShadow="False">
-            <Frame.GestureRecognizers>
-                <TapGestureRecognizer Tapped="OnHomeClicked"/>
-            </Frame.GestureRecognizers>
-            <Path Data="M10,20V14H14V20H19V12H22L12,3L2,12H5V20H10Z"
-                  Fill="Black"
-                  Aspect="Uniform"
-                  WidthRequest="35"
-                  HeightRequest="35"/>
-        </Frame>
+        <BoxView InputTransparent="True">
+            <BoxView.Background>
+                <LinearGradientBrush StartPoint="0,0"
+                                     EndPoint="0,1">
+                    <GradientStop Color="#14030A20"
+                                  Offset="0" />
+                    <GradientStop Color="#3C030A18"
+                                  Offset="0.5" />
+                    <GradientStop Color="#A0020712"
+                                  Offset="1" />
+                </LinearGradientBrush>
+            </BoxView.Background>
+        </BoxView>
 
-        <Button x:Name="ProfileButton"
-                Grid.Row="0"
-                Text=""
-                HorizontalOptions="End"
-                VerticalOptions="Start"
-                Margin="0,0,20,0"
-                CornerRadius="20"
-                FontAttributes="Bold"
-                FontSize="18"
-                TextColor="Black"
-                Padding="24,8"
-                BackgroundColor="#76d859"
-                IsVisible="False"
-                Clicked="OnProfileClicked"/>
+        <Grid Padding="18,22,18,24"
+              RowDefinitions="Auto,Auto,Auto,*,Auto">
 
-        <!-- Center Text "Lobby" -->
-        <VerticalStackLayout Grid.Row="1"
-                             Spacing="8"
-                             HorizontalOptions="Center"
-                             Margin="0,30,0,32">
-            <Label Text="Lobby"
-                   FontSize="46"
-                   FontAttributes="Bold"
-                   TextColor="White"
-                   HorizontalOptions="Center"/>
+            <!-- 상단 홈 / 프로필 -->
+            <Grid Grid.Row="0"
+                  ColumnDefinitions="Auto,*,Auto">
+                <Border WidthRequest="64"
+                        HeightRequest="64"
+                        Padding="0"
+                        BackgroundColor="#171A22"
+                        Stroke="#6D7380"
+                        StrokeThickness="3"
+                        SemanticProperties.Description="홈으로">
+                    <Border.StrokeShape>
+                        <RoundRectangle CornerRadius="18" />
+                    </Border.StrokeShape>
+                    <Border.Shadow>
+                        <Shadow Brush="#CC000000"
+                                Offset="0,6"
+                                Radius="8"
+                                Opacity="0.75" />
+                    </Border.Shadow>
+                    <Border.GestureRecognizers>
+                        <TapGestureRecognizer Tapped="OnHomeClicked" />
+                    </Border.GestureRecognizers>
+                    <Border Padding="6"
+                            BackgroundColor="#1477E8"
+                            Stroke="#55C7FF"
+                            StrokeThickness="2">
+                        <Border.StrokeShape>
+                            <RoundRectangle CornerRadius="15" />
+                        </Border.StrokeShape>
+                        <Image Source="game_home.png"
+                               WidthRequest="45"
+                               HeightRequest="45"
+                               Aspect="AspectFit" />
+                    </Border>
+                </Border>
 
-            <Label x:Name="RoomCodeLabel"
-                   Text=""
-                   FontSize="22"
-                   FontAttributes="Bold"
-                   TextColor="#f9d955"
-                   HorizontalOptions="Center"/>
-
-            <Label x:Name="LobbyStatusLabel"
-                   Text=""
-                   FontSize="15"
-                   TextColor="White"
-                   HorizontalTextAlignment="Center"
-                   HorizontalOptions="Center"/>
-        </VerticalStackLayout>
-
-        <!-- Two Columns with Vertical Separator -->
-        <Grid Grid.Row="2"
-                ColumnDefinitions="*, 2, *">
-            <!-- Police Area -->
-            <Grid x:Name="PoliceArea"
-                  Grid.Column="0"
-                  BackgroundColor="Transparent">
-                <Grid.GestureRecognizers>
-                    <TapGestureRecognizer Tapped="OnPoliceAreaTapped"/>
-                </Grid.GestureRecognizers>
-                <VerticalStackLayout>
-                    <Label Text="Police"
-                           FontSize="24"
-                           FontAttributes="Bold"
-                           TextColor="White"
-                           HorizontalOptions="Center"
-                           Margin="0,0,0,20"/>
-
-                    <!-- Police Players will be added here -->
-                    <VerticalStackLayout x:Name="PoliceList"
-                            Spacing="10"/>
-                </VerticalStackLayout>
+                <Border x:Name="ProfileButton"
+                        Grid.Column="2"
+                        IsVisible="False"
+                        HeightRequest="64"
+                        MinimumWidthRequest="172"
+                        Padding="0"
+                        BackgroundColor="#171A22"
+                        Stroke="#6D7380"
+                        StrokeThickness="3"
+                        SemanticProperties.Description="프로필">
+                    <Border.StrokeShape>
+                        <RoundRectangle CornerRadius="21" />
+                    </Border.StrokeShape>
+                    <Border.Shadow>
+                        <Shadow Brush="#CC000000"
+                                Offset="0,6"
+                                Radius="8"
+                                Opacity="0.75" />
+                    </Border.Shadow>
+                    <Border.GestureRecognizers>
+                        <TapGestureRecognizer Tapped="OnProfileClicked" />
+                    </Border.GestureRecognizers>
+                    <Border Padding="9,5"
+                            BackgroundColor="#1266CF"
+                            Stroke="#5CC8FF"
+                            StrokeThickness="2">
+                        <Border.StrokeShape>
+                            <RoundRectangle CornerRadius="18" />
+                        </Border.StrokeShape>
+                        <Grid ColumnDefinitions="36,*"
+                              ColumnSpacing="10">
+                            <Image Source="main_login_user.png"
+                                   WidthRequest="32"
+                                   HeightRequest="32"
+                                   Aspect="AspectFit" />
+                            <Label x:Name="ProfileNameLabel"
+                                   Grid.Column="1"
+                                   FontFamily="OpenSansSemibold"
+                                   FontAttributes="Bold"
+                                   FontSize="18"
+                                   TextColor="#FFF8E8"
+                                   MaxLines="1"
+                                   LineBreakMode="TailTruncation"
+                                   VerticalTextAlignment="Center"
+                                   HorizontalTextAlignment="Center">
+                                <Label.Shadow>
+                                    <Shadow Brush="#AA001735"
+                                            Offset="0,2"
+                                            Radius="2"
+                                            Opacity="1" />
+                                </Label.Shadow>
+                            </Label>
+                        </Grid>
+                    </Border>
+                </Border>
             </Grid>
 
-            <!-- Separator line -->
-            <BoxView Grid.Column="1"
-                    Color="White"
-                    VerticalOptions="Fill"/>
+            <!-- 경찰 배지 없이 제목만 표시합니다. -->
+            <Border Grid.Row="1"
+                    HeightRequest="88"
+                    Margin="54,18,54,10"
+                    Padding="12"
+                    BackgroundColor="#102F66"
+                    Stroke="#F1D49A"
+                    StrokeThickness="4">
+                <Border.StrokeShape>
+                    <RoundRectangle CornerRadius="24" />
+                </Border.StrokeShape>
+                <Border.Shadow>
+                    <Shadow Brush="#D8000000"
+                            Offset="0,8"
+                            Radius="10"
+                            Opacity="0.8" />
+                </Border.Shadow>
+                <Label Text="게임 로비"
+                       FontFamily="OpenSansSemibold"
+                       FontAttributes="Bold"
+                       FontSize="35"
+                       TextColor="#FFF8E8"
+                       HorizontalTextAlignment="Center"
+                       VerticalTextAlignment="Center">
+                    <Label.Shadow>
+                        <Shadow Brush="#CB020816"
+                                Offset="0,4"
+                                Radius="3"
+                                Opacity="1" />
+                    </Label.Shadow>
+                </Label>
+            </Border>
 
-            <!-- Robber Area -->
-            <Grid x:Name="RobberArea"
-                  Grid.Column="2"
-                  BackgroundColor="Transparent">
-                <Grid.GestureRecognizers>
-                    <TapGestureRecognizer Tapped="OnRobberAreaTapped"/>
-                </Grid.GestureRecognizers>
-                <VerticalStackLayout>
-                    <Label Text="Robber"
-                           FontSize="24"
-                           FontAttributes="Bold"
-                           TextColor="White"
-                           HorizontalOptions="Center"
-                           Margin="0,0,0,20"/>
+            <!-- 방 코드와 복사 버튼 -->
+            <VerticalStackLayout Grid.Row="2"
+                                 Spacing="4"
+                                 Margin="0,0,0,10"
+                                 HorizontalOptions="Center">
+                <Border HeightRequest="52"
+                        Padding="5"
+                        BackgroundColor="#171A22"
+                        Stroke="#F1D49A"
+                        StrokeThickness="3">
+                    <Border.StrokeShape>
+                        <RoundRectangle CornerRadius="17" />
+                    </Border.StrokeShape>
+                    <Border.Shadow>
+                        <Shadow Brush="#C9000000"
+                                Offset="0,5"
+                                Radius="7"
+                                Opacity="0.75" />
+                    </Border.Shadow>
+                    <Grid ColumnDefinitions="Auto,44"
+                          ColumnSpacing="8">
+                        <Label x:Name="RoomCodeLabel"
+                               Text="방 코드"
+                               Padding="14,0,4,0"
+                               FontFamily="OpenSansSemibold"
+                               FontAttributes="Bold"
+                               FontSize="20"
+                               TextColor="#FFD447"
+                               VerticalTextAlignment="Center" />
 
-                    <!-- Robber Players will be added here -->
-                    <VerticalStackLayout x:Name="RobberList"
-                            Spacing="10"/>
-                </VerticalStackLayout>
+                        <Border x:Name="CopyRoomCodeButton"
+                                Grid.Column="1"
+                                Padding="8"
+                                BackgroundColor="#1C73D6"
+                                Stroke="#65CEFF"
+                                StrokeThickness="2"
+                                SemanticProperties.Description="방 코드 복사">
+                            <Border.StrokeShape>
+                                <RoundRectangle CornerRadius="11" />
+                            </Border.StrokeShape>
+                            <Border.GestureRecognizers>
+                                <TapGestureRecognizer Tapped="OnCopyRoomCodeClicked" />
+                            </Border.GestureRecognizers>
+                            <Image Source="lobby_copy.png"
+                                   WidthRequest="25"
+                                   HeightRequest="25"
+                                   Aspect="AspectFit" />
+                        </Border>
+                    </Grid>
+                </Border>
+
+                <!-- 성공 시에는 비워두고 오류/복사 결과만 잠시 표시합니다. -->
+                <Label x:Name="LobbyStatusLabel"
+                       Text=""
+                       MinimumHeightRequest="18"
+                       FontFamily="OpenSansSemibold"
+                       FontSize="13"
+                       TextColor="#FFF1B5"
+                       HorizontalTextAlignment="Center"
+                       HorizontalOptions="Center" />
+            </VerticalStackLayout>
+
+            <!-- 역할별 플레이어 패널: 인원수 표시는 의도적으로 넣지 않습니다. -->
+            <Grid Grid.Row="3"
+                  ColumnDefinitions="*,*"
+                  ColumnSpacing="12"
+                  Margin="0,0,0,12">
+                <Border x:Name="PoliceArea"
+                        Grid.Column="0"
+                        Padding="0"
+                        BackgroundColor="Transparent"
+                        Stroke="#F7D9A0"
+                        StrokeThickness="4"
+                        SemanticProperties.Description="경찰 팀 선택">
+                    <Border.StrokeShape>
+                        <RoundRectangle CornerRadius="28" />
+                    </Border.StrokeShape>
+                    <Border.Shadow>
+                        <Shadow Brush="#E0000000"
+                                Offset="0,8"
+                                Radius="11"
+                                Opacity="0.82" />
+                    </Border.Shadow>
+                    <Border.GestureRecognizers>
+                        <TapGestureRecognizer Tapped="OnPoliceAreaTapped" />
+                    </Border.GestureRecognizers>
+                    <Border Padding="9"
+                            BackgroundColor="#0A3778"
+                            Stroke="#62D4FF"
+                            StrokeThickness="2">
+                        <Border.StrokeShape>
+                            <RoundRectangle CornerRadius="24" />
+                        </Border.StrokeShape>
+                        <Grid RowDefinitions="64,*">
+                            <Border Padding="7"
+                                    BackgroundColor="#1477E8"
+                                    Stroke="#5CC8FF"
+                                    StrokeThickness="2">
+                                <Border.StrokeShape>
+                                    <RoundRectangle CornerRadius="16" />
+                                </Border.StrokeShape>
+                                <Grid ColumnDefinitions="50,*"
+                                      ColumnSpacing="5">
+                                    <Image Source="lobby_police_avatar.png"
+                                           WidthRequest="48"
+                                           HeightRequest="48"
+                                           Aspect="AspectFit" />
+                                    <Label Grid.Column="1"
+                                           Text="경찰"
+                                           FontFamily="OpenSansSemibold"
+                                           FontAttributes="Bold"
+                                           FontSize="25"
+                                           TextColor="#FFF8E8"
+                                           HorizontalTextAlignment="Center"
+                                           VerticalTextAlignment="Center" />
+                                </Grid>
+                            </Border>
+                            <ScrollView Grid.Row="1"
+                                        Margin="0,10,0,0">
+                                <VerticalStackLayout x:Name="PoliceList"
+                                                     Spacing="8" />
+                            </ScrollView>
+                        </Grid>
+                    </Border>
+                </Border>
+
+                <Border x:Name="RobberArea"
+                        Grid.Column="1"
+                        Padding="0"
+                        BackgroundColor="Transparent"
+                        Stroke="#F7D9A0"
+                        StrokeThickness="4"
+                        SemanticProperties.Description="도둑 팀 선택">
+                    <Border.StrokeShape>
+                        <RoundRectangle CornerRadius="28" />
+                    </Border.StrokeShape>
+                    <Border.Shadow>
+                        <Shadow Brush="#E0000000"
+                                Offset="0,8"
+                                Radius="11"
+                                Opacity="0.82" />
+                    </Border.Shadow>
+                    <Border.GestureRecognizers>
+                        <TapGestureRecognizer Tapped="OnRobberAreaTapped" />
+                    </Border.GestureRecognizers>
+                    <Border Padding="9"
+                            BackgroundColor="#741E0D"
+                            Stroke="#FF9A42"
+                            StrokeThickness="2">
+                        <Border.StrokeShape>
+                            <RoundRectangle CornerRadius="24" />
+                        </Border.StrokeShape>
+                        <Grid RowDefinitions="64,*">
+                            <Border Padding="7"
+                                    BackgroundColor="#E64813"
+                                    Stroke="#FFAA53"
+                                    StrokeThickness="2">
+                                <Border.StrokeShape>
+                                    <RoundRectangle CornerRadius="16" />
+                                </Border.StrokeShape>
+                                <Grid ColumnDefinitions="50,*"
+                                      ColumnSpacing="5">
+                                    <Image Source="lobby_robber_avatar.png"
+                                           WidthRequest="48"
+                                           HeightRequest="48"
+                                           Aspect="AspectFit" />
+                                    <Label Grid.Column="1"
+                                           Text="도둑"
+                                           FontFamily="OpenSansSemibold"
+                                           FontAttributes="Bold"
+                                           FontSize="25"
+                                           TextColor="#FFF8E8"
+                                           HorizontalTextAlignment="Center"
+                                           VerticalTextAlignment="Center" />
+                                </Grid>
+                            </Border>
+                            <ScrollView Grid.Row="1"
+                                        Margin="0,10,0,0">
+                                <VerticalStackLayout x:Name="RobberList"
+                                                     Spacing="8" />
+                            </ScrollView>
+                        </Grid>
+                    </Border>
+                </Border>
             </Grid>
+
+            <!-- 방장이고 두 역할이 모두 있을 때만 표시됩니다. -->
+            <Border x:Name="StartGameButton"
+                    Grid.Row="4"
+                    IsVisible="False"
+                    HeightRequest="70"
+                    Margin="24,0"
+                    Padding="0"
+                    BackgroundColor="#182016"
+                    Stroke="#F7D36D"
+                    StrokeThickness="4"
+                    SemanticProperties.Description="게임 시작">
+                <Border.StrokeShape>
+                    <RoundRectangle CornerRadius="23" />
+                </Border.StrokeShape>
+                <Border.Shadow>
+                    <Shadow Brush="#D8000000"
+                            Offset="0,8"
+                            Radius="10"
+                            Opacity="0.82" />
+                </Border.Shadow>
+                <Border.GestureRecognizers>
+                    <TapGestureRecognizer Tapped="OnGameStartClicked" />
+                </Border.GestureRecognizers>
+                <Border BackgroundColor="#3FCB20"
+                        Stroke="#8AF064"
+                        StrokeThickness="2">
+                    <Border.StrokeShape>
+                        <RoundRectangle CornerRadius="19" />
+                    </Border.StrokeShape>
+                    <Label Text="게임 시작"
+                           FontFamily="OpenSansSemibold"
+                           FontAttributes="Bold"
+                           FontSize="30"
+                           TextColor="#FFF8E8"
+                           HorizontalTextAlignment="Center"
+                           VerticalTextAlignment="Center">
+                        <Label.Shadow>
+                            <Shadow Brush="#9F123000"
+                                    Offset="0,3"
+                                    Radius="2"
+                                    Opacity="1" />
+                        </Label.Shadow>
+                    </Label>
+                </Border>
+            </Border>
         </Grid>
-
-        <!-- Bottom Game Start Button -->
-        <Button x:Name="StartGameButton"
-                Grid.Row="3"
-                Text="Game Start"
-                FontAttributes="Bold"
-                FontSize="24"
-                TextColor="Black"
-                BackgroundColor="#76d859"
-                HeightRequest="80"
-                CornerRadius="20"
-                Margin="30,40,30,40"
-                Clicked="OnGameStartClicked"/>
     </Grid>
-
 </ContentPage>

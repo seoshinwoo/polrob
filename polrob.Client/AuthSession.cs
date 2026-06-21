@@ -5,7 +5,9 @@ namespace polrob.Client;
 
 public static class AuthSession
 {
-    private const string LocalNetworkServerHost = "192.0.0.2";
+    private const string LocalNetworkServerHost = "192.168.0.211";
+    private static readonly SemaphoreSlim LoadLock = new(1, 1);
+    private static bool _isLoaded;
 
     public static string? SessionToken { get; private set; }
     public static string? UserId { get; private set; }
@@ -18,9 +20,29 @@ public static class AuthSession
 
     public static async Task LoadAsync()
     {
-        SessionToken = await SecureStorage.GetAsync("sessionToken");
-        UserId = Preferences.Get("userId", null);
-        Name = Preferences.Get("name", null);
+        if (_isLoaded)
+        {
+            return;
+        }
+
+        await LoadLock.WaitAsync();
+        try
+        {
+            if (_isLoaded)
+            {
+                return;
+            }
+
+            SessionToken = await SecureStorage.GetAsync("sessionToken");
+            UserId = Preferences.Get("userId", null);
+            Name = Preferences.Get("name", null);
+            _isLoaded = true;
+        }
+        finally
+        {
+            LoadLock.Release();
+        }
+
         Changed?.Invoke();
     }
 
@@ -29,6 +51,7 @@ public static class AuthSession
         SessionToken = sessionToken;
         UserId = userId;
         Name = name;
+        _isLoaded = true;
 
         await SecureStorage.SetAsync("sessionToken", sessionToken);
         Preferences.Set("userId", userId);
@@ -57,6 +80,7 @@ public static class AuthSession
         SessionToken = null;
         UserId = null;
         Name = null;
+        _isLoaded = true;
 
         SecureStorage.Remove("sessionToken");
         Preferences.Remove("playerId");

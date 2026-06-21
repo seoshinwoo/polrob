@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using Microsoft.AspNetCore.SignalR;
 using polrob.Shared;
 
@@ -11,10 +12,12 @@ public class GameRoomHub : Hub
     private static readonly ConcurrentDictionary<string, string> ActiveUserConnections = new();
 
     private readonly GameRoomService _gameRoomService;
+    private readonly ILogger<GameRoomHub> _logger;
 
-    public GameRoomHub(GameRoomService gameRoomService)
+    public GameRoomHub(GameRoomService gameRoomService, ILogger<GameRoomHub> logger)
     {
         _gameRoomService = gameRoomService;
+        _logger = logger;
     }
 
     public async Task JoinRoom(string roomId, string userId)
@@ -99,16 +102,49 @@ public class GameRoomHub : Hub
 
     public async Task CancelMatching(string roomId, string userId)
     {
+        await CancelMatchingWithAcknowledgement(roomId, userId);
+    }
+
+    public async Task<ServerResponse> CancelMatchingWithAcknowledgement(string roomId, string userId)
+    {
         if (string.IsNullOrWhiteSpace(roomId) || string.IsNullOrWhiteSpace(userId))
         {
-            return;
+            return new ServerResponse
+            {
+                Success = false,
+                Message = "방 ID와 사용자 ID가 필요합니다.",
+                RoomId = roomId
+            };
+        }
+
+        var startedAt = Stopwatch.GetTimestamp();
+        var status = _gameRoomService.RemovePlayer(roomId, userId);
+        if (!status.Success)
+        {
+            return status;
         }
 
         RemoveConnectionTracking(Context.ConnectionId, roomId, userId);
-        await Groups.RemoveFromGroupAsync(Context.ConnectionId, roomId);
 
-        var status = _gameRoomService.RemovePlayer(roomId, userId);
-        await Clients.Group(roomId).SendAsync("RoomStatusUpdated", status);
+        try
+        {
+            await Groups.RemoveFromGroupAsync(Context.ConnectionId, roomId);
+            await Clients.Group(roomId).SendAsync("RoomStatusUpdated", status);
+        }
+        catch (Exception ex)
+        {
+            // 방의 플레이어 제거는 이미 완료되었습니다. 그룹 정리나 다른 사용자에게
+            // 상태를 알리는 과정의 실패 때문에 호출자에게 잘못된 실패를 반환하지 않습니다.
+            _logger.LogWarning(ex, "Room {RoomId} leave notification failed after removing user {UserId}.", roomId, userId);
+        }
+
+        _logger.LogInformation(
+            "Room {RoomId} removed user {UserId} in {ElapsedMilliseconds:F1} ms.",
+            roomId,
+            userId,
+            Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds);
+
+        return status;
     }
 
     public override async Task OnDisconnectedAsync(Exception? exception)

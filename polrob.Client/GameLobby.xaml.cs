@@ -1,4 +1,6 @@
+using Microsoft.AspNetCore.Http.Connections;
 using Microsoft.AspNetCore.SignalR.Client;
+using Microsoft.Maui.Controls.Shapes;
 using polrob.Shared;
 
 namespace polrob.Client;
@@ -21,6 +23,7 @@ public partial class GameLobby : ContentPage
     private bool _isHost;
     private bool _canStartGame;
     private bool _isNavigatingToGame;
+    private bool _isNavigatingHome;
 
     public string RoomId
     {
@@ -36,7 +39,7 @@ public partial class GameLobby : ContentPage
             {
                 RoomCodeLabel.Text = string.IsNullOrWhiteSpace(_roomCode)
                     ? string.Empty
-                    : $"Code: {_roomCode}";
+                    : $"방 코드  {_roomCode}";
             }
         }
     }
@@ -77,7 +80,7 @@ public partial class GameLobby : ContentPage
 
         RoomCodeLabel.Text = string.IsNullOrWhiteSpace(_roomCode)
             ? string.Empty
-            : $"Code: {_roomCode}";
+            : $"방 코드  {_roomCode}";
         UpdateStartButtonVisibility();
         UpdateRoleAreaBackgrounds();
 
@@ -89,13 +92,104 @@ public partial class GameLobby : ContentPage
 
     private async void OnHomeClicked(object? sender, EventArgs e)
     {
-        await DisconnectRoomUpdatesAsync(removePlayer: true);
-        await Shell.Current.GoToAsync("..", true);
+        if (_isNavigatingHome)
+        {
+            return;
+        }
+
+        _isNavigatingHome = true;
+        var leaveAcknowledged = await LeaveRoomForHomeAsync();
+        if (!leaveAcknowledged)
+        {
+            _isNavigatingHome = false;
+            return;
+        }
+
+        await Shell.Current.GoToAsync("..", false);
+    }
+
+    private async Task<bool> LeaveRoomForHomeAsync()
+    {
+        if (_hubConnection == null || _hubConnection.State != HubConnectionState.Connected)
+        {
+            LobbyStatusLabel.Text = "서버 연결이 복구된 뒤 다시 시도해주세요.";
+            return false;
+        }
+
+        var connection = _hubConnection;
+
+        try
+        {
+            if (string.IsNullOrWhiteSpace(_roomId) || string.IsNullOrWhiteSpace(AuthSession.UserId))
+            {
+                LobbyStatusLabel.Text = "방 또는 로그인 정보를 확인할 수 없습니다.";
+                return false;
+            }
+
+            LobbyStatusLabel.Text = "방에서 나가는 중...";
+            var response = await connection.InvokeAsync<ServerResponse?>(
+                "CancelMatchingWithAcknowledgement",
+                _roomId,
+                AuthSession.UserId);
+
+            if (response == null)
+            {
+                LobbyStatusLabel.Text = "서버에서 방 나가기 확인 응답을 받지 못했습니다.";
+                return false;
+            }
+
+            if (!response.Success)
+            {
+                LobbyStatusLabel.Text = response.Message ?? "서버가 방 나가기를 처리하지 못했습니다.";
+                return false;
+            }
+
+            // 서버가 플레이어 제거를 완료했다는 명시적인 응답을 받은 뒤에만 이동합니다.
+            _hubConnection = null;
+            _ = DisposeConnectionAsync(connection);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            LobbyStatusLabel.Text = $"방 나가기를 확인하지 못했습니다: {ex.Message}";
+            return false;
+        }
+    }
+
+    private static async Task DisposeConnectionAsync(HubConnection connection)
+    {
+        try
+        {
+            await connection.DisposeAsync();
+        }
+        catch
+        {
+            // 연결은 이미 로비에서 분리됐으므로 폐기 오류가 화면 이동을 막지 않습니다.
+        }
     }
 
     private async void OnProfileClicked(object? sender, EventArgs e)
     {
         await Shell.Current.GoToAsync("Profile");
+    }
+
+    private async void OnCopyRoomCodeClicked(object? sender, EventArgs e)
+    {
+        if (string.IsNullOrWhiteSpace(_roomCode))
+        {
+            LobbyStatusLabel.Text = "복사할 방 코드가 없습니다.";
+            return;
+        }
+
+        await Clipboard.Default.SetTextAsync(_roomCode);
+        const string copiedMessage = "방 코드가 복사되었습니다.";
+        LobbyStatusLabel.Text = copiedMessage;
+
+        await Task.Delay(1500);
+        if (LobbyStatusLabel.Text == copiedMessage)
+        {
+            LobbyStatusLabel.Text = string.Empty;
+        }
     }
 
     private async void OnPoliceAreaTapped(object? sender, EventArgs e)
@@ -122,7 +216,7 @@ public partial class GameLobby : ContentPage
     private void UpdateAuthHeader()
     {
         ProfileButton.IsVisible = AuthSession.IsLoggedIn;
-        ProfileButton.Text = AuthSession.Name ?? string.Empty;
+        ProfileNameLabel.Text = AuthSession.Name ?? string.Empty;
     }
 
     private async Task StartRoomUpdatesAsync(string roomId, string userId)
@@ -133,7 +227,13 @@ public partial class GameLobby : ContentPage
         }
 
         _hubConnection = new HubConnectionBuilder()
-            .WithUrl(new Uri(new Uri(AuthSession.ApiBaseUrl), "hubs/game-room"))
+            .WithUrl(
+                new Uri(new Uri(AuthSession.ApiBaseUrl), "hubs/game-room"),
+                options =>
+                {
+                    options.Transports = HttpTransportType.WebSockets;
+                    options.SkipNegotiation = true;
+                })
             .WithAutomaticReconnect()
             .Build();
 
@@ -182,10 +282,10 @@ public partial class GameLobby : ContentPage
         if (!string.IsNullOrWhiteSpace(response.RoomCode))
         {
             _roomCode = response.RoomCode;
-            RoomCodeLabel.Text = $"Code: {_roomCode}";
+            RoomCodeLabel.Text = $"방 코드  {_roomCode}";
         }
 
-        LobbyStatusLabel.Text = $"{response.CurrentCount}/{response.MaxCount}";
+        LobbyStatusLabel.Text = string.Empty;
         _canStartGame = response.Players.Any(p => p.Role == PlayerRole.Police)
             && response.Players.Any(p => p.Role == PlayerRole.Robber);
 
@@ -200,8 +300,8 @@ public partial class GameLobby : ContentPage
 
         UpdateRoleAreaBackgrounds();
         UpdateStartButtonVisibility();
-        RenderPlayerList(PoliceList, response.Players.Where(p => p.Role == PlayerRole.Police));
-        RenderPlayerList(RobberList, response.Players.Where(p => p.Role == PlayerRole.Robber));
+        RenderPlayerList(PoliceList, response.Players.Where(p => p.Role == PlayerRole.Police), PlayerRole.Police);
+        RenderPlayerList(RobberList, response.Players.Where(p => p.Role == PlayerRole.Robber), PlayerRole.Robber);
     }
 
     private async Task ChangeRoleAsync(PlayerRole role)
@@ -232,10 +332,16 @@ public partial class GameLobby : ContentPage
         PoliceArea.BackgroundColor = _role == PlayerRole.Police
             ? PoliceSelectedColor
             : Colors.Transparent;
+        PoliceArea.Stroke = _role == PlayerRole.Police
+            ? Color.FromArgb("#FFF06A")
+            : Color.FromArgb("#F7D9A0");
 
         RobberArea.BackgroundColor = _role == PlayerRole.Robber
             ? RobberSelectedColor
             : Colors.Transparent;
+        RobberArea.Stroke = _role == PlayerRole.Robber
+            ? Color.FromArgb("#FFF06A")
+            : Color.FromArgb("#F7D9A0");
     }
 
     private void UpdateStartButtonVisibility()
@@ -243,19 +349,77 @@ public partial class GameLobby : ContentPage
         StartGameButton.IsVisible = _isHost && _canStartGame;
     }
 
-    private static void RenderPlayerList(Layout list, IEnumerable<Player> players)
+    private void RenderPlayerList(Layout list, IEnumerable<Player> players, PlayerRole role)
     {
         list.Children.Clear();
         foreach (var player in players)
         {
-            list.Children.Add(new Label
+            var isLocalPlayer = player.Id == AuthSession.UserId;
+            var card = new Border
+            {
+                HeightRequest = 64,
+                Padding = new Thickness(7, 5),
+                BackgroundColor = role == PlayerRole.Police
+                    ? Color.FromArgb("#15366D")
+                    : Color.FromArgb("#672010"),
+                Stroke = isLocalPlayer
+                    ? Color.FromArgb("#FFD84B")
+                    : role == PlayerRole.Police
+                        ? Color.FromArgb("#2369BD")
+                        : Color.FromArgb("#B83A18"),
+                StrokeThickness = isLocalPlayer ? 3 : 2,
+                StrokeShape = new RoundRectangle { CornerRadius = new CornerRadius(15) }
+            };
+
+            var content = new Grid
+            {
+                ColumnDefinitions =
+                {
+                    new ColumnDefinition(new GridLength(48)),
+                    new ColumnDefinition(GridLength.Star)
+                },
+                ColumnSpacing = 6
+            };
+
+            var avatarFrame = new Border
+            {
+                WidthRequest = 46,
+                HeightRequest = 46,
+                Padding = 0,
+                BackgroundColor = role == PlayerRole.Police
+                    ? Color.FromArgb("#0D5DB7")
+                    : Color.FromArgb("#A93214"),
+                Stroke = role == PlayerRole.Police
+                    ? Color.FromArgb("#59C8FF")
+                    : Color.FromArgb("#FF8A3D"),
+                StrokeThickness = 2,
+                StrokeShape = new RoundRectangle { CornerRadius = new CornerRadius(23) },
+                Content = new Image
+                {
+                    Source = ImageSource.FromFile(role == PlayerRole.Police
+                        ? "lobby_police_avatar.png"
+                        : "lobby_robber_avatar.png"),
+                    Aspect = Aspect.AspectFit
+                }
+            };
+
+            var nameLabel = new Label
             {
                 Text = string.IsNullOrWhiteSpace(player.Name) ? player.Id : player.Name,
-                FontSize = 18,
+                FontFamily = "OpenSansSemibold",
+                FontSize = 16,
                 FontAttributes = FontAttributes.Bold,
                 TextColor = Colors.White,
+                MaxLines = 1,
+                LineBreakMode = LineBreakMode.TailTruncation,
+                VerticalTextAlignment = TextAlignment.Center,
                 HorizontalTextAlignment = TextAlignment.Center
-            });
+            };
+
+            content.Add(avatarFrame);
+            content.Add(nameLabel, 1);
+            card.Content = content;
+            list.Children.Add(card);
         }
     }
 
