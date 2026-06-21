@@ -13,6 +13,7 @@ public class GameMap
     private const float PondRadius = 36f * LayoutScale;
     private const float BushSize = 32f * LayoutScale;
     private readonly Dictionary<(int X, int Y), List<Obstacle>> _obstaclesByCell = new();
+    private readonly List<Obstacle> _bushes = new();
     private float _maximumObstacleExtent;
 
     public float Width = 5000;
@@ -72,6 +73,42 @@ public class GameMap
                 }
             }
         }
+    }
+
+    public Obstacle? FindBushContainingPoint(float x, float y)
+    {
+        foreach (var bush in _bushes)
+        {
+            if (ContainsPoint(bush, x, y))
+            {
+                return bush;
+            }
+        }
+
+        return null;
+    }
+
+    public static bool IsBushObstacle(Obstacle obstacle) =>
+        obstacle.ImageFileName == "bush.png";
+
+    public static bool ContainsPoint(Obstacle obstacle, float x, float y)
+    {
+        if (obstacle.Type == "Rect")
+        {
+            return x >= obstacle.LeftTop.X &&
+                   x <= obstacle.RightBottom.X &&
+                   y >= obstacle.LeftTop.Y &&
+                   y <= obstacle.RightBottom.Y;
+        }
+
+        if (obstacle.Type == "Circle")
+        {
+            var dx = x - obstacle.CenterX.X;
+            var dy = y - obstacle.CenterX.Y;
+            return (dx * dx) + (dy * dy) <= obstacle.Radius * obstacle.Radius;
+        }
+
+        return false;
     }
 
     private void AddWalls()
@@ -208,7 +245,7 @@ public class GameMap
         var centerY = layoutCenterY * LayoutScale;
         var halfSize = size / 2f;
 
-        Obstacles.Add(new Obstacle
+        var obstacle = new Obstacle
         {
             Type = "Rect",
             ImageFileName = imageFileName,
@@ -216,7 +253,13 @@ public class GameMap
             LeftBottom = new PointF(centerX - halfSize, centerY + halfSize),
             RightTop = new PointF(centerX + halfSize, centerY - halfSize),
             RightBottom = new PointF(centerX + halfSize, centerY + halfSize)
-        });
+        };
+
+        Obstacles.Add(obstacle);
+        if (IsBushObstacle(obstacle))
+        {
+            _bushes.Add(obstacle);
+        }
     }
 
     private void AddCircleObstacle(string imageFileName, float layoutCenterX, float layoutCenterY, float radius)

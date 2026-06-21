@@ -785,6 +785,12 @@ public class GameNetworkServer : BackgroundService
                     continue;
                 }
 
+                var robberBush = _map.FindBushContainingPoint(robber.X, robber.Y);
+                if (robberBush != null && !GameMap.ContainsPoint(robberBush, police.X, police.Y))
+                {
+                    continue;
+                }
+
                 if (IsPointInVision(police, robber.X, robber.Y))
                 {
                     StartArrest(gameSession, police, robber);

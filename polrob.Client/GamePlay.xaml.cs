@@ -48,6 +48,7 @@ public partial class GamePlay : ContentPage
     private const byte FogOpacity = 120;
     private const float PlayerNameFontSize = 28f;
     private const float PlayerNameMaxWidth = 180f;
+    private const byte BushPlayerOpacity = 185;
     private const float RenderCullPadding = 100f;
     private readonly List<Obstacle> _nearbyCollisionObstacles = new();
     private readonly SemaphoreSlim _assetLoadLock = new(1, 1);
@@ -774,6 +775,12 @@ public partial class GamePlay : ContentPage
         _gameMap.GetNearbyObstacles(x, y, radius, _nearbyCollisionObstacles);
         foreach (var obs in _nearbyCollisionObstacles)
         {
+            // 부쉬는 충돌 장애물이 아니라 자유롭게 드나드는 은신 영역이다.
+            if (GameMap.IsBushObstacle(obs))
+            {
+                continue;
+            }
+
             if (obs.Type == "Rect")
             {
                 var rect = new SKRect(obs.LeftTop.X, obs.LeftTop.Y, obs.RightBottom.X, obs.RightBottom.Y);
@@ -927,6 +934,17 @@ public partial class GamePlay : ContentPage
     {
         foreach (var player in _players.Values)
         {
+            var containingBush = _gameMap.FindBushContainingPoint(player.X, player.Y);
+            var isInsideBush = containingBush != null;
+
+            // 부쉬 밖에서는 안쪽의 다른 플레이어가 보이지 않는다. 같은 부쉬 안에서는 다시 보인다.
+            if (player.Id != _player.Id &&
+                containingBush != null &&
+                !GameMap.ContainsPoint(containingBush, _player.X, _player.Y))
+            {
+                continue;
+            }
+
             // 플레이어 렌더링
             SKBitmap? currentBitmap = null;
             bool isArrested = _arrestVisualTimers.TryGetValue(player.Id, out var arrestEnd) && DateTime.Now < arrestEnd;
@@ -964,7 +982,19 @@ public partial class GamePlay : ContentPage
 
                 // 모든 v2 캐릭터 이미지는 같은 512x512 캔버스와 중심점으로 정규화되어 있습니다.
                 var destRect = new SKRect(-drawRadius, -drawRadius, drawRadius, drawRadius);
-                canvas.DrawBitmap(currentBitmap, destRect);
+                if (isInsideBush)
+                {
+                    using var bushPaint = new SKPaint
+                    {
+                        Color = SKColors.White.WithAlpha(BushPlayerOpacity),
+                        IsAntialias = true
+                    };
+                    canvas.DrawBitmap(currentBitmap, destRect, bushPaint);
+                }
+                else
+                {
+                    canvas.DrawBitmap(currentBitmap, destRect);
+                }
 
                 canvas.Restore();
             }
@@ -972,7 +1002,8 @@ public partial class GamePlay : ContentPage
             {
                 using var paint = new SKPaint
                 {
-                    Color = player.Role == PlayerRole.Police ? SKColors.Blue : SKColors.Red,
+                    Color = (player.Role == PlayerRole.Police ? SKColors.Blue : SKColors.Red)
+                        .WithAlpha(isInsideBush ? BushPlayerOpacity : byte.MaxValue),
                     IsAntialias = true,
                     Style = SKPaintStyle.Fill
                 };
