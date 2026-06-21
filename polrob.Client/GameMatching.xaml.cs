@@ -1,12 +1,18 @@
 using System.Net.Http.Json;
 using Microsoft.AspNetCore.SignalR.Client;
 using polrob.Shared;
+using SkiaSharp;
+using SkiaSharp.Views.Maui;
 
 namespace polrob.Client;
 
 [QueryProperty(nameof(Role), "role")]
 public partial class GameMatching : ContentPage
 {
+    private const int MatchingCapacity = 6;
+    private const float SegmentAngle = 60f;
+    private const float SegmentGapAngle = 8f;
+
     private readonly HttpClient _httpClient = new()
     {
         BaseAddress = new Uri(AuthSession.ApiBaseUrl)
@@ -18,6 +24,7 @@ public partial class GameMatching : ContentPage
     private string? _roomId;
     private bool _isMatched;
     private bool _isNavigatingToGame;
+    private int _currentMatchingCount;
 
     public string Role
     {
@@ -55,7 +62,7 @@ public partial class GameMatching : ContentPage
         await JoinRandomGameAsync(AuthSession.UserId, _selectedRole);
     }
 
-    private async void OnCancelMatchingClicked(object sender, EventArgs e)
+    private async void OnCancelMatchingClicked(object? sender, TappedEventArgs e)
     {
         MatchingStatusLabel.Text = "매칭 취소 중...";
         MatchingActivityIndicator.IsRunning = false;
@@ -68,7 +75,95 @@ public partial class GameMatching : ContentPage
 
     public void UpdateMatchingCount(int currentCount, int maxCount = 6)
     {
-        MatchingStatusLabel.Text = $"매칭 중({currentCount}/{maxCount})";
+        _currentMatchingCount = Math.Clamp(currentCount, 0, MatchingCapacity);
+        MatchingCurrentCountLabel.Text = _currentMatchingCount.ToString();
+        MatchingRingCanvas.InvalidateSurface();
+    }
+
+    private void OnMatchingRingPaintSurface(object? sender, SKPaintSurfaceEventArgs e)
+    {
+        var canvas = e.Surface.Canvas;
+        var width = e.Info.Width;
+        var height = e.Info.Height;
+        var scale = Math.Min(width, height) / 350f;
+        var centerX = width / 2f;
+        var centerY = height / 2f;
+        var radius = Math.Min(width, height) / 2f - (28f * scale);
+        var ringRect = new SKRect(
+            centerX - radius,
+            centerY - radius,
+            centerX + radius,
+            centerY + radius);
+
+        canvas.Clear(SKColors.Transparent);
+
+        using var outerRingPaint = new SKPaint
+        {
+            Style = SKPaintStyle.Stroke,
+            StrokeWidth = 6f * scale,
+            IsAntialias = true,
+            Color = SKColor.Parse("#151922")
+        };
+        canvas.DrawCircle(centerX, centerY, radius + (15f * scale), outerRingPaint);
+
+        for (var index = 0; index < MatchingCapacity; index++)
+        {
+            var isActive = index < _currentMatchingCount;
+            var activeColor = index < 3
+                ? SKColor.Parse("#159DFF")
+                : SKColor.Parse("#FF8A16");
+            var startAngle = -90f + (index * SegmentAngle) + (SegmentGapAngle / 2f);
+            var sweepAngle = SegmentAngle - SegmentGapAngle;
+
+            using var segmentPath = new SKPath();
+            segmentPath.AddArc(ringRect, startAngle, sweepAngle);
+
+            using var basePaint = new SKPaint
+            {
+                Style = SKPaintStyle.Stroke,
+                StrokeWidth = 24f * scale,
+                StrokeCap = SKStrokeCap.Round,
+                IsAntialias = true,
+                Color = isActive ? activeColor : SKColor.Parse("#2B2E34")
+            };
+
+            if (isActive)
+            {
+                using var glowPaint = new SKPaint
+                {
+                    Style = SKPaintStyle.Stroke,
+                    StrokeWidth = 34f * scale,
+                    StrokeCap = SKStrokeCap.Round,
+                    IsAntialias = true,
+                    Color = activeColor.WithAlpha(145),
+                    MaskFilter = SKMaskFilter.CreateBlur(SKBlurStyle.Normal, 9f * scale)
+                };
+                canvas.DrawPath(segmentPath, glowPaint);
+            }
+
+            canvas.DrawPath(segmentPath, basePaint);
+
+            using var highlightPaint = new SKPaint
+            {
+                Style = SKPaintStyle.Stroke,
+                StrokeWidth = 3f * scale,
+                StrokeCap = SKStrokeCap.Round,
+                IsAntialias = true,
+                Color = isActive
+                    ? SKColors.White.WithAlpha(195)
+                    : SKColors.White.WithAlpha(32)
+            };
+            canvas.DrawPath(segmentPath, highlightPaint);
+        }
+
+        using var innerRingPaint = new SKPaint
+        {
+            Style = SKPaintStyle.Stroke,
+            StrokeWidth = 5f * scale,
+            IsAntialias = true,
+            Color = SKColor.Parse("#080A0F")
+        };
+        canvas.DrawCircle(centerX, centerY, radius - (19f * scale), innerRingPaint);
     }
 
     private async Task JoinRandomGameAsync(string userId, PlayerRole role)
@@ -198,7 +293,9 @@ public partial class GameMatching : ContentPage
         _isNavigatingToGame = true;
         _isMatched = true;
 
-        MatchingStatusLabel.Text = $"매칭 완료({response.CurrentCount}/{response.MaxCount})";
+        UpdateMatchingCount(response.CurrentCount, response.MaxCount);
+        MatchingTitleLabel.Text = "매칭 완료";
+        MatchingStatusLabel.Text = "게임을 시작합니다!";
         MatchingActivityIndicator.IsRunning = false;
 
         await DisconnectRoomUpdatesAsync(removePlayer: false);

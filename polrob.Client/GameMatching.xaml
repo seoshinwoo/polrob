@@ -1,47 +1,287 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:skia="clr-namespace:SkiaSharp.Views.Maui.Controls;assembly=SkiaSharp.Views.Maui.Controls"
              x:Class="polrob.Client.GameMatching"
-             BackgroundColor="#555555"
+             BackgroundColor="#050B1D"
              Shell.NavBarIsVisible="False">
 
-    <Grid Padding="24">
-        <Grid.RowDefinitions>
-            <RowDefinition Height="*"/>
-            <RowDefinition Height="Auto"/>
-        </Grid.RowDefinitions>
+    <Grid>
+        <Image Source="gamejoin_background.png"
+               Aspect="AspectFill"
+               HorizontalOptions="Fill"
+               VerticalOptions="Fill"
+               InputTransparent="True" />
 
-        <VerticalStackLayout Grid.Row="0"
-                             Spacing="28"
-                             HorizontalOptions="Center"
-                             VerticalOptions="Center">
-            <ActivityIndicator x:Name="MatchingActivityIndicator"
-                               IsRunning="True"
-                               Color="#76d859"
-                               WidthRequest="72"
-                               HeightRequest="72"/>
+        <BoxView InputTransparent="True">
+            <BoxView.Background>
+                <LinearGradientBrush StartPoint="0,0"
+                                     EndPoint="0,1">
+                    <GradientStop Color="#4D020817"
+                                  Offset="0" />
+                    <GradientStop Color="#12020817"
+                                  Offset="0.48" />
+                    <GradientStop Color="#C7040915"
+                                  Offset="1" />
+                </LinearGradientBrush>
+            </BoxView.Background>
+        </BoxView>
 
-            <Label x:Name="MatchingStatusLabel"
-                   Text="매칭 중(0/6)"
-                   FontSize="36"
+        <Grid Padding="20,30,20,34"
+              RowDefinitions="*,Auto,Auto,Auto,Auto"
+              RowSpacing="8">
+
+            <!-- 6명 정원의 원형 매칭 게이지 -->
+            <Grid Grid.Row="0"
+                  WidthRequest="350"
+                  HeightRequest="350"
+                  MaximumWidthRequest="350"
+                  MaximumHeightRequest="350"
+                  HorizontalOptions="Center"
+                  VerticalOptions="End"
+                  Margin="0,8,0,10">
+
+                <skia:SKCanvasView x:Name="MatchingRingCanvas"
+                                   PaintSurface="OnMatchingRingPaintSurface"
+                                   HorizontalOptions="Fill"
+                                   VerticalOptions="Fill"
+                                   InputTransparent="True" />
+
+                <Border WidthRequest="258"
+                        HeightRequest="258"
+                        Padding="0"
+                        BackgroundColor="#11151E"
+                        Stroke="#0B0D13"
+                        StrokeThickness="8"
+                        HorizontalOptions="Center"
+                        VerticalOptions="Center">
+                    <Border.Clip>
+                        <EllipseGeometry Center="129,129"
+                                         RadiusX="129"
+                                         RadiusY="129" />
+                    </Border.Clip>
+                    <Border.StrokeShape>
+                        <RoundRectangle CornerRadius="129" />
+                    </Border.StrokeShape>
+                    <Border.Shadow>
+                        <Shadow Brush="#E0000000"
+                                Offset="0,10"
+                                Radius="14"
+                                Opacity="0.9" />
+                    </Border.Shadow>
+
+                    <Grid ColumnDefinitions="*,*">
+                        <BoxView BackgroundColor="#0A65D7" />
+                        <BoxView Grid.Column="1"
+                                 BackgroundColor="#E8460A" />
+
+                        <BoxView Grid.ColumnSpan="2"
+                                 Opacity="0.32"
+                                 InputTransparent="True">
+                            <BoxView.Background>
+                                <LinearGradientBrush StartPoint="0,0"
+                                                     EndPoint="0,1">
+                                    <GradientStop Color="#A8FFFFFF"
+                                                  Offset="0" />
+                                    <GradientStop Color="#0010182A"
+                                                  Offset="0.48" />
+                                    <GradientStop Color="#94100609"
+                                                  Offset="1" />
+                                </LinearGradientBrush>
+                            </BoxView.Background>
+                        </BoxView>
+
+                        <Image Source="lobby_police_avatar.png"
+                               WidthRequest="155"
+                               HeightRequest="155"
+                               Margin="-4,8,0,0"
+                               Aspect="AspectFit"
+                               HorizontalOptions="Center"
+                               VerticalOptions="Center" />
+
+                        <Image Grid.Column="1"
+                               Source="lobby_robber_avatar.png"
+                               WidthRequest="155"
+                               HeightRequest="155"
+                               Margin="0,8,-4,0"
+                               Aspect="AspectFit"
+                               HorizontalOptions="Center"
+                               VerticalOptions="Center" />
+
+                        <BoxView Grid.ColumnSpan="2"
+                                 WidthRequest="3"
+                                 BackgroundColor="#CC151820"
+                                 HorizontalOptions="Center"
+                                 VerticalOptions="Fill" />
+
+                        <Border Grid.ColumnSpan="2"
+                                WidthRequest="88"
+                                HeightRequest="74"
+                                Padding="0"
+                                BackgroundColor="#E1161A22"
+                                Stroke="#090A0D"
+                                StrokeThickness="5"
+                                HorizontalOptions="Center"
+                                VerticalOptions="Center">
+                            <Border.StrokeShape>
+                                <RoundRectangle CornerRadius="24" />
+                            </Border.StrokeShape>
+                            <Label Text="VS"
+                                   FontFamily="OpenSansSemibold"
+                                   FontAttributes="Bold"
+                                   FontSize="38"
+                                   TextColor="#FFF4D4"
+                                   CharacterSpacing="-2"
+                                   HorizontalTextAlignment="Center"
+                                   VerticalTextAlignment="Center">
+                                <Label.Shadow>
+                                    <Shadow Brush="#FF000000"
+                                            Offset="0,3"
+                                            Radius="3"
+                                            Opacity="1" />
+                                </Label.Shadow>
+                            </Label>
+                        </Border>
+                    </Grid>
+                </Border>
+            </Grid>
+
+            <Label x:Name="MatchingTitleLabel"
+                   Grid.Row="1"
+                   Text="매칭 중"
+                   FontFamily="OpenSansSemibold"
                    FontAttributes="Bold"
-                   TextColor="White"
-                   HorizontalTextAlignment="Center"/>
-        </VerticalStackLayout>
+                   FontSize="48"
+                   CharacterSpacing="2"
+                   TextColor="#FFF8E8"
+                   HorizontalTextAlignment="Center">
+                <Label.Shadow>
+                    <Shadow Brush="#E5000000"
+                            Offset="0,5"
+                            Radius="4"
+                            Opacity="1" />
+                </Label.Shadow>
+            </Label>
 
-        <Button Grid.Row="1"
-                Text="매칭 취소"
-                FontSize="14"
-                FontAttributes="Bold"
-                TextColor="Black"
-                BackgroundColor="#f9d955"
-                WidthRequest="120"
-                HeightRequest="44"
-                CornerRadius="14"
-                HorizontalOptions="Center"
-                VerticalOptions="End"
-                Margin="0,0,0,24"
-                Clicked="OnCancelMatchingClicked"/>
+            <HorizontalStackLayout Grid.Row="2"
+                                   Spacing="10"
+                                   HorizontalOptions="Center">
+                <Label x:Name="MatchingCurrentCountLabel"
+                       Text="0"
+                       FontFamily="OpenSansSemibold"
+                       FontAttributes="Bold"
+                       FontSize="58"
+                       TextColor="#2C9FFF"
+                       VerticalTextAlignment="Center">
+                    <Label.Shadow>
+                        <Shadow Brush="#D0003C88"
+                                Offset="0,4"
+                                Radius="4"
+                                Opacity="1" />
+                    </Label.Shadow>
+                </Label>
+                <Label Text="/"
+                       FontFamily="OpenSansSemibold"
+                       FontAttributes="Bold"
+                       FontSize="52"
+                       TextColor="#FFF4E1"
+                       VerticalTextAlignment="Center" />
+                <Label Text="6"
+                       FontFamily="OpenSansSemibold"
+                       FontAttributes="Bold"
+                       FontSize="58"
+                       TextColor="#FF8A17"
+                       VerticalTextAlignment="Center">
+                    <Label.Shadow>
+                        <Shadow Brush="#C86B2100"
+                                Offset="0,4"
+                                Radius="4"
+                                Opacity="1" />
+                    </Label.Shadow>
+                </Label>
+            </HorizontalStackLayout>
+
+            <Grid Grid.Row="3"
+                  ColumnDefinitions="Auto,Auto"
+                  ColumnSpacing="8"
+                  Margin="0,0,0,16"
+                  HorizontalOptions="Center">
+                <ActivityIndicator x:Name="MatchingActivityIndicator"
+                                   IsRunning="True"
+                                   Color="#FFB221"
+                                   WidthRequest="20"
+                                   HeightRequest="20"
+                                   VerticalOptions="Center" />
+                <Label x:Name="MatchingStatusLabel"
+                       Grid.Column="1"
+                       Text="플레이어를 찾고 있어요..."
+                       FontFamily="OpenSansSemibold"
+                       FontAttributes="Bold"
+                       FontSize="19"
+                       TextColor="#FFF8E8"
+                       VerticalTextAlignment="Center">
+                    <Label.Shadow>
+                        <Shadow Brush="#D0000000"
+                                Offset="0,2"
+                                Radius="2"
+                                Opacity="1" />
+                    </Label.Shadow>
+                </Label>
+            </Grid>
+
+            <Border Grid.Row="4"
+                    WidthRequest="248"
+                    HeightRequest="72"
+                    Padding="5"
+                    BackgroundColor="#17120A"
+                    Stroke="#FFD95B"
+                    StrokeThickness="4"
+                    HorizontalOptions="Center"
+                    SemanticProperties.Description="매칭 취소">
+                <Border.StrokeShape>
+                    <RoundRectangle CornerRadius="24" />
+                </Border.StrokeShape>
+                <Border.Shadow>
+                    <Shadow Brush="#D0000000"
+                            Offset="0,8"
+                            Radius="9"
+                            Opacity="0.85" />
+                </Border.Shadow>
+                <Border.GestureRecognizers>
+                    <TapGestureRecognizer Tapped="OnCancelMatchingClicked" />
+                </Border.GestureRecognizers>
+
+                <Border Padding="12,4"
+                        Stroke="#FF9A18"
+                        StrokeThickness="3">
+                    <Border.StrokeShape>
+                        <RoundRectangle CornerRadius="18" />
+                    </Border.StrokeShape>
+                    <Border.Background>
+                        <LinearGradientBrush StartPoint="0,0"
+                                             EndPoint="0,1">
+                            <GradientStop Color="#E8870A"
+                                          Offset="0" />
+                            <GradientStop Color="#8F3B03"
+                                          Offset="1" />
+                        </LinearGradientBrush>
+                    </Border.Background>
+                    <Label Text="매칭 취소"
+                           FontFamily="OpenSansSemibold"
+                           FontAttributes="Bold"
+                           FontSize="27"
+                           TextColor="#FFF8E8"
+                           HorizontalTextAlignment="Center"
+                           VerticalTextAlignment="Center">
+                        <Label.Shadow>
+                            <Shadow Brush="#D0441600"
+                                    Offset="0,3"
+                                    Radius="2"
+                                    Opacity="1" />
+                        </Label.Shadow>
+                    </Label>
+                </Border>
+            </Border>
+        </Grid>
     </Grid>
-
 </ContentPage>
