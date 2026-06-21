@@ -48,6 +48,10 @@ public partial class GamePlay : ContentPage
     private const byte FogOpacity = 120;
     private const float PlayerNameFontSize = 28f;
     private const float PlayerNameMaxWidth = 180f;
+    private const float RenderCullPadding = 100f;
+    private readonly List<Obstacle> _nearbyCollisionObstacles = new();
+    private readonly SemaphoreSlim _assetLoadLock = new(1, 1);
+    private bool _assetsLoaded;
 
     private SKBitmap? _policeIdleBitmap;
     private SKBitmap?[] _policeRunBitmaps = new SKBitmap?[8];
@@ -55,11 +59,20 @@ public partial class GamePlay : ContentPage
     private SKBitmap? _robberIdleBitmap;
     private SKBitmap?[] _robberRunBitmaps = new SKBitmap?[8];
     private SKBitmap? _robberSurrendBitmap;
+    private SKBitmap? _robberPrisonBreakBitmap;
     private SKBitmap? _policeStationBitmap;
     private SKBitmap? _jailBitmap;
+    private SKBitmap? _wallBitmap;
+    private SKBitmap? _buildingBitmap;
+    private SKBitmap? _houseBitmap;
+    private SKBitmap? _treeBitmap;
+    private SKBitmap? _pondBitmap;
+    private SKBitmap? _bushBitmap;
 
     // 체포 상태 만료 시간 기록 (2초 유지용)
     private Dictionary<string, DateTime> _arrestVisualTimers = new();
+    // 탈옥 직후 해방 동작을 잠시 표시합니다.
+    private readonly Dictionary<string, DateTime> _jailBreakVisualTimers = new();
     // 화면 중앙 체포 텍스트 표시 목표 시간
     private DateTime _showArrestedTextUntil = DateTime.MinValue;
 
@@ -185,7 +198,7 @@ public partial class GamePlay : ContentPage
     {
         _networkClient = new GameNetworkClient();
 
-        _networkClient.OnInitialStateReceived += async (players) =>
+        _networkClient.OnInitialStateReceived += (players) =>
         {
             _players.Clear();
             _remotePlayerInterpolations.Clear();
@@ -199,7 +212,6 @@ public partial class GamePlay : ContentPage
             {
                 ResetRemotePlayerInterpolation(remotePlayer);
             }
-            await LoadAssetsAsync(); // Test
             _isInitialized = true;
         };
 
@@ -434,17 +446,44 @@ public partial class GamePlay : ContentPage
 
     private async Task LoadAssetsAsync()
     {
-        _policeIdleBitmap = await LoadBitmapAsync("char_police.png");
-        _robberIdleBitmap = await LoadBitmapAsync("char_robber.png");
-        _policeArrestBitmap = await LoadBitmapAsync("char_police_arrest.png");
-        _robberSurrendBitmap = await LoadBitmapAsync("char_robber_surrend.png");
-        _policeStationBitmap = await LoadBitmapAsync("police_station.png");
-        _jailBitmap = await LoadBitmapAsync("jail.png");
-
-        for (int i = 0; i < 8; i++)
+        if (_assetsLoaded)
         {
-            _policeRunBitmaps[i] = await LoadBitmapAsync($"char_police_run_{i + 1}.png");
-            _robberRunBitmaps[i] = await LoadBitmapAsync($"char_robber_run_{i + 1}.png");
+            return;
+        }
+
+        await _assetLoadLock.WaitAsync();
+        try
+        {
+            if (_assetsLoaded)
+            {
+                return;
+            }
+
+            _policeIdleBitmap = await LoadBitmapAsync("char_police_v2.png");
+            _robberIdleBitmap = await LoadBitmapAsync("char_robber_v2.png");
+            _policeArrestBitmap = await LoadBitmapAsync("char_police_arrest_v2.png");
+            _robberSurrendBitmap = await LoadBitmapAsync("char_robber_surrend_v2.png");
+            _robberPrisonBreakBitmap = await LoadBitmapAsync("char_robber_prison_break_v2.png");
+            _policeStationBitmap = await LoadBitmapAsync("police_station.png");
+            _jailBitmap = await LoadBitmapAsync("jail_v2.png");
+            _wallBitmap = await LoadBitmapAsync("wall.png");
+            _buildingBitmap = await LoadBitmapAsync("building.png");
+            _houseBitmap = await LoadBitmapAsync("house_v2.png");
+            _treeBitmap = await LoadBitmapAsync("tree.png");
+            _pondBitmap = await LoadBitmapAsync("pond_v2.png");
+            _bushBitmap = await LoadBitmapAsync("bush.png");
+
+            for (int i = 0; i < 8; i++)
+            {
+                _policeRunBitmaps[i] = await LoadBitmapAsync($"char_police_run_v2_{i + 1}.png");
+                _robberRunBitmaps[i] = await LoadBitmapAsync($"char_robber_run_v2_{i + 1}.png");
+            }
+
+            _assetsLoaded = true;
+        }
+        finally
+        {
+            _assetLoadLock.Release();
         }
     }
 
@@ -720,10 +759,10 @@ public partial class GamePlay : ContentPage
 
     private bool IsColliding(float x, float y, float radius)
     {
-        // 건물(감옥) 충돌 처리 (경찰서는 통과 가능)
+        // 경찰서와 감옥은 통과할 수 없는 건물이다.
         foreach (var building in _gameMap.Buildings)
         {
-            if (building.Type != "Jail")
+            if (building.Type is not ("PoliceStation" or "Jail"))
                 continue;
 
             if (IsCircleCollidingWithBuilding(x, y, radius, building))
@@ -732,7 +771,8 @@ public partial class GamePlay : ContentPage
             }
         }
 
-        foreach (var obs in _gameMap.Obstacles)
+        _gameMap.GetNearbyObstacles(x, y, radius, _nearbyCollisionObstacles);
+        foreach (var obs in _nearbyCollisionObstacles)
         {
             if (obs.Type == "Rect")
             {
@@ -800,37 +840,25 @@ public partial class GamePlay : ContentPage
         // 화면의 중심이 플레이어를 따라다니게 캔버스를 이동시킴
         canvas.Translate(width / 2f - _player.X, height / 2f - _player.Y);
 
-        // 2. 월드 렌더링
+        var visibleWorldBounds = new SKRect(
+            _player.X - (width / 2f) - RenderCullPadding,
+            _player.Y - (height / 2f) - RenderCullPadding,
+            _player.X + (width / 2f) + RenderCullPadding,
+            _player.Y + (height / 2f) + RenderCullPadding);
+
         using (var mapPaint = new SKPaint { Color = SKColors.LightGray, Style = SKPaintStyle.Stroke, StrokeWidth = 10 })
         {
             canvas.DrawRect(0, 0, _gameMap.Width, _gameMap.Height, mapPaint);
         }
 
-        DrawBuildings(canvas);
-
-        // 장애물 렌더링
-        using (var obsPaint = new SKPaint { Color = SKColors.AliceBlue, Style = SKPaintStyle.Fill })
-        {
-            foreach (var obs in _gameMap.Obstacles)
-            {
-                if (obs.Type == "Rect")
-                {
-                    // 좌측상단 ~ 우측하단을 사용해 사각형을 그림
-                    var rect = new SKRect(obs.LeftTop.X, obs.LeftTop.Y, obs.RightBottom.X, obs.RightBottom.Y);
-                    canvas.DrawRect(rect, obsPaint);
-                }
-                else if (obs.Type == "Circle")
-                {
-                    canvas.DrawCircle(obs.CenterX.X, obs.CenterX.Y, obs.Radius, obsPaint);
-                }
-            }
-        }
+        DrawBuildings(canvas, visibleWorldBounds);
+        DrawObstacles(canvas, visibleWorldBounds);
 
         DrawVisionOverlay(canvas);
 
-        DrawJailBreakProgressBar(canvas);
-
         DrawPlayers(canvas);
+        DrawJailForeground(canvas, visibleWorldBounds);
+        DrawJailBreakProgressBar(canvas);
 
         canvas.Restore();
 
@@ -902,10 +930,20 @@ public partial class GamePlay : ContentPage
             // 플레이어 렌더링
             SKBitmap? currentBitmap = null;
             bool isArrested = _arrestVisualTimers.TryGetValue(player.Id, out var arrestEnd) && DateTime.Now < arrestEnd;
+            bool isJailBreaking = _jailBreakVisualTimers.TryGetValue(player.Id, out var jailBreakEnd) && DateTime.Now < jailBreakEnd;
+
+            if (!isJailBreaking && jailBreakEnd != default)
+            {
+                _jailBreakVisualTimers.Remove(player.Id);
+            }
 
             if (isArrested)
             {
                 currentBitmap = player.Role == PlayerRole.Police ? _policeArrestBitmap : _robberSurrendBitmap;
+            }
+            else if (isJailBreaking && player.Role == PlayerRole.Robber)
+            {
+                currentBitmap = _robberPrisonBreakBitmap;
             }
             else if (player.Role == PlayerRole.Police)
             {
@@ -924,26 +962,9 @@ public partial class GamePlay : ContentPage
 
                 float drawRadius = player.Radius * 2f; // 100f (기본 렌더링 범위: 200x200)
 
-                if (isArrested || !player.IsMoving || currentBitmap == _policeIdleBitmap || currentBitmap == _robberIdleBitmap)
-                {
-                    // Idle 이미지 (1024x1024)는 여백이 많으므로 200x200 박스에 렌더링합니다.
-                    var destRect = new SKRect(-drawRadius, -drawRadius, drawRadius, drawRadius);
-                    canvas.DrawBitmap(currentBitmap, destRect);
-                }
-                else
-                {
-                    // Run 이미지들은 여백 없이 타이트하게 크롭되어 있습니다. (약 280x315 크기)
-                    // 200x200에 꽉 채우면 여백이 없어 원래 캐릭터보다 엄청 커 보이고, 전처럼 줄이면 너무 작아집니다.
-                    // Idle 이미지 안의 실제 캐릭터 비율과 눈대중으로 일치하도록 맞춰줍니다.
-                    float targetHeight = drawRadius * 1.35f; // 가만히 있을 때와 시각적으로 비슷한 높이 지정
-                    float scale = targetHeight / currentBitmap.Height;
-                    float scaledWidth = currentBitmap.Width * scale;
-                    float scaledHeight = currentBitmap.Height * scale;
-
-                    // 각각의 크롭된 이미지를 항상 중심 기준으로 그려 진동(Jitter)을 방지합니다.
-                    var destRect = new SKRect(-scaledWidth / 2f, -scaledHeight / 2f, scaledWidth / 2f, scaledHeight / 2f);
-                    canvas.DrawBitmap(currentBitmap, destRect);
-                }
+                // 모든 v2 캐릭터 이미지는 같은 512x512 캔버스와 중심점으로 정규화되어 있습니다.
+                var destRect = new SKRect(-drawRadius, -drawRadius, drawRadius, drawRadius);
+                canvas.DrawBitmap(currentBitmap, destRect);
 
                 canvas.Restore();
             }
@@ -1023,7 +1044,7 @@ public partial class GamePlay : ContentPage
         return suffix;
     }
 
-    private void DrawBuildings(SKCanvas canvas)
+    private void DrawBuildings(SKCanvas canvas, SKRect visibleWorldBounds)
     {
         foreach (var building in _gameMap.Buildings)
         {
@@ -1032,6 +1053,11 @@ public partial class GamePlay : ContentPage
                 building.LeftTop.Y,
                 building.RightBottom.X,
                 building.RightBottom.Y);
+
+            if (!RectsIntersect(rect, visibleWorldBounds))
+            {
+                continue;
+            }
 
             var bitmap = building.Type switch
             {
@@ -1046,6 +1072,139 @@ public partial class GamePlay : ContentPage
             }
         }
     }
+
+    private void DrawJailForeground(SKCanvas canvas, SKRect visibleWorldBounds)
+    {
+        if (_jailBitmap == null)
+        {
+            return;
+        }
+
+        var jail = _gameMap.Jail;
+        var rect = new SKRect(
+            jail.LeftTop.X,
+            jail.LeftTop.Y,
+            jail.RightBottom.X,
+            jail.RightBottom.Y);
+
+        if (!RectsIntersect(rect, visibleWorldBounds))
+        {
+            return;
+        }
+
+        // 플레이어 위에 쇠창살을 다시 그려 감옥 안에 갇혀 있는 깊이감을 만든다.
+        using var foregroundPaint = new SKPaint
+        {
+            Color = SKColors.White.WithAlpha(235),
+            IsAntialias = true
+        };
+        canvas.DrawBitmap(_jailBitmap, rect, foregroundPaint);
+    }
+
+    private void DrawObstacles(SKCanvas canvas, SKRect visibleWorldBounds)
+    {
+        using var fallbackPaint = new SKPaint
+        {
+            Color = SKColors.AliceBlue,
+            Style = SKPaintStyle.Fill,
+            IsAntialias = true
+        };
+
+        foreach (var obstacle in _gameMap.Obstacles)
+        {
+            SKRect collisionRect;
+            if (obstacle.Type == "Rect")
+            {
+                collisionRect = new SKRect(
+                    obstacle.LeftTop.X,
+                    obstacle.LeftTop.Y,
+                    obstacle.RightBottom.X,
+                    obstacle.RightBottom.Y);
+            }
+            else if (obstacle.Type == "Circle")
+            {
+                collisionRect = new SKRect(
+                    obstacle.CenterX.X - obstacle.Radius,
+                    obstacle.CenterX.Y - obstacle.Radius,
+                    obstacle.CenterX.X + obstacle.Radius,
+                    obstacle.CenterX.Y + obstacle.Radius);
+            }
+            else
+            {
+                continue;
+            }
+
+            var imageScale = obstacle.ImageFileName switch
+            {
+                // tree.png 자체의 좌우 투명 여백을 감안해 실제 수관이 충돌 원보다 살짝 크게 보이게 한다.
+                "tree.png" => 1.70f,
+                "bush.png" => 1.15f,
+                _ => 1f
+            };
+            var imageRect = ScaleRectFromCenter(collisionRect, imageScale);
+
+            if (!RectsIntersect(imageRect, visibleWorldBounds))
+            {
+                continue;
+            }
+
+            var bitmap = obstacle.ImageFileName switch
+            {
+                "wall.png" => _wallBitmap,
+                "building.png" => _buildingBitmap,
+                "house_v2.png" => _houseBitmap,
+                "tree.png" => _treeBitmap,
+                "pond_v2.png" => _pondBitmap,
+                "bush.png" => _bushBitmap,
+                _ => null
+            };
+
+            if (obstacle.Type == "Rect")
+            {
+                if (bitmap != null)
+                {
+                    canvas.DrawBitmap(bitmap, imageRect);
+                }
+                else
+                {
+                    canvas.DrawRect(collisionRect, fallbackPaint);
+                }
+            }
+            else if (obstacle.Type == "Circle")
+            {
+                if (bitmap != null)
+                {
+                    canvas.DrawBitmap(bitmap, imageRect);
+                }
+                else
+                {
+                    canvas.DrawCircle(obstacle.CenterX.X, obstacle.CenterX.Y, obstacle.Radius, fallbackPaint);
+                }
+            }
+        }
+    }
+
+    private static SKRect ScaleRectFromCenter(SKRect rect, float scale)
+    {
+        if (scale == 1f)
+        {
+            return rect;
+        }
+
+        var halfWidth = rect.Width * scale / 2f;
+        var halfHeight = rect.Height * scale / 2f;
+        return new SKRect(
+            rect.MidX - halfWidth,
+            rect.MidY - halfHeight,
+            rect.MidX + halfWidth,
+            rect.MidY + halfHeight);
+    }
+
+    private static bool RectsIntersect(SKRect first, SKRect second) =>
+        first.Left <= second.Right &&
+        first.Right >= second.Left &&
+        first.Top <= second.Bottom &&
+        first.Bottom >= second.Top;
 
     private void DrawJailBreakProgressBar(SKCanvas canvas)
     {
@@ -1208,6 +1367,7 @@ public partial class GamePlay : ContentPage
         }
 
         _arrestVisualTimers.Remove(syncData.RobberId);
+        _jailBreakVisualTimers[syncData.RobberId] = DateTime.Now.AddSeconds(2);
 
         if (_player.Id == syncData.RobberId)
         {
@@ -1250,6 +1410,7 @@ public partial class GamePlay : ContentPage
         var endTime = DateTime.Now.AddSeconds(2);
         _arrestVisualTimers[policeId] = endTime;
         _arrestVisualTimers[robberId] = endTime;
+        _jailBreakVisualTimers.Remove(robberId);
 
         if (_player.Id == policeId || _player.Id == robberId)
         {

@@ -97,7 +97,7 @@ public static class AuthSession
         get
         {
 #if ANDROID
-            return "http://10.0.2.2:5174";
+            return $"http://{AndroidServerHost}:5174";
 #elif IOS
             return $"http://{IosServerHost}:5174";
 #else
@@ -111,7 +111,7 @@ public static class AuthSession
         get
         {
 #if ANDROID
-            return "10.0.2.2";
+            return AndroidServerHost;
 #elif IOS
             return IosServerHost;
 #else
@@ -119,6 +119,11 @@ public static class AuthSession
 #endif
         }
     }
+
+    private static string AndroidServerHost =>
+        DeviceInfo.DeviceType == DeviceType.Virtual
+            ? "10.0.2.2"
+            : LocalNetworkServerHost;
 
     private static string IosServerHost =>
         DeviceInfo.DeviceType == DeviceType.Virtual
