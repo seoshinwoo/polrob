@@ -686,6 +686,8 @@ public partial class GamePlay : ContentPage
         }
 
         _player.IsMoving = false;
+        var inputX = 0f;
+        var inputY = 0f;
 
         // 체포 상태이면 이동 불가
         bool isArrestedOrArresting = _arrestVisualTimers.TryGetValue(_player.Id, out var freezeEnd) && DateTime.Now < freezeEnd;
@@ -700,6 +702,8 @@ public partial class GamePlay : ContentPage
             {
                 var moveX = dx / _joystickRadius * _player.Speed;
                 var moveY = dy / _joystickRadius * _player.Speed;
+                inputX = Math.Clamp(dx / _joystickRadius, -1f, 1f);
+                inputY = Math.Clamp(dy / _joystickRadius, -1f, 1f);
 
                 // 조이스틱이 아주 약간이라도 움직이면 캐릭터가 바라보는 각도를 갱신
                 if (Math.Abs(dx) > 0.1f || Math.Abs(dy) > 0.1f)
@@ -751,7 +755,7 @@ public partial class GamePlay : ContentPage
 
             if (movementStateChanged || now - _lastSyncTime >= syncInterval)
             {
-                _networkClient.SendMoveUdp(_player);
+                _networkClient.SendMoveUdp(_player.Id, inputX, inputY);
                 _lastSyncTime = now;
                 _lastSyncedIsMoving = _player.IsMoving;
             }

@@ -12,6 +12,8 @@ public class GameNetworkClient
     private BinaryReader? _reader;
     private BinaryWriter? _writer;
     private bool _isDisconnected;
+    private ulong _movementInputSequence;
+    private string _movementSessionToken = string.Empty;
 
     public event Action<List<Player>>? OnInitialStateReceived;
     public event Action<Player>? OnPlayerJoined;
@@ -26,6 +28,8 @@ public class GameNetworkClient
     public async Task ConnectAsync(string ipAddress, Player localPlayer)
     {
         _isDisconnected = false;
+        _movementInputSequence = 0;
+        _movementSessionToken = string.Empty;
         _tcpClient = new TcpClient();
         await _tcpClient.ConnectAsync(ipAddress, 7777);
 
@@ -53,10 +57,18 @@ public class GameNetworkClient
         }
     }
 
-    public void SendMoveUdp(Player player)
+    public void SendMoveUdp(string playerId, float inputX, float inputY)
     {
         if (_isDisconnected || _udpClient == null) return;
-        string json = JsonSerializer.Serialize(PlayerMovementSync.FromPlayer(player));
+        var input = new PlayerMovementInput
+        {
+            Id = playerId,
+            X = inputX,
+            Y = inputY,
+            Sequence = ++_movementInputSequence,
+            Token = _movementSessionToken
+        };
+        string json = JsonSerializer.Serialize(input);
         byte[] bytes = System.Text.Encoding.UTF8.GetBytes(json);
         _udpClient.SendAsync(bytes, bytes.Length);
     }
@@ -130,6 +142,10 @@ public class GameNetworkClient
                     {
                         var syncData = JsonSerializer.Deserialize<JailBreakProgressSync>(json);
                         if (syncData != null) OnJailBreakProgressReceived?.Invoke(syncData);
+                    }
+                    else if (type == TcpMessageType.MovementSession)
+                    {
+                        _movementSessionToken = json;
                     }
                 });
             }

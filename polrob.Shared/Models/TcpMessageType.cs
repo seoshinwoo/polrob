@@ -10,5 +10,6 @@ public enum TcpMessageType : byte
     GameState = 6,
     JailBreak = 7,
     PlayerState = 8,
-    JailBreakProgress = 9
+    JailBreakProgress = 9,
+    MovementSession = 10
 }

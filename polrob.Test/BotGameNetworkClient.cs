@@ -14,6 +14,8 @@ public sealed class BotGameNetworkClient : IAsyncDisposable
     private CancellationTokenSource? _receiveCancellation;
     private Task? _tcpReceiveTask;
     private Task? _udpReceiveTask;
+    private ulong _movementInputSequence;
+    private string _movementSessionToken = string.Empty;
 
     public event Action<List<Player>>? InitialStateReceived;
     public event Action<Player>? PlayerJoined;
@@ -58,7 +60,16 @@ public sealed class BotGameNetworkClient : IAsyncDisposable
             return;
         }
 
-        var bytes = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(PlayerMovementSync.FromPlayer(player)));
+        var angleRadians = (player.Angle + 90f) * MathF.PI / 180f;
+        var input = new PlayerMovementInput
+        {
+            Id = player.Id,
+            X = player.IsMoving ? MathF.Cos(angleRadians) : 0f,
+            Y = player.IsMoving ? MathF.Sin(angleRadians) : 0f,
+            Sequence = ++_movementInputSequence,
+            Token = _movementSessionToken
+        };
+        var bytes = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(input));
         await _udpClient.SendAsync(bytes);
     }
 
@@ -159,6 +170,10 @@ public sealed class BotGameNetworkClient : IAsyncDisposable
                 {
                     PlayerStateReceived?.Invoke(playerState);
                 }
+                break;
+
+            case TcpMessageType.MovementSession:
+                _movementSessionToken = payload;
                 break;
         }
     }

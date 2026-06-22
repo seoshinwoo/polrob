@@ -41,6 +41,10 @@ public class GameNetworkServer : BackgroundService
     private const double JailBreakDurationSeconds = 3d;
     private const float JailBreakReleaseOffset = 20f;
     private const float JailBreakContactTolerance = 90f;
+    private const float ServerPlayerSpeed = 7f;
+    private const float ServerPlayerRadius = 50f;
+    private const float MovementUnitsPerSecondMultiplier = 60f;
+    private static readonly TimeSpan MovementInputTimeout = TimeSpan.FromMilliseconds(250);
     private const int TcpListenBacklog = 2048;
 
     // TCP/UDP 소켓과 방 서비스를 준비합니다.
@@ -194,6 +198,7 @@ public class GameNetworkServer : BackgroundService
                 stateElapsed += elapsed;
 
                 DrainRoomCommands(roomId, gameSession);
+                SimulateAuthoritativeMovement(gameSession, elapsed, now);
 
                 while (udpBroadcastElapsed >= UdpMovementBroadcastInterval)
                 {
@@ -295,7 +300,7 @@ public class GameNetworkServer : BackgroundService
                     break;
                 case MoveRoomCommand move:
                     latestMoveByPlayerId ??= new Dictionary<string, MoveRoomCommand>();
-                    latestMoveByPlayerId[move.Movement.Id] = move;
+                    latestMoveByPlayerId[move.Input.Id] = move;
                     break;
             }
         }
@@ -521,12 +526,19 @@ public class GameNetworkServer : BackgroundService
         var player = command.Player;
         var playerId = player.Id;
 
+        // 이동에 영향을 주는 값은 Join payload를 신뢰하지 않고 서버가 고정합니다.
+        player.Speed = ServerPlayerSpeed;
+        player.Radius = ServerPlayerRadius;
+        player.Angle = 0f;
+        player.IsMoving = false;
+
         PositionPlayerForRoom(player, gameSession);
         var playerSession = new PlayerSession
         {
             Client = command.Client,
             Writer = command.Writer,
-            PlayerState = player
+            PlayerState = player,
+            MovementSessionToken = Guid.NewGuid().ToString("N")
         };
         gameSession.Sessions[playerId] = playerSession;
         gameSession.HasHadPlayers = true;
@@ -546,6 +558,7 @@ public class GameNetworkServer : BackgroundService
 
         Console.WriteLine($"Player Connected [TCP]: {playerId} / room {roomId}");
 
+        TrySendTcp(command.Writer, TcpMessageType.MovementSession, playerSession.MovementSessionToken);
         TrySendTcp(command.Writer, TcpMessageType.InitialState, SerializeForMetrics(visiblePlayers));
         Console.WriteLine($"{roomId} 방 {player.Role} 역할 {visiblePlayers.Count}명으로 플레이어 초기화!!");
 
@@ -651,33 +664,136 @@ public class GameNetworkServer : BackgroundService
 
     private void HandleRoomMove(string roomId, GameSession gameSession, MoveRoomCommand command)
     {
-        var movement = command.Movement;
-        if (!gameSession.Sessions.TryGetValue(movement.Id, out var session))
+        var input = command.Input;
+        if (!gameSession.Sessions.TryGetValue(input.Id, out var session))
         {
             return;
         }
 
-        if (session.UdpEndPoint == null || !session.UdpEndPoint.Equals(command.RemoteEndPoint))
+        if (!string.Equals(input.Token, session.MovementSessionToken, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        if (session.UdpEndPoint == null)
         {
             session.UdpEndPoint = command.RemoteEndPoint;
-            Console.WriteLine($"UDP Endpoint registered for {movement.Id} / room {roomId}: {command.RemoteEndPoint}");
+            Console.WriteLine($"UDP Endpoint registered for {input.Id} / room {roomId}: {command.RemoteEndPoint}");
         }
-
-        if (IsPlayerMovementLocked(gameSession, session.PlayerState))
+        else if (!session.UdpEndPoint.Equals(command.RemoteEndPoint))
         {
-            session.PlayerState.IsMoving = false;
-            gameSession.PendingUdpMovementPlayerIds.Remove(movement.Id);
-            BroadcastPlayerState(gameSession, session.PlayerState);
             return;
         }
 
-        session.PlayerState.X = movement.X;
-        session.PlayerState.Y = movement.Y;
-        session.PlayerState.Angle = movement.Angle;
-        session.PlayerState.IsMoving = movement.IsMoving;
-        RefreshJailEntry(gameSession, session.PlayerState);
+        if (input.Sequence <= session.LastMovementInputSequence ||
+            !float.IsFinite(input.X) || !float.IsFinite(input.Y))
+        {
+            return;
+        }
 
-        gameSession.PendingUdpMovementPlayerIds.Add(movement.Id);
+        var length = MathF.Sqrt((input.X * input.X) + (input.Y * input.Y));
+        session.InputX = length > 1f ? input.X / length : input.X;
+        session.InputY = length > 1f ? input.Y / length : input.Y;
+        session.LastMovementInputSequence = input.Sequence;
+        session.LastMovementInputAtUtc = DateTime.UtcNow;
+    }
+
+    // 마지막으로 받은 조이스틱 입력을 사용해 좌표, 속도, 각도, 충돌을 서버가 계산합니다.
+    private void SimulateAuthoritativeMovement(GameSession gameSession, TimeSpan elapsed, DateTime now)
+    {
+        var deltaSeconds = Math.Clamp((float)elapsed.TotalSeconds, 0f, 0.1f);
+
+        foreach (var session in gameSession.Sessions.Values)
+        {
+            var player = session.PlayerState;
+            var wasMoving = player.IsMoving;
+            var inputExpired = now - session.LastMovementInputAtUtc > MovementInputTimeout;
+
+            if (gameSession.GamePhase != GamePhase.Playing ||
+                IsPlayerMovementLocked(gameSession, player) || inputExpired)
+            {
+                session.InputX = 0f;
+                session.InputY = 0f;
+            }
+
+            var hasInput = MathF.Abs(session.InputX) > 0.001f || MathF.Abs(session.InputY) > 0.001f;
+            if (!hasInput)
+            {
+                player.IsMoving = false;
+                if (wasMoving)
+                {
+                    gameSession.PendingUdpMovementPlayerIds.Add(player.Id);
+                }
+                continue;
+            }
+
+            var distance = player.Speed * MovementUnitsPerSecondMultiplier * deltaSeconds;
+            var nextX = Math.Clamp(player.X + session.InputX * distance, player.Radius, _map.Width - player.Radius);
+            var nextY = Math.Clamp(player.Y + session.InputY * distance, player.Radius, _map.Height - player.Radius);
+            var moved = false;
+
+            if (!IsMovementPositionBlocked(nextX, player.Y, player.Radius, session.NearbyCollisionObstacles))
+            {
+                moved |= MathF.Abs(nextX - player.X) > 0.001f;
+                player.X = nextX;
+            }
+
+            if (!IsMovementPositionBlocked(player.X, nextY, player.Radius, session.NearbyCollisionObstacles))
+            {
+                moved |= MathF.Abs(nextY - player.Y) > 0.001f;
+                player.Y = nextY;
+            }
+
+            player.Angle = MathF.Atan2(session.InputY, session.InputX) * 180f / MathF.PI - 90f;
+            player.IsMoving = moved;
+            RefreshJailEntry(gameSession, player);
+            gameSession.PendingUdpMovementPlayerIds.Add(player.Id);
+        }
+    }
+
+    private bool IsMovementPositionBlocked(float x, float y, float radius, List<Obstacle> nearbyObstacles)
+    {
+        foreach (var building in _map.Buildings)
+        {
+            if (building.Type is ("PoliceStation" or "Jail") &&
+                IsCircleCollidingWithBuilding(x, y, radius, building))
+            {
+                return true;
+            }
+        }
+
+        _map.GetNearbyObstacles(x, y, radius, nearbyObstacles);
+        foreach (var obstacle in nearbyObstacles)
+        {
+            if (GameMap.IsBushObstacle(obstacle))
+            {
+                continue;
+            }
+
+            if (obstacle.Type == "Rect")
+            {
+                var closestX = Math.Max(obstacle.LeftTop.X, Math.Min(x, obstacle.RightBottom.X));
+                var closestY = Math.Max(obstacle.LeftTop.Y, Math.Min(y, obstacle.RightBottom.Y));
+                var dx = x - closestX;
+                var dy = y - closestY;
+                if ((dx * dx) + (dy * dy) < radius * radius)
+                {
+                    return true;
+                }
+            }
+            else if (obstacle.Type == "Circle")
+            {
+                var dx = x - obstacle.CenterX.X;
+                var dy = y - obstacle.CenterX.Y;
+                var radiusSum = radius + obstacle.Radius;
+                if ((dx * dx) + (dy * dy) < radiusSum * radiusSum)
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     private void FlushPendingUdpMovementBroadcasts(GameSession gameSession)
@@ -1474,7 +1590,7 @@ public class GameNetworkServer : BackgroundService
         }
     }
 
-    // UDP 이동 패킷을 받아 서버의 플레이어 상태에 반영하고 같은 역할에만 전파합니다.
+    // UDP 조이스틱 입력을 받아 해당 방의 단일 처리 큐에 넣습니다.
     private async Task ReceiveUdpAsync(CancellationToken stoppingToken)
     {
         while (!stoppingToken.IsCancellationRequested)
@@ -1484,12 +1600,7 @@ public class GameNetworkServer : BackgroundService
                 var result = await _udpClient.ReceiveAsync(stoppingToken);
                 Interlocked.Increment(ref _udpPacketsReceivedThisSecond);
                 Interlocked.Add(ref _udpBytesReceivedThisSecond, result.Buffer.Length);
-                var movement = JsonSerializer.Deserialize<PlayerMovementSync>(result.Buffer);
-                if (movement == null || string.IsNullOrWhiteSpace(movement.Id))
-                {
-                    var player = JsonSerializer.Deserialize<Player>(result.Buffer);
-                    movement = player == null ? null : PlayerMovementSync.FromPlayer(player);
-                }
+                var movement = JsonSerializer.Deserialize<PlayerMovementInput>(result.Buffer);
 
                 if (movement == null || !_playerRooms.TryGetValue(movement.Id, out var roomId))
                 {
@@ -1518,11 +1629,6 @@ public class GameNetworkServer : BackgroundService
     {
         foreach (var kvp in gameSession.Sessions)
         {
-            if (kvp.Key == movingPlayer.Id)
-            {
-                continue;
-            }
-
             var recipient = kvp.Value;
             if (recipient.PlayerState.Role != movingPlayer.Role &&
                 !recipient.VisibleOpponentPlayerIds.Contains(movingPlayer.Id))
@@ -1581,7 +1687,7 @@ public sealed record JoinRoomCommand(
 
 public sealed record LeaveRoomCommand(string PlayerId) : RoomCommand;
 
-public sealed record MoveRoomCommand(PlayerMovementSync Movement, IPEndPoint RemoteEndPoint) : RoomCommand;
+public sealed record MoveRoomCommand(PlayerMovementInput Input, IPEndPoint RemoteEndPoint) : RoomCommand;
 
 public class ArrestState
 {
@@ -1596,6 +1702,12 @@ public class PlayerSession
     public BinaryWriter Writer { get; set; } = null!;
     public Player PlayerState { get; set; } = null!;
     public IPEndPoint? UdpEndPoint { get; set; }
+    public float InputX { get; set; }
+    public float InputY { get; set; }
+    public ulong LastMovementInputSequence { get; set; }
+    public DateTime LastMovementInputAtUtc { get; set; } = DateTime.MinValue;
+    public string MovementSessionToken { get; init; } = string.Empty;
+    public List<Obstacle> NearbyCollisionObstacles { get; } = new();
     public HashSet<string> VisibleOpponentPlayerIds { get; } = new();
 }
 
