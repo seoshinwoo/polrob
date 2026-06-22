@@ -791,7 +791,8 @@ public class GameNetworkServer : BackgroundService
                     continue;
                 }
 
-                if (IsPointInVision(police, robber.X, robber.Y))
+                if (IsPointInVision(police, robber.X, robber.Y) &&
+                    !IsVisionBlockedByObstacle(police, robber))
                 {
                     StartArrest(gameSession, police, robber);
                     break;
@@ -1068,6 +1069,150 @@ public class GameNetworkServer : BackgroundService
         var angleDifference = Math.Abs(ShortestAngleDifference(facingAngle, targetAngle));
 
         return angleDifference <= VisionConeAngleDegrees / 2f;
+    }
+
+    // 경찰과 도둑 사이의 선분을 실제로 가로막는 장애물이 있는지 확인합니다.
+    private bool IsVisionBlockedByObstacle(Player police, Player robber)
+    {
+        foreach (var building in _map.Buildings)
+        {
+            if (DoesSegmentIntersectRectangle(
+                    police.X,
+                    police.Y,
+                    robber.X,
+                    robber.Y,
+                    building.LeftTop.X,
+                    building.LeftTop.Y,
+                    building.RightBottom.X,
+                    building.RightBottom.Y))
+            {
+                return true;
+            }
+        }
+
+        foreach (var obstacle in _map.Obstacles)
+        {
+            // 경찰이 들어가 있는 부쉬 자체는 경찰과 도둑 사이의 장애물로 보지 않는다.
+            if (GameMap.IsBushObstacle(obstacle) &&
+                GameMap.ContainsPoint(obstacle, police.X, police.Y))
+            {
+                continue;
+            }
+
+            if (obstacle.Type == "Rect" &&
+                DoesSegmentIntersectRectangle(
+                    police.X,
+                    police.Y,
+                    robber.X,
+                    robber.Y,
+                    obstacle.LeftTop.X,
+                    obstacle.LeftTop.Y,
+                    obstacle.RightBottom.X,
+                    obstacle.RightBottom.Y))
+            {
+                return true;
+            }
+
+            if (obstacle.Type == "Circle" &&
+                DoesSegmentIntersectCircle(
+                    police.X,
+                    police.Y,
+                    robber.X,
+                    robber.Y,
+                    obstacle.CenterX.X,
+                    obstacle.CenterX.Y,
+                    obstacle.Radius))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool DoesSegmentIntersectRectangle(
+        float startX,
+        float startY,
+        float endX,
+        float endY,
+        float left,
+        float top,
+        float right,
+        float bottom)
+    {
+        var directionX = endX - startX;
+        var directionY = endY - startY;
+        var minimum = 0f;
+        var maximum = 1f;
+
+        return ClipSegmentToAxis(-directionX, startX - left, ref minimum, ref maximum) &&
+               ClipSegmentToAxis(directionX, right - startX, ref minimum, ref maximum) &&
+               ClipSegmentToAxis(-directionY, startY - top, ref minimum, ref maximum) &&
+               ClipSegmentToAxis(directionY, bottom - startY, ref minimum, ref maximum);
+    }
+
+    private static bool ClipSegmentToAxis(
+        float direction,
+        float distance,
+        ref float minimum,
+        ref float maximum)
+    {
+        if (Math.Abs(direction) < float.Epsilon)
+        {
+            return distance >= 0f;
+        }
+
+        var ratio = distance / direction;
+        if (direction < 0f)
+        {
+            if (ratio > maximum)
+            {
+                return false;
+            }
+
+            minimum = Math.Max(minimum, ratio);
+        }
+        else
+        {
+            if (ratio < minimum)
+            {
+                return false;
+            }
+
+            maximum = Math.Min(maximum, ratio);
+        }
+
+        return true;
+    }
+
+    private static bool DoesSegmentIntersectCircle(
+        float startX,
+        float startY,
+        float endX,
+        float endY,
+        float centerX,
+        float centerY,
+        float radius)
+    {
+        var directionX = endX - startX;
+        var directionY = endY - startY;
+        var segmentLengthSquared = directionX * directionX + directionY * directionY;
+
+        if (segmentLengthSquared <= float.Epsilon)
+        {
+            return false;
+        }
+
+        var projection = ((centerX - startX) * directionX + (centerY - startY) * directionY) /
+                         segmentLengthSquared;
+        projection = Math.Clamp(projection, 0f, 1f);
+
+        var closestX = startX + projection * directionX;
+        var closestY = startY + projection * directionY;
+        var distanceX = centerX - closestX;
+        var distanceY = centerY - closestY;
+
+        return distanceX * distanceX + distanceY * distanceY <= radius * radius;
     }
 
     // 플레이어 크기를 기준으로 시야 거리를 계산합니다.

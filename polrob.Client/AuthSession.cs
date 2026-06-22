@@ -5,7 +5,7 @@ namespace polrob.Client;
 
 public static class AuthSession
 {
-    private const string LocalNetworkServerHost = "192.168.0.211";
+    private const string LocalNetworkServerHost = "192.168.1.178";
     private static readonly SemaphoreSlim LoadLock = new(1, 1);
     private static bool _isLoaded;
 
