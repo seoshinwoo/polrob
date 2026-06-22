@@ -377,7 +377,10 @@ public partial class GamePlay : ContentPage
 
         try
         {
-            await _networkClient.ConnectAsync(GetServerIpAddress(), _player);
+            await _networkClient.ConnectAsync(
+                GetServerIpAddress(),
+                _player,
+                AuthSession.SessionToken ?? string.Empty);
         }
         catch (Exception ex)
         {

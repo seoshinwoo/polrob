@@ -253,9 +253,10 @@ public partial class GameOver : ContentPage
         try
         {
             using var httpClient = new HttpClient { BaseAddress = new Uri(AuthSession.ApiBaseUrl) };
+            AuthSession.ApplyAuthorization(httpClient);
             var response = await httpClient.PostAsJsonAsync(
                 "game/reset-room",
-                new ResetRoomRequest(AuthSession.UserId!, _roomId, _role));
+                new ResetRoomRequest(_roomId, _role));
 
             if (!response.IsSuccessStatusCode)
             {
@@ -295,7 +296,7 @@ public partial class GameOver : ContentPage
             : message.Trim('"');
     }
 
-    private sealed record ResetRoomRequest(string UserId, string RoomId, PlayerRole Role);
+    private sealed record ResetRoomRequest(string RoomId, PlayerRole Role);
 
     private enum GameOverLayoutDensity
     {

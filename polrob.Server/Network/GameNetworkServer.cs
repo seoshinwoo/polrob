@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Channels;
 using System.Text.Json;
 using Microsoft.Extensions.Hosting;
+using polrob.Server.Controllers;
 using polrob.Shared;
 
 namespace polrob.Server.Network;
@@ -478,15 +479,22 @@ public class GameNetworkServer : BackgroundService
 
                 if (type == TcpMessageType.Join)
                 {
-                    var player = JsonSerializer.Deserialize<Player>(json);
-                    if (player == null)
+                    var joinRequest = JsonSerializer.Deserialize<GameJoinRequest>(json);
+                    if (joinRequest == null ||
+                        !AuthController.ValidateSession(joinRequest.SessionToken, out var authenticatedUserId) ||
+                        string.IsNullOrWhiteSpace(authenticatedUserId))
                     {
-                        continue;
+                        throw new InvalidDataException("TCP 게임 입장 인증에 실패했습니다.");
                     }
 
-                    playerId = player.Id;
-                    roomId = NormalizeRoomId(player.RoomId);
-                    player.RoomId = roomId;
+                    roomId = NormalizeRoomId(joinRequest.RoomId);
+                    var player = _gameRoomService.GetAuthenticatedGamePlayer(roomId, authenticatedUserId);
+                    if (player == null)
+                    {
+                        throw new InvalidDataException("인증된 사용자가 해당 방에 참여 중이지 않습니다.");
+                    }
+
+                    playerId = authenticatedUserId;
 
                     var joinCommand = new JoinRoomCommand(player, client, writer);
                     var gameSession = GetOrCreateGameSession(roomId, stoppingToken);

@@ -57,9 +57,10 @@ public partial class MainPage : ContentPage
 		try
 		{
 			CreateButton.IsEnabled = false;
+			AuthSession.ApplyAuthorization(HttpClient);
 			var response = await HttpClient.PostAsJsonAsync(
 				"game/create",
-				new CreateRoomRequest(AuthSession.UserId, "custom", PlayerRole.Police, true));
+				new CreateRoomRequest("custom", PlayerRole.Police, true));
 
 			if (!response.IsSuccessStatusCode)
 			{
@@ -113,7 +114,6 @@ public partial class MainPage : ContentPage
 	}
 
 	private sealed record CreateRoomRequest(
-		string UserId,
 		string Type,
 		PlayerRole Role,
 		bool IsPrivate);

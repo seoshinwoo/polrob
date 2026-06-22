@@ -83,9 +83,10 @@ public partial class GameJoin : ContentPage
             CustomStatusLabel.Text = "입장 중...";
 
             using var httpClient = new HttpClient { BaseAddress = new Uri(AuthSession.ApiBaseUrl) };
+            AuthSession.ApplyAuthorization(httpClient);
             var response = await httpClient.PostAsJsonAsync(
                 "game/join-custom",
-                new JoinCustomGameRequest(AuthSession.UserId, roomCode, PlayerRole.Robber));
+                new JoinCustomGameRequest(roomCode, PlayerRole.Robber));
 
             if (!response.IsSuccessStatusCode)
             {
@@ -226,5 +227,5 @@ public partial class GameJoin : ContentPage
             : message.Trim('"');
     }
 
-    private sealed record JoinCustomGameRequest(string UserId, string RoomCode, PlayerRole Role);
+    private sealed record JoinCustomGameRequest(string RoomCode, PlayerRole Role);
 }

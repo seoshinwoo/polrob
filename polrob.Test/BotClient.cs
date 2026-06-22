@@ -1,4 +1,5 @@
 using System.Net.Http.Json;
+using System.Net.Http.Headers;
 using Microsoft.AspNetCore.SignalR.Client;
 using polrob.Shared;
 
@@ -30,6 +31,7 @@ public class BotClient : IAsyncDisposable
 
     public string Name { get; set; } = string.Empty;
     public string Id { get; private set; } = string.Empty;
+    public string SessionToken { get; private set; } = string.Empty;
     public PlayerRole Role { get; set; }
     public string RoomId { get; private set; } = string.Empty;
     public int CurrentRoomCount { get; private set; }
@@ -65,6 +67,9 @@ public class BotClient : IAsyncDisposable
             ?? throw new InvalidOperationException("봇 로그인 응답을 읽을 수 없습니다.");
 
         Id = loginResponse.UserId;
+        SessionToken = loginResponse.SessionToken;
+        _httpClient.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue("Bearer", SessionToken);
     }
 
     public async Task Matching()
@@ -76,7 +81,7 @@ public class BotClient : IAsyncDisposable
 
         using var response = await _httpClient.PostAsJsonAsync(
             "game/join-random",
-            new BotMatchingRequest(Id, Role));
+            new BotMatchingRequest(Role));
 
         response.EnsureSuccessStatusCode();
 
@@ -88,14 +93,16 @@ public class BotClient : IAsyncDisposable
         UpdateRoomStatus(matchingResponse);
 
         _hubConnection = new HubConnectionBuilder()
-            .WithUrl(new Uri(_httpClient.BaseAddress!, "hubs/game-room"))
+            .WithUrl(
+                new Uri(_httpClient.BaseAddress!, "hubs/game-room"),
+                options => options.AccessTokenProvider = () => Task.FromResult<string?>(SessionToken))
             .Build();
 
         _hubConnection.On<ServerResponse>("RoomStatusUpdated", UpdateRoomStatus);
         _hubConnection.On<ServerResponse>("GameStarted", UpdateRoomStatus);
 
         await _hubConnection.StartAsync();
-        await _hubConnection.InvokeAsync("JoinRoom", RoomId, Id);
+        await _hubConnection.InvokeAsync("JoinRoom", RoomId);
     }
 
     public Task WaitForMatchAsync(TimeSpan timeout)
@@ -154,6 +161,7 @@ public class BotClient : IAsyncDisposable
             await _gameNetworkClient.ConnectAsync(
                 serverHost,
                 joiningPlayer,
+                SessionToken,
                 gameplayCancellation.Token);
             try
             {
@@ -440,6 +448,6 @@ public class BotClient : IAsyncDisposable
     }
 
     private sealed record BotLoginRequest(string Name, PlayerRole Role);
-    private sealed record LoginResponse(string UserId, string Name);
-    private sealed record BotMatchingRequest(string UserId, PlayerRole Role);
+    private sealed record LoginResponse(string SessionToken, string UserId, string Name);
+    private sealed record BotMatchingRequest(PlayerRole Role);
 }

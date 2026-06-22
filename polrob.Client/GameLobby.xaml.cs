@@ -233,6 +233,7 @@ public partial class GameLobby : ContentPage
                 {
                     options.Transports = HttpTransportType.WebSockets;
                     options.SkipNegotiation = true;
+                    options.AccessTokenProvider = () => Task.FromResult(AuthSession.SessionToken);
                 })
             .WithAutomaticReconnect()
             .Build();
@@ -262,12 +263,12 @@ public partial class GameLobby : ContentPage
             if (!string.IsNullOrWhiteSpace(_roomId)
                 && !string.IsNullOrWhiteSpace(AuthSession.UserId))
             {
-                await _hubConnection.InvokeAsync("JoinRoom", _roomId, AuthSession.UserId);
+                await _hubConnection.InvokeAsync("JoinRoom", _roomId);
             }
         };
 
         await _hubConnection.StartAsync();
-        await _hubConnection.InvokeAsync("JoinRoom", roomId, userId);
+        await _hubConnection.InvokeAsync("JoinRoom", roomId);
     }
 
     private void ApplyRoomStatus(ServerResponse response)
@@ -324,7 +325,7 @@ public partial class GameLobby : ContentPage
             return;
         }
 
-        await _hubConnection.InvokeAsync("ChangeRole", _roomId, AuthSession.UserId, role);
+        await _hubConnection.InvokeAsync("ChangeRole", _roomId, role);
     }
 
     private void UpdateRoleAreaBackgrounds()
@@ -458,7 +459,7 @@ public partial class GameLobby : ContentPage
             {
                 if (removePlayer && !string.IsNullOrWhiteSpace(AuthSession.UserId))
                 {
-                    await connection.InvokeAsync("CancelMatching", _roomId, AuthSession.UserId);
+                    await connection.InvokeAsync("CancelMatching", _roomId);
                 }
                 else
                 {

@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using Microsoft.AspNetCore.SignalR;
+using polrob.Server.Controllers;
 using polrob.Shared;
 
 namespace polrob.Server.Hubs;
@@ -10,6 +11,8 @@ public class GameRoomHub : Hub
     private static readonly TimeSpan DisconnectGracePeriod = TimeSpan.FromSeconds(10);
     private static readonly ConcurrentDictionary<string, RoomConnection> Connections = new();
     private static readonly ConcurrentDictionary<string, string> ActiveUserConnections = new();
+    private const string AuthenticatedUserIdKey = "AuthenticatedUserId";
+    private const string AuthenticatedSessionTokenKey = "AuthenticatedSessionToken";
 
     private readonly GameRoomService _gameRoomService;
     private readonly ILogger<GameRoomHub> _logger;
@@ -20,14 +23,50 @@ public class GameRoomHub : Hub
         _logger = logger;
     }
 
-    public async Task JoinRoom(string roomId, string userId)
+    public override async Task OnConnectedAsync()
     {
-        if (string.IsNullOrWhiteSpace(roomId) || string.IsNullOrWhiteSpace(userId))
+        var httpContext = Context.GetHttpContext();
+        var authorization = httpContext?.Request.Headers.Authorization.ToString();
+        var token = httpContext?.Request.Query["access_token"].ToString();
+        const string bearerPrefix = "Bearer ";
+        if (string.IsNullOrWhiteSpace(token) &&
+            authorization?.StartsWith(bearerPrefix, StringComparison.OrdinalIgnoreCase) == true)
+        {
+            token = authorization[bearerPrefix.Length..].Trim();
+        }
+
+        if (!AuthController.ValidateSession(token ?? string.Empty, out var userId) ||
+            string.IsNullOrWhiteSpace(userId))
+        {
+            Context.Abort();
+            return;
+        }
+
+        Context.Items[AuthenticatedUserIdKey] = userId;
+        Context.Items[AuthenticatedSessionTokenKey] = token;
+        await base.OnConnectedAsync();
+    }
+
+    public async Task JoinRoom(string roomId)
+    {
+        var userId = GetAuthenticatedUserId();
+        if (string.IsNullOrWhiteSpace(roomId))
         {
             await Clients.Caller.SendAsync("RoomStatusUpdated", new ServerResponse
             {
                 Success = false,
-                Message = "방 ID와 사용자 ID가 필요합니다."
+                Message = "방 ID가 필요합니다."
+            });
+            return;
+        }
+
+        if (_gameRoomService.GetAuthenticatedGamePlayer(roomId, userId) == null)
+        {
+            await Clients.Caller.SendAsync("RoomStatusUpdated", new ServerResponse
+            {
+                Success = false,
+                Message = "이 방에 참여 중인 사용자가 아닙니다.",
+                RoomId = roomId
             });
             return;
         }
@@ -50,12 +89,24 @@ public class GameRoomHub : Hub
 
     public async Task StartGame(string roomId)
     {
+        var userId = GetAuthenticatedUserId();
         if (string.IsNullOrWhiteSpace(roomId))
         {
             await Clients.Caller.SendAsync("RoomStatusUpdated", new ServerResponse
             {
                 Success = false,
                 Message = "방 ID가 필요합니다."
+            });
+            return;
+        }
+
+        if (!_gameRoomService.IsRoomHost(roomId, userId))
+        {
+            await Clients.Caller.SendAsync("RoomStatusUpdated", new ServerResponse
+            {
+                Success = false,
+                Message = "방장만 게임을 시작할 수 있습니다.",
+                RoomId = roomId
             });
             return;
         }
@@ -70,14 +121,15 @@ public class GameRoomHub : Hub
         await Clients.Caller.SendAsync("RoomStatusUpdated", gameStartStatus);
     }
 
-    public async Task ChangeRole(string roomId, string userId, PlayerRole role)
+    public async Task ChangeRole(string roomId, PlayerRole role)
     {
-        if (string.IsNullOrWhiteSpace(roomId) || string.IsNullOrWhiteSpace(userId))
+        var userId = GetAuthenticatedUserId();
+        if (string.IsNullOrWhiteSpace(roomId))
         {
             await Clients.Caller.SendAsync("RoomStatusUpdated", new ServerResponse
             {
                 Success = false,
-                Message = "방 ID와 사용자 ID가 필요합니다.",
+                Message = "방 ID가 필요합니다.",
                 Role = role
             });
             return;
@@ -100,19 +152,20 @@ public class GameRoomHub : Hub
             : Groups.RemoveFromGroupAsync(Context.ConnectionId, roomId);
     }
 
-    public async Task CancelMatching(string roomId, string userId)
+    public async Task CancelMatching(string roomId)
     {
-        await CancelMatchingWithAcknowledgement(roomId, userId);
+        await CancelMatchingWithAcknowledgement(roomId);
     }
 
-    public async Task<ServerResponse> CancelMatchingWithAcknowledgement(string roomId, string userId)
+    public async Task<ServerResponse> CancelMatchingWithAcknowledgement(string roomId)
     {
-        if (string.IsNullOrWhiteSpace(roomId) || string.IsNullOrWhiteSpace(userId))
+        var userId = GetAuthenticatedUserId();
+        if (string.IsNullOrWhiteSpace(roomId))
         {
             return new ServerResponse
             {
                 Success = false,
-                Message = "방 ID와 사용자 ID가 필요합니다.",
+                Message = "방 ID가 필요합니다.",
                 RoomId = roomId
             };
         }
@@ -196,6 +249,18 @@ public class GameRoomHub : Hub
     private static string CreateUserKey(string roomId, string userId)
     {
         return $"{roomId}:{userId}";
+    }
+
+    private string GetAuthenticatedUserId()
+    {
+        if (!Context.Items.TryGetValue(AuthenticatedUserIdKey, out var value) || value is not string userId ||
+            !Context.Items.TryGetValue(AuthenticatedSessionTokenKey, out var tokenValue) || tokenValue is not string token ||
+            !AuthController.ValidateSession(token, out var currentUserId) || currentUserId != userId)
+        {
+            throw new HubException("로그인 세션이 만료되었거나 유효하지 않습니다.");
+        }
+
+        return userId;
     }
 
     private sealed record RoomConnection(string RoomId, string UserId);

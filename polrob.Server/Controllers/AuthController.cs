@@ -31,7 +31,7 @@ public class AuthController : ControllerBase
     public record LoginResponse(string SessionToken, string UserId, string Name);
     public record LogoutRequest(string SessionToken);
     public record BotLoginRequest(string? Name, PlayerRole Role);
-    public record BotLoginResponse(string UserId, string Name);
+    public record BotLoginResponse(string SessionToken, string UserId, string Name);
 
     [HttpPost("signup")]
     public async Task<IActionResult> SignUp([FromBody] SignUpRequest req)
@@ -101,7 +101,7 @@ public class AuthController : ControllerBase
         }
 
         var bot = _botIdentityService.Create(req?.Name, req?.Role ?? PlayerRole.Robber);
-        return Ok(new BotLoginResponse(bot.Id, bot.Name));
+        return Ok(new BotLoginResponse(CreateSession(bot.Id), bot.Id, bot.Name));
     }
     public static bool ValidateSession(string sessionToken, out string? userId)
     {
@@ -176,9 +176,13 @@ public class AuthController : ControllerBase
 
     private static LoginResponse CreateLoginResponse(User user)
     {
-        var sessionId = Guid.NewGuid().ToString("N");
-        Sessions[sessionId] = (user.Id, DateTime.UtcNow.AddHours(12));
+        return new LoginResponse(CreateSession(user.Id), user.Id, user.Name);
+    }
 
-        return new LoginResponse(sessionId, user.Id, user.Name);
+    private static string CreateSession(string userId)
+    {
+        var sessionId = Guid.NewGuid().ToString("N");
+        Sessions[sessionId] = (userId, DateTime.UtcNow.AddHours(12));
+        return sessionId;
     }
 }

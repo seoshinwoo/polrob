@@ -25,7 +25,7 @@ public class GameNetworkClient
     public event Action<JailBreakProgressSync>? OnJailBreakProgressReceived;
     public event Action<GameStateSync>? OnGameStateReceived;
 
-    public async Task ConnectAsync(string ipAddress, Player localPlayer)
+    public async Task ConnectAsync(string ipAddress, Player localPlayer, string sessionToken)
     {
         _isDisconnected = false;
         _movementInputSequence = 0;
@@ -43,7 +43,11 @@ public class GameNetworkClient
         _ = Task.Run(ReceiveTcpLoop);
         _ = Task.Run(ReceiveUdpLoop);
 
-        SendTcp(TcpMessageType.Join, JsonSerializer.Serialize(localPlayer));
+        SendTcp(TcpMessageType.Join, JsonSerializer.Serialize(new GameJoinRequest
+        {
+            SessionToken = sessionToken,
+            RoomId = localPlayer.RoomId
+        }));
     }
 
     private void SendTcp(TcpMessageType type, string payload)

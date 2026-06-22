@@ -1,4 +1,5 @@
 using System.Net.Http.Json;
+using System.Net.Http.Headers;
 using Microsoft.Maui.Storage;
 
 namespace polrob.Client;
@@ -90,6 +91,13 @@ public static class AuthSession
         Preferences.Remove("name");
 
         Changed?.Invoke();
+    }
+
+    public static void ApplyAuthorization(HttpClient httpClient)
+    {
+        httpClient.DefaultRequestHeaders.Authorization = string.IsNullOrWhiteSpace(SessionToken)
+            ? null
+            : new AuthenticationHeaderValue("Bearer", SessionToken);
     }
 
     public static string ApiBaseUrl

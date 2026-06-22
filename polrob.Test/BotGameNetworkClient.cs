@@ -29,6 +29,7 @@ public sealed class BotGameNetworkClient : IAsyncDisposable
     public async Task ConnectAsync(
         string serverHost,
         Player localPlayer,
+        string sessionToken,
         CancellationToken cancellationToken)
     {
         _receiveCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -50,7 +51,11 @@ public sealed class BotGameNetworkClient : IAsyncDisposable
             () => ReceiveUdpLoopAsync(_receiveCancellation.Token),
             CancellationToken.None);
 
-        SendTcp(TcpMessageType.Join, JsonSerializer.Serialize(localPlayer));
+        SendTcp(TcpMessageType.Join, JsonSerializer.Serialize(new GameJoinRequest
+        {
+            SessionToken = sessionToken,
+            RoomId = localPlayer.RoomId
+        }));
     }
 
     public async ValueTask SendMoveAsync(Player player)

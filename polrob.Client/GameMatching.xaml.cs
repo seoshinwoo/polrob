@@ -171,10 +171,11 @@ public partial class GameMatching : ContentPage
         try
         {
             _hasRequestedMatching = true;
+            AuthSession.ApplyAuthorization(_httpClient);
 
             var response = await _httpClient.PostAsJsonAsync(
                 "game/join-random",
-                new JoinRandomGameRequest(userId, role));
+                new JoinRandomGameRequest(role));
 
             if (!response.IsSuccessStatusCode)
             {
@@ -230,7 +231,9 @@ public partial class GameMatching : ContentPage
         await DisconnectRoomUpdatesAsync(removePlayer: false);
 
         _hubConnection = new HubConnectionBuilder()
-            .WithUrl(new Uri(new Uri(AuthSession.ApiBaseUrl), "hubs/game-room"))
+            .WithUrl(
+                new Uri(new Uri(AuthSession.ApiBaseUrl), "hubs/game-room"),
+                options => options.AccessTokenProvider = () => Task.FromResult(AuthSession.SessionToken))
             .WithAutomaticReconnect()
             .Build();
 
@@ -275,12 +278,12 @@ public partial class GameMatching : ContentPage
             if (!string.IsNullOrWhiteSpace(_roomId)
                 && !string.IsNullOrWhiteSpace(AuthSession.UserId))
             {
-                await _hubConnection.InvokeAsync("JoinRoom", _roomId, AuthSession.UserId);
+                await _hubConnection.InvokeAsync("JoinRoom", _roomId);
             }
         };
 
         await _hubConnection.StartAsync();
-        await _hubConnection.InvokeAsync("JoinRoom", roomId, userId);
+        await _hubConnection.InvokeAsync("JoinRoom", roomId);
     }
 
     private async Task NavigateToGameAsync(ServerResponse response)
@@ -323,7 +326,7 @@ public partial class GameMatching : ContentPage
                     && !_isMatched
                     && !string.IsNullOrWhiteSpace(AuthSession.UserId))
                 {
-                    await connection.InvokeAsync("CancelMatching", _roomId, AuthSession.UserId);
+                    await connection.InvokeAsync("CancelMatching", _roomId);
                 }
                 else
                 {
@@ -347,5 +350,5 @@ public partial class GameMatching : ContentPage
             : message.Trim('"');
     }
 
-    private sealed record JoinRandomGameRequest(string UserId, PlayerRole Role);
+    private sealed record JoinRandomGameRequest(PlayerRole Role);
 }

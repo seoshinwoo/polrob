@@ -23,17 +23,13 @@ public class GameController : ControllerBase
     [HttpPost("create")]
     public async Task<ActionResult<ServerResponse>> CreateRoom([FromBody] CreateRoomRequest request)
     {
-        if (string.IsNullOrWhiteSpace(request.UserId))
+        if (!TryGetAuthenticatedUserId(out var userId))
         {
-            return BadRequest(new ServerResponse
-            {
-                Success = false,
-                Message = "사용자 ID가 필요합니다."
-            });
+            return Unauthorized("유효한 로그인 세션이 필요합니다.");
         }
 
         var response = await _gameRoomService.CreateRoom(
-            request.UserId,
+            userId,
             request.Type,
             request.Role,
             request.IsPrivate);
@@ -49,13 +45,9 @@ public class GameController : ControllerBase
     [HttpPost("join-custom")]
     public async Task<ActionResult<ServerResponse>> JoinCustomGame([FromBody] JoinCustomGameRequest request)
     {
-        if (string.IsNullOrWhiteSpace(request.UserId))
+        if (!TryGetAuthenticatedUserId(out var userId))
         {
-            return BadRequest(new ServerResponse
-            {
-                Success = false,
-                Message = "사용자 ID가 필요합니다."
-            });
+            return Unauthorized("유효한 로그인 세션이 필요합니다.");
         }
 
         if (string.IsNullOrWhiteSpace(request.RoomCode))
@@ -68,7 +60,7 @@ public class GameController : ControllerBase
         }
 
         var response = await _gameRoomService.JoinCustomGame(
-            request.UserId,
+            userId,
             request.RoomCode,
             request.Role);
 
@@ -91,16 +83,12 @@ public class GameController : ControllerBase
     [HttpPost("join-random")]
     public async Task<ActionResult<ServerResponse>> JoinRandomGame([FromBody] JoinRandomGameRequest request)
     {
-        if (string.IsNullOrWhiteSpace(request.UserId))
+        if (!TryGetAuthenticatedUserId(out var userId))
         {
-            return BadRequest(new ServerResponse
-            {
-                Success = false,
-                Message = "사용자 ID가 필요합니다."
-            });
+            return Unauthorized("유효한 로그인 세션이 필요합니다.");
         }
 
-        var response = await _gameRoomService.JoinRandomGame(request.UserId, string.Empty, request.Role);
+        var response = await _gameRoomService.JoinRandomGame(userId, string.Empty, request.Role);
         if (!response.Success)
         {
             return BadRequest(response);
@@ -128,13 +116,9 @@ public class GameController : ControllerBase
     [HttpPost("reset-room")]
     public async Task<ActionResult<ServerResponse>> ResetRoom([FromBody] ResetRoomRequest request)
     {
-        if (string.IsNullOrWhiteSpace(request.UserId))
+        if (!TryGetAuthenticatedUserId(out var userId))
         {
-            return BadRequest(new ServerResponse
-            {
-                Success = false,
-                Message = "사용자 ID가 필요합니다."
-            });
+            return Unauthorized("유효한 로그인 세션이 필요합니다.");
         }
 
         if (string.IsNullOrWhiteSpace(request.RoomId))
@@ -146,7 +130,7 @@ public class GameController : ControllerBase
             });
         }
 
-        var response = await _gameRoomService.ResetRoomForReplay(request.RoomId, request.UserId, request.Role);
+        var response = await _gameRoomService.ResetRoomForReplay(request.RoomId, userId, request.Role);
         if (!response.Success)
         {
             return BadRequest(response);
@@ -159,13 +143,33 @@ public class GameController : ControllerBase
         return Ok(response);
     }
 
+    private bool TryGetAuthenticatedUserId(out string userId)
+    {
+        userId = string.Empty;
+        var authorization = Request.Headers.Authorization.ToString();
+        const string bearerPrefix = "Bearer ";
+        if (!authorization.StartsWith(bearerPrefix, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        if (!AuthController.ValidateSession(
+                authorization[bearerPrefix.Length..].Trim(),
+                out var authenticatedUserId) || string.IsNullOrWhiteSpace(authenticatedUserId))
+        {
+            return false;
+        }
+
+        userId = authenticatedUserId;
+        return true;
+    }
+
     public sealed record CreateRoomRequest(
-        string UserId,
         string Type = "custom",
         PlayerRole Role = PlayerRole.Police,
         bool IsPrivate = true);
 
-    public sealed record JoinCustomGameRequest(string UserId, string RoomCode, PlayerRole Role = PlayerRole.Robber);
-    public sealed record JoinRandomGameRequest(string UserId, PlayerRole Role);
-    public sealed record ResetRoomRequest(string UserId, string RoomId, PlayerRole Role);
+    public sealed record JoinCustomGameRequest(string RoomCode, PlayerRole Role = PlayerRole.Robber);
+    public sealed record JoinRandomGameRequest(PlayerRole Role);
+    public sealed record ResetRoomRequest(string RoomId, PlayerRole Role);
 }

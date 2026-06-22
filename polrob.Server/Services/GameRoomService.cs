@@ -43,7 +43,8 @@ public class GameRoomService
 
             var game = new Game(type, isPrivate)
             {
-                RoomCode = CreateUniqueRoomCode()
+                RoomCode = CreateUniqueRoomCode(),
+                HostUserId = userId
             };
 
             var player = CreatePlayer(user, game.Id, role);
@@ -218,6 +219,25 @@ public class GameRoomService
             }
 
             return CreateRoomStatusResponse(game);
+        }
+    }
+
+    public Player? GetAuthenticatedGamePlayer(string roomId, string userId)
+    {
+        lock (_roomLock)
+        {
+            RemoveExpiredEmptyRoomsCore(DateTime.UtcNow);
+            var player = Games.FirstOrDefault(game => game.Id == roomId)?.Players
+                .FirstOrDefault(candidate => candidate.Id == userId);
+            return player == null ? null : CopyPlayer(player);
+        }
+    }
+
+    public bool IsRoomHost(string roomId, string userId)
+    {
+        lock (_roomLock)
+        {
+            return Games.Any(game => game.Id == roomId && game.HostUserId == userId);
         }
     }
 
@@ -637,6 +657,23 @@ public class GameRoomService
             Name = user.Name,
             RoomId = roomId,
             Role = role
+        };
+    }
+
+    private static Player CopyPlayer(Player player)
+    {
+        return new Player
+        {
+            Id = player.Id,
+            RoomId = player.RoomId,
+            Name = player.Name,
+            X = player.X,
+            Y = player.Y,
+            Speed = player.Speed,
+            Radius = player.Radius,
+            Angle = player.Angle,
+            IsMoving = player.IsMoving,
+            Role = player.Role
         };
     }
 
