@@ -1,4 +1,5 @@
-﻿using System.Net.Http.Json;
+﻿using System.Net;
+using System.Net.Http.Json;
 using polrob.Shared;
 
 namespace polrob.Client;
@@ -64,6 +65,14 @@ public partial class MainPage : ContentPage
 
 			if (!response.IsSuccessStatusCode)
 			{
+				if (response.StatusCode == HttpStatusCode.Unauthorized)
+				{
+					AuthSession.ClearLocalSession();
+					await DisplayAlertAsync("Create", "로그인 세션이 만료되었습니다. 다시 로그인해주세요.", "OK");
+					await Shell.Current.GoToAsync("Login");
+					return;
+				}
+
 				await DisplayAlertAsync("Create", await ReadErrorMessageAsync(response), "OK");
 				return;
 			}

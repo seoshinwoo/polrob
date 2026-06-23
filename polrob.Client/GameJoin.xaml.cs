@@ -1,3 +1,4 @@
+using System.Net;
 using System.Net.Http.Json;
 using Microsoft.Maui.Storage;
 using polrob.Shared;
@@ -90,6 +91,14 @@ public partial class GameJoin : ContentPage
 
             if (!response.IsSuccessStatusCode)
             {
+                if (response.StatusCode == HttpStatusCode.Unauthorized)
+                {
+                    AuthSession.ClearLocalSession();
+                    CustomStatusLabel.Text = "로그인 세션이 만료되었습니다. 다시 로그인해주세요.";
+                    await Shell.Current.GoToAsync("Login");
+                    return;
+                }
+
                 CustomStatusLabel.Text = await ReadErrorMessageAsync(response);
                 return;
             }

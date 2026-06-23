@@ -78,6 +78,11 @@ public static class AuthSession
             }
         }
 
+        ClearLocalSession();
+    }
+
+    public static void ClearLocalSession()
+    {
         SessionToken = null;
         UserId = null;
         Name = null;

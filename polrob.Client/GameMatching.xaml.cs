@@ -1,3 +1,4 @@
+using System.Net;
 using System.Net.Http.Json;
 using Microsoft.AspNetCore.SignalR.Client;
 using polrob.Shared;
@@ -179,6 +180,16 @@ public partial class GameMatching : ContentPage
 
             if (!response.IsSuccessStatusCode)
             {
+                if (response.StatusCode == HttpStatusCode.Unauthorized)
+                {
+                    AuthSession.ClearLocalSession();
+                    MatchingStatusLabel.Text = "로그인 세션이 만료되었습니다. 다시 로그인해주세요.";
+                    MatchingActivityIndicator.IsRunning = false;
+                    _hasRequestedMatching = false;
+                    await Shell.Current.GoToAsync("Login");
+                    return;
+                }
+
                 MatchingStatusLabel.Text = await ReadErrorMessageAsync(response);
                 MatchingActivityIndicator.IsRunning = false;
                 _hasRequestedMatching = false;
