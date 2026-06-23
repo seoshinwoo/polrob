@@ -463,11 +463,11 @@ public partial class GamePlay : ContentPage
                 return;
             }
 
-            _policeIdleBitmap = await LoadBitmapAsync("char_police_v2.png");
-            _robberIdleBitmap = await LoadBitmapAsync("char_robber_v2.png");
-            _policeArrestBitmap = await LoadBitmapAsync("char_police_arrest_v2.png");
-            _robberSurrendBitmap = await LoadBitmapAsync("char_robber_surrend_v2.png");
-            _robberPrisonBreakBitmap = await LoadBitmapAsync("char_robber_prison_break_v2.png");
+            _policeIdleBitmap = await LoadBitmapAsync("char_police_v3.png");
+            _robberIdleBitmap = await LoadBitmapAsync("char_robber_v3.png");
+            _policeArrestBitmap = await LoadBitmapAsync("char_police_arrest_v3.png");
+            _robberSurrendBitmap = await LoadBitmapAsync("char_robber_surrend_v3.png");
+            _robberPrisonBreakBitmap = await LoadBitmapAsync("char_robber_prison_break_v3.png");
             _policeStationBitmap = await LoadBitmapAsync("police_station.png");
             _jailBitmap = await LoadBitmapAsync("jail_v2.png");
             _wallBitmap = await LoadBitmapAsync("wall.png");
@@ -479,8 +479,8 @@ public partial class GamePlay : ContentPage
 
             for (int i = 0; i < 8; i++)
             {
-                _policeRunBitmaps[i] = await LoadBitmapAsync($"char_police_run_v2_{i + 1}.png");
-                _robberRunBitmaps[i] = await LoadBitmapAsync($"char_robber_run_v2_{i + 1}.png");
+                _policeRunBitmaps[i] = await LoadBitmapAsync($"char_police_run_v3_{i + 1}.png");
+                _robberRunBitmaps[i] = await LoadBitmapAsync($"char_robber_run_v3_{i + 1}.png");
             }
 
             _assetsLoaded = true;
@@ -987,7 +987,7 @@ public partial class GamePlay : ContentPage
 
                 float drawRadius = player.Radius * 2f; // 100f (기본 렌더링 범위: 200x200)
 
-                // 모든 v2 캐릭터 이미지는 같은 512x512 캔버스와 중심점으로 정규화되어 있습니다.
+                // 모든 v3 캐릭터 이미지는 같은 512x512 캔버스와 중심점으로 정규화되어 있습니다.
                 var destRect = new SKRect(-drawRadius, -drawRadius, drawRadius, drawRadius);
                 if (isInsideBush)
                 {
