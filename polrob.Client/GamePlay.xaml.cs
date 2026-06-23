@@ -50,6 +50,13 @@ public partial class GamePlay : ContentPage
     private const float PlayerNameMaxWidth = 180f;
     private const byte BushPlayerOpacity = 185;
     private const float RenderCullPadding = 100f;
+    private const float TerrainTileWorldSize = 256f;
+    private static readonly SKColor MapOutsideColor = SKColor.Parse("#4C4F4A");
+    private static readonly SKColor MissingTerrainColor = SKColor.Parse("#7F865F");
+    private static readonly SKRect VillageTerrainBounds = new(256f, 1280f, 4352f, 4352f);
+    private static readonly SKRect WestForestTerrainBounds = new(0f, 4608f, 2816f, 7500f);
+    private static readonly SKRect EastForestTerrainBounds = new(2304f, 4608f, 5000f, 7500f);
+    private static readonly SKRect PondTerrainBounds = new(512f, 4864f, 2048f, 7424f);
     private readonly List<Obstacle> _nearbyCollisionObstacles = new();
     private readonly SemaphoreSlim _assetLoadLock = new(1, 1);
     private bool _assetsLoaded;
@@ -69,6 +76,7 @@ public partial class GamePlay : ContentPage
     private SKBitmap? _treeBitmap;
     private SKBitmap? _pondBitmap;
     private SKBitmap? _bushBitmap;
+    private readonly SKBitmap?[,] _terrainTiles = new SKBitmap?[4, 4];
 
     // 체포 상태 만료 시간 기록 (2초 유지용)
     private Dictionary<string, DateTime> _arrestVisualTimers = new();
@@ -476,6 +484,7 @@ public partial class GamePlay : ContentPage
             _treeBitmap = await LoadBitmapAsync("tree.png");
             _pondBitmap = await LoadBitmapAsync("pond_v2.png");
             _bushBitmap = await LoadBitmapAsync("bush.png");
+            await LoadTerrainTilesAsync();
 
             for (int i = 0; i < 8; i++)
             {
@@ -488,6 +497,17 @@ public partial class GamePlay : ContentPage
         finally
         {
             _assetLoadLock.Release();
+        }
+    }
+
+    private async Task LoadTerrainTilesAsync()
+    {
+        for (var row = 0; row < _terrainTiles.GetLength(0); row++)
+        {
+            for (var column = 0; column < _terrainTiles.GetLength(1); column++)
+            {
+                _terrainTiles[row, column] = await LoadBitmapAsync($"TerrainTiles/terrain_tile_{row}{column}.png");
+            }
         }
     }
 
@@ -846,7 +866,7 @@ public partial class GamePlay : ContentPage
 
     private void Draw(SKCanvas canvas, int width, int height)
     {
-        canvas.Clear(SKColor.Parse("#555555"));
+        canvas.Clear(MapOutsideColor);
 
         canvas.Save();
 
@@ -859,6 +879,8 @@ public partial class GamePlay : ContentPage
             _player.Y - (height / 2f) - RenderCullPadding,
             _player.X + (width / 2f) + RenderCullPadding,
             _player.Y + (height / 2f) + RenderCullPadding);
+
+        DrawMapBackground(canvas, visibleWorldBounds);
 
         using (var mapPaint = new SKPaint { Color = SKColors.LightGray, Style = SKPaintStyle.Stroke, StrokeWidth = 10 })
         {
@@ -935,6 +957,149 @@ public partial class GamePlay : ContentPage
                 // 여기서는 터치한 곳 위치에 조이스틱이 뜨도록 (Floating Joystick) 구현함.
             }
         }
+    }
+
+    private void DrawMapBackground(SKCanvas canvas, SKRect visibleWorldBounds)
+    {
+        var mapBounds = new SKRect(0, 0, _gameMap.Width, _gameMap.Height);
+
+        canvas.Save();
+        canvas.ClipRect(mapBounds);
+
+        DrawTiledRect(canvas, mapBounds, visibleWorldBounds, TerrainTile(0, 2), MissingTerrainColor);
+        DrawTerrainRegion(
+            canvas,
+            VillageTerrainBounds,
+            visibleWorldBounds,
+            fillTile: TerrainTile(0, 1),
+            verticalEdgeTile: TerrainTile(1, 1),
+            horizontalEdgeTile: TerrainTile(3, 1),
+            fallbackColor: SKColor.Parse("#CDB78B"));
+
+        DrawTerrainRegion(
+            canvas,
+            WestForestTerrainBounds,
+            visibleWorldBounds,
+            fillTile: TerrainTile(0, 0),
+            verticalEdgeTile: TerrainTile(1, 0),
+            horizontalEdgeTile: TerrainTile(3, 0),
+            fallbackColor: SKColor.Parse("#766243"));
+
+        DrawTerrainRegion(
+            canvas,
+            EastForestTerrainBounds,
+            visibleWorldBounds,
+            fillTile: TerrainTile(0, 0),
+            verticalEdgeTile: TerrainTile(1, 0),
+            horizontalEdgeTile: TerrainTile(3, 0),
+            fallbackColor: SKColor.Parse("#766243"));
+
+        DrawTerrainRegion(
+            canvas,
+            PondTerrainBounds,
+            visibleWorldBounds,
+            fillTile: TerrainTile(0, 3),
+            verticalEdgeTile: TerrainTile(1, 3),
+            horizontalEdgeTile: TerrainTile(3, 3),
+            fallbackColor: SKColor.Parse("#6F8F83"),
+            invertWaterEdges: true);
+
+        canvas.Restore();
+    }
+
+    private SKBitmap? TerrainTile(int row, int column) => _terrainTiles[row, column];
+
+    private static void DrawTerrainRegion(
+        SKCanvas canvas,
+        SKRect bounds,
+        SKRect visibleWorldBounds,
+        SKBitmap? fillTile,
+        SKBitmap? verticalEdgeTile,
+        SKBitmap? horizontalEdgeTile,
+        SKColor fallbackColor,
+        bool invertWaterEdges = false)
+    {
+        DrawTiledRect(canvas, bounds, visibleWorldBounds, fillTile, fallbackColor);
+
+        var tileSize = TerrainTileWorldSize;
+        var topEdge = new SKRect(bounds.Left, bounds.Top, bounds.Right, bounds.Top + tileSize);
+        var bottomEdge = new SKRect(bounds.Left, bounds.Bottom - tileSize, bounds.Right, bounds.Bottom);
+        var leftEdge = new SKRect(bounds.Left, bounds.Top, bounds.Left + tileSize, bounds.Bottom);
+        var rightEdge = new SKRect(bounds.Right - tileSize, bounds.Top, bounds.Right, bounds.Bottom);
+
+        DrawTiledRect(canvas, topEdge, visibleWorldBounds, horizontalEdgeTile, fallbackColor, flipY: invertWaterEdges);
+        DrawTiledRect(canvas, bottomEdge, visibleWorldBounds, horizontalEdgeTile, fallbackColor, flipY: !invertWaterEdges);
+        DrawTiledRect(canvas, leftEdge, visibleWorldBounds, verticalEdgeTile, fallbackColor, flipX: !invertWaterEdges);
+        DrawTiledRect(canvas, rightEdge, visibleWorldBounds, verticalEdgeTile, fallbackColor, flipX: invertWaterEdges);
+    }
+
+    private static void DrawTiledRect(
+        SKCanvas canvas,
+        SKRect bounds,
+        SKRect visibleWorldBounds,
+        SKBitmap? tile,
+        SKColor fallbackColor,
+        bool flipX = false,
+        bool flipY = false)
+    {
+        if (!RectsIntersect(bounds, visibleWorldBounds))
+        {
+            return;
+        }
+
+        if (tile == null)
+        {
+            using var fallbackPaint = new SKPaint
+            {
+                Color = fallbackColor,
+                Style = SKPaintStyle.Fill,
+                IsAntialias = false
+            };
+            canvas.DrawRect(bounds, fallbackPaint);
+            return;
+        }
+
+        var startX = bounds.Left + (MathF.Floor((visibleWorldBounds.Left - bounds.Left) / TerrainTileWorldSize) * TerrainTileWorldSize);
+        var startY = bounds.Top + (MathF.Floor((visibleWorldBounds.Top - bounds.Top) / TerrainTileWorldSize) * TerrainTileWorldSize);
+
+        canvas.Save();
+        canvas.ClipRect(bounds);
+
+        for (var y = startY; y < visibleWorldBounds.Bottom && y < bounds.Bottom; y += TerrainTileWorldSize)
+        {
+            for (var x = startX; x < visibleWorldBounds.Right && x < bounds.Right; x += TerrainTileWorldSize)
+            {
+                var destination = new SKRect(x, y, x + TerrainTileWorldSize, y + TerrainTileWorldSize);
+                if (RectsIntersect(destination, visibleWorldBounds))
+                {
+                    DrawTerrainTile(canvas, tile, destination, flipX, flipY);
+                }
+            }
+        }
+
+        canvas.Restore();
+    }
+
+    private static void DrawTerrainTile(SKCanvas canvas, SKBitmap tile, SKRect destination, bool flipX, bool flipY)
+    {
+        if (!flipX && !flipY)
+        {
+            canvas.DrawBitmap(tile, destination);
+            return;
+        }
+
+        canvas.Save();
+        canvas.Translate(destination.MidX, destination.MidY);
+        canvas.Scale(flipX ? -1f : 1f, flipY ? -1f : 1f);
+
+        var flippedDestination = new SKRect(
+            -destination.Width / 2f,
+            -destination.Height / 2f,
+            destination.Width / 2f,
+            destination.Height / 2f);
+
+        canvas.DrawBitmap(tile, flippedDestination);
+        canvas.Restore();
     }
 
     private void DrawPlayers(SKCanvas canvas)
