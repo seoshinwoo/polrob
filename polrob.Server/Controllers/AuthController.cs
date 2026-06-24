@@ -103,6 +103,7 @@ public class AuthController : ControllerBase
         var bot = _botIdentityService.Create(req?.Name, req?.Role ?? PlayerRole.Robber);
         return Ok(new BotLoginResponse(CreateSession(bot.Id), bot.Id, bot.Name));
     }
+
     public static bool ValidateSession(string sessionToken, out string? userId)
     {
         userId = null;
