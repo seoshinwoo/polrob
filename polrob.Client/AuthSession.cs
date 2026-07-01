@@ -98,6 +98,7 @@ public static class AuthSession
         Changed?.Invoke();
     }
 
+    // HttpClient가 서버에 요청을 보낼 때 로그인 토큰을 Authorization 헤더에 붙여주는 함수
     public static void ApplyAuthorization(HttpClient httpClient)
     {
         httpClient.DefaultRequestHeaders.Authorization = string.IsNullOrWhiteSpace(SessionToken)
