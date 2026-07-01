@@ -10,9 +10,10 @@
 모바일 클라이언트부터 매치메이킹, 소켓 통신, 방 단위 게임 루프와 부하 테스트까지 직접 구현한 개인 프로젝트입니다.
 
 <p>
-  <img src="https://img.shields.io/badge/.NET-10.0-512BD4?style=for-the-badge&logo=dotnet&logoColor=white" alt=".NET 10" />
+  <img src="https://img.shields.io/badge/.NET-10.0-512BD4?style=for-the-badge" alt=".NET 10" />
   <img src="https://img.shields.io/badge/C%23-Game_Server-239120?style=for-the-badge&logo=csharp&logoColor=white" alt="C#" />
-  <img src="https://img.shields.io/badge/.NET_MAUI-Client-512BD4?style=for-the-badge&logo=dotnet&logoColor=white" alt=".NET MAUI" />
+  <img src="https://img.shields.io/badge/.NET_MAUI-Client-512BD4?style=for-the-badge" alt=".NET MAUI" />
+  <img src="https://img.shields.io/badge/SkiaSharp-Rendering-00A6A6?style=for-the-badge" alt="SkiaSharp" />
   <img src="https://img.shields.io/badge/SignalR-Lobby-7B42BC?style=for-the-badge&logo=signal&logoColor=white" alt="SignalR" />
   <img src="https://img.shields.io/badge/Azure_Cosmos_DB-Persistence-0078D4?style=for-the-badge&logo=microsoftazure&logoColor=white" alt="Azure Cosmos DB" />
 </p>
@@ -238,7 +239,8 @@ bot failures · room phase · eligible Playing samples
 | 영역 | 기술 |
 |---|---|
 | Language / Runtime | C#, .NET 10 |
-| Mobile Client | .NET MAUI, XAML, SkiaSharp |
+| Mobile Client | .NET MAUI, XAML |
+| Rendering | SkiaSharp |
 | Web / Lobby | ASP.NET Core Web API, SignalR |
 | Game Transport | `TcpListener`, `TcpClient`, `UdpClient`, custom packet types |
 | Concurrency | `BackgroundService`, `Channel<T>`, `ConcurrentDictionary`, room-scoped loop |
