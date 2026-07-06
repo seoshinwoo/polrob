@@ -4,10 +4,10 @@
 
 # PolRob
 
-### 2명의 경찰과 4명의 도둑이 벌이는 6인 실시간 비대칭 추격전
+### 경찰과 도도ㅜㄱ의 쫓고 쫓기는 실시간 추격전!
 
-클라이언트는 **조이스틱 입력만 전송**하고, 서버가 이동·충돌·시야·체포·탈옥·승패를 판정합니다.<br/>
-모바일 클라이언트부터 매치메이킹, 소켓 통신, 방 단위 게임 루프와 부하 테스트까지 직접 구현한 개인 프로젝트입니다.
+경찰들은 제한 시간 안에 도둑을 모두 체포해야 하고, 도둑들은 맵 구석구석으로 도망치고 잡힌 동료를 탈옥시키며 끝까지 버텨야 합니다. <br />
+커스텀 매칭으로 친구들과 함께 플레이하고, 혼자일 때는 랜덤 매칭으로 다른 사람들과 플레이하세요.
 
 <p>
   <img src="https://img.shields.io/badge/.NET-10.0-512BD4?style=for-the-badge" alt=".NET 10" />
@@ -24,78 +24,19 @@
 
 ## 🎮 프로젝트 개요
 
-| 항목 | 내용 |
-|---|---|
-| 프로젝트 | PolRob |
-| 장르 | 6인 실시간 비대칭 멀티플레이 추격 게임 |
-| 게임 구성 | Police 2명 vs Robber 4명 |
-| 개발 형태 | 개인 프로젝트 — 기획, 서버, 네트워크, 모바일 클라이언트 구현 |
-| 지원 플랫폼 | Android, iOS |
-| 서버 | ASP.NET Core Web API + SignalR + Custom TCP/UDP Server |
-| 데이터베이스 | Azure Cosmos DB |
+| Genre | 캐주얼 멀티플레이 게임 |
+| Platform | Android, iOS |
+| 개발 인원 | 1명 |
 
-| 👮 Police | 🥷 Robber |
-|---|---|
-| 제한 시간 안에 모든 도둑을 체포하고 감옥에 수감합니다. | 건물과 부쉬를 이용해 시야를 피하고 제한 시간까지 생존합니다. |
-| 시야와 장애물 판정을 통과한 도둑과 일정 시간 접촉하면 체포합니다. | 감옥 근처에서 구조 게이지를 채워 수감된 동료를 탈옥시킵니다. |
 
-```text
-로그인 → 랜덤 매칭 / 커스텀 방 → 역할 구성 → 게임 시작
-   → 실시간 추격·체포·탈옥 → 서버 승패 판정 → 결과 / 재대결
-```
+## Game Rule
 
-### 프로젝트에서 검증하고자 한 것
-
-- 신뢰성과 실시간성이 다른 데이터를 어떤 프로토콜로 나눌 것인가
-- 여러 네트워크 실행 흐름이 한 방의 상태를 동시에 변경하지 않게 하는 방법은 무엇인가
-- 신뢰할 수 없는 클라이언트 입력으로부터 게임 상태를 어떻게 보호할 것인가
-- 성능 개선을 감이 아니라 동일 조건의 수치로 어떻게 증명할 것인가
+- 기본적으로 게임은 경찰 2명, 도둑 4명으로 구성됩니다
+- 한 게임의 시간은 300초이고, 시간 안에 경찰이 모든 도둑을 잡으면 경찰 승리, 못 잡으면 도둑 승리입니다
+- 경찰의 시야 안에 도둑이 들어오면 해당 도둑은 감옥에 갇히게 되고 체포되지 않은 도둑이 감옥으로 가서 탈옥시킬 수 있습니다
+- 커스텀 방을 만들고 친구들을 초대해 게임을 진행할 수도 있고, 랜덤 매칭을 통해 다른 플레이어들과 게임을 할 수도 있습니다
 
 ---
-
-## 🏗️ 시스템 아키텍처
-
-```mermaid
-flowchart LR
-    subgraph Client[.NET MAUI Client]
-        UI[Login / Lobby / Gameplay]
-        Input[Joystick Input]
-        Render[SkiaSharp Rendering]
-        Network[GameNetworkClient]
-    end
-
-    subgraph Web[ASP.NET Core :5174]
-        API[REST API<br/>Auth · Match · Room]
-        Hub[SignalR Hub<br/>Lobby Events]
-        Session[Login Session]
-    end
-
-    subgraph GameServer[GameNetworkServer]
-        TCP[TCP :7777<br/>Reliable Events]
-        UDP[UDP :7778<br/>Movement Input / Snapshot]
-        Queue[Room Command Queue]
-        Tick[Room Single-Consumer Loop]
-        Rules[Authoritative Simulation<br/>Move · Collision · Arrest · Jailbreak · Win]
-        Metrics[Traffic / Runtime Metrics]
-    end
-
-    DB[(Azure Cosmos DB)]
-
-    UI -->|HTTP + Bearer Token| API
-    UI <-->|SignalR + Access Token| Hub
-    API --> Session
-    Hub --> Session
-    API --> DB
-    Input --> Network
-    Network <-->|Authenticated Join / State| TCP
-    Network <-->|Input / Authoritative Snapshot| UDP
-    TCP --> Queue
-    UDP --> Queue
-    Queue --> Tick --> Rules
-    Rules --> TCP
-    Rules --> UDP
-    Tick --> Metrics
-```
 
 ### 통신 채널 분리
 
@@ -114,7 +55,7 @@ flowchart LR
 
 클라이언트가 계산한 좌표를 신뢰하지 않습니다. 클라이언트는 정규화 전 조이스틱 입력과 순서 번호만 보내며, 서버가 고정된 속도와 반지름을 기준으로 위치를 계산합니다.
 
-```mermaid
+<!-- ```mermaid
 sequenceDiagram
     participant C as Client
     participant U as UDP Receiver
@@ -127,7 +68,7 @@ sequenceDiagram
     R->>R: validate token / endpoint / sequence
     R->>R: normalize input + simulate movement + collision
     R-->>C: authoritative position snapshot
-```
+``` -->
 
 서버 검증 항목:
 
@@ -219,10 +160,10 @@ bot failures · room phase · eligible Playing samples
 3. 한 tick에 쌓인 동일 플레이어 입력을 최신값 하나로 coalescing
 4. 정지 플레이어의 불필요한 입력 송신 빈도 감소
 
-> [!IMPORTANT]
+<!-- > [!IMPORTANT]
 > 이 수치는 동일 로컬 환경에서 **최적화 전후의 상대적 변화**를 비교한 결과이며 실제 서비스 동시접속 수용량을 의미하지 않습니다. 이후 추가된 server-authoritative simulation과 인증 payload의 비용은 현재 구조에서 별도로 재측정해야 합니다.
 
-실행 스크립트와 개별 실험은 [`run_load_metrics.sh`](run_load_metrics.sh), [`서버 최적화 리포트`](docs/server_optimization_report.md)에서 확인할 수 있습니다.
+실행 스크립트와 개별 실험은 [`run_load_metrics.sh`](run_load_metrics.sh), [`서버 최적화 리포트`](docs/server_optimization_report.md)에서 확인할 수 있습니다. -->
 
 ---
 

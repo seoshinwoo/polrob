@@ -1,0 +1,240 @@
+<svg width="2400" height="1350" viewBox="0 0 2400 1350" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <title>PolRob Runtime Architecture</title>
+  <desc>Portfolio architecture diagram for PolRob showing .NET MAUI client, ASP.NET Core REST and SignalR layer, raw TCP/UDP game server, room service, and Azure Cosmos DB.</desc>
+  <defs>
+    <filter id="softShadow" x="-10%" y="-10%" width="120%" height="130%">
+      <feDropShadow dx="0" dy="14" stdDeviation="18" flood-color="#102033" flood-opacity="0.10"/>
+    </filter>
+    <linearGradient id="serverFill" x1="650" y1="180" x2="1690" y2="1190" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#F4F8FB"/>
+    </linearGradient>
+    <linearGradient id="clientFill" x1="80" y1="180" x2="600" y2="1190" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#F4FBF9"/>
+    </linearGradient>
+    <marker id="arrow-http" markerWidth="14" markerHeight="14" refX="11" refY="7" orient="auto" markerUnits="strokeWidth">
+      <path d="M2 2L12 7L2 12Z" fill="#EA580C"/>
+    </marker>
+    <marker id="arrow-signalr" markerWidth="14" markerHeight="14" refX="11" refY="7" orient="auto" markerUnits="strokeWidth">
+      <path d="M2 2L12 7L2 12Z" fill="#7C3AED"/>
+    </marker>
+    <marker id="arrow-tcp" markerWidth="14" markerHeight="14" refX="11" refY="7" orient="auto" markerUnits="strokeWidth">
+      <path d="M2 2L12 7L2 12Z" fill="#2563EB"/>
+    </marker>
+    <marker id="arrow-udp" markerWidth="14" markerHeight="14" refX="11" refY="7" orient="auto" markerUnits="strokeWidth">
+      <path d="M2 2L12 7L2 12Z" fill="#059669"/>
+    </marker>
+    <marker id="arrow-neutral" markerWidth="14" markerHeight="14" refX="11" refY="7" orient="auto" markerUnits="strokeWidth">
+      <path d="M2 2L12 7L2 12Z" fill="#475569"/>
+    </marker>
+    <style>
+      .bg { fill: #F6F8FB; }
+      .panel { stroke: #D7DEE8; stroke-width: 2; filter: url(#softShadow); }
+      .section { fill: #F9FBFE; stroke: #DDE5EF; stroke-width: 2; }
+      .card { fill: #FFFFFF; stroke: #D7DEE8; stroke-width: 2; }
+      .card-http { fill: #FFF7ED; stroke: #FDBA74; stroke-width: 2; }
+      .card-signalr { fill: #F5F3FF; stroke: #C4B5FD; stroke-width: 2; }
+      .card-tcp { fill: #EFF6FF; stroke: #93C5FD; stroke-width: 2; }
+      .card-udp { fill: #ECFDF5; stroke: #86EFAC; stroke-width: 2; }
+      .card-db { fill: #F0FDFA; stroke: #5EEAD4; stroke-width: 2; }
+      .ink { fill: #172033; }
+      .muted { fill: #64748B; }
+      .tiny { font-family: Arial, sans-serif; font-size: 22px; font-weight: 500; letter-spacing: 0; }
+      .small { font-family: Arial, sans-serif; font-size: 25px; font-weight: 500; letter-spacing: 0; }
+      .body { font-family: Arial, sans-serif; font-size: 28px; font-weight: 500; letter-spacing: 0; }
+      .body-strong { font-family: Arial, sans-serif; font-size: 30px; font-weight: 700; letter-spacing: 0; }
+      .label { font-family: Arial, sans-serif; font-size: 24px; font-weight: 700; letter-spacing: 0; }
+      .panel-title { font-family: Arial, sans-serif; font-size: 38px; font-weight: 800; letter-spacing: 0; fill: #172033; }
+      .section-title { font-family: Arial, sans-serif; font-size: 30px; font-weight: 800; letter-spacing: 0; fill: #172033; }
+      .title { font-family: Arial, sans-serif; font-size: 58px; font-weight: 900; letter-spacing: 0; fill: #101828; }
+      .subtitle { font-family: Arial, sans-serif; font-size: 28px; font-weight: 500; letter-spacing: 0; fill: #667085; }
+      .pill-text { font-family: Arial, sans-serif; font-size: 22px; font-weight: 800; letter-spacing: 0; fill: #FFFFFF; }
+      .arrow-http { stroke: #EA580C; stroke-width: 6; fill: none; marker-end: url(#arrow-http); stroke-linecap: round; stroke-linejoin: round; }
+      .arrow-signalr { stroke: #7C3AED; stroke-width: 6; fill: none; marker-end: url(#arrow-signalr); stroke-linecap: round; stroke-linejoin: round; }
+      .arrow-tcp { stroke: #2563EB; stroke-width: 6; fill: none; marker-end: url(#arrow-tcp); stroke-linecap: round; stroke-linejoin: round; }
+      .arrow-udp { stroke: #059669; stroke-width: 6; fill: none; marker-end: url(#arrow-udp); stroke-linecap: round; stroke-linejoin: round; }
+      .arrow-neutral { stroke: #475569; stroke-width: 5; fill: none; marker-end: url(#arrow-neutral); stroke-linecap: round; stroke-linejoin: round; }
+      .arrow-dash { stroke-dasharray: 10 12; }
+    </style>
+  </defs>
+
+  <rect class="bg" width="2400" height="1350"/>
+  <circle cx="2160" cy="122" r="110" fill="#EA580C" opacity="0.06"/>
+  <circle cx="220" cy="1230" r="150" fill="#0F766E" opacity="0.06"/>
+
+  <text class="title" x="80" y="92">PolRob Runtime Architecture</text>
+  <text class="subtitle" x="82" y="135">HTTP, SignalR, TCP, and UDP are separated by responsibility; gameplay state is server-authoritative.</text>
+
+  <g transform="translate(1560 58)">
+    <rect x="0" y="0" width="760" height="76" rx="8" fill="#FFFFFF" stroke="#D7DEE8" stroke-width="2"/>
+    <rect x="24" y="22" width="96" height="32" rx="8" fill="#EA580C"/>
+    <text class="pill-text" x="48" y="45">HTTP</text>
+    <rect x="150" y="22" width="118" height="32" rx="8" fill="#7C3AED"/>
+    <text class="pill-text" x="170" y="45">SignalR</text>
+    <rect x="298" y="22" width="82" height="32" rx="8" fill="#2563EB"/>
+    <text class="pill-text" x="320" y="45">TCP</text>
+    <rect x="410" y="22" width="82" height="32" rx="8" fill="#059669"/>
+    <text class="pill-text" x="431" y="45">UDP</text>
+    <text class="tiny muted" x="528" y="45">channel legend</text>
+  </g>
+
+  <rect class="panel" x="80" y="180" width="520" height="1010" rx="8" fill="url(#clientFill)"/>
+  <rect x="112" y="212" width="92" height="12" rx="6" fill="#0F766E"/>
+  <text class="panel-title" x="112" y="270">.NET MAUI Client</text>
+
+  <rect class="card-http" x="115" y="305" width="450" height="135" rx="8"/>
+  <text class="body-strong ink" x="150" y="355">Login / Main / Join</text>
+  <text class="small muted" x="150" y="389">signup/login, create room</text>
+  <text class="small muted" x="150" y="419">join custom or random rooms</text>
+
+  <rect class="card-signalr" x="115" y="490" width="450" height="135" rx="8"/>
+  <text class="body-strong ink" x="150" y="540">Lobby / Matching</text>
+  <text class="small muted" x="150" y="577">room groups, role changes, match count</text>
+  <text class="tiny muted" x="150" y="608">GameStarted and RoomStatusUpdated</text>
+
+  <rect class="card" x="115" y="675" width="450" height="145" rx="8"/>
+  <text class="body-strong ink" x="150" y="728">GamePlay + SkiaSharp</text>
+  <text class="small muted" x="150" y="763">rendering, local prediction</text>
+  <text class="small muted" x="150" y="793">remote interpolation</text>
+
+  <rect class="card" x="115" y="870" width="450" height="150" rx="8"/>
+  <text class="body-strong ink" x="150" y="922">GameNetworkClient</text>
+  <text class="small muted" x="150" y="960">TCP join/events + UDP movement</text>
+  <text class="tiny muted" x="150" y="993">uses AuthSession.GameServerHost</text>
+
+  <rect class="card" x="115" y="1055" width="450" height="82" rx="8"/>
+  <text class="body-strong ink" x="150" y="1105">Local Session Cache</text>
+  <text class="tiny muted" x="150" y="1134">SecureStorage token + Preferences</text>
+
+  <rect class="panel" x="650" y="180" width="1040" height="1010" rx="8" fill="url(#serverFill)"/>
+  <rect x="682" y="212" width="92" height="12" rx="6" fill="#2563EB"/>
+  <text class="panel-title" x="682" y="270">ASP.NET Core Server</text>
+  <text class="small muted" x="1195" y="268">:5174 web app + hosted real-time server</text>
+
+  <rect class="section" x="690" y="300" width="960" height="350" rx="8"/>
+  <text class="section-title" x="720" y="350">Web / Lobby Layer</text>
+
+  <rect class="card-http" x="730" y="385" width="300" height="110" rx="8"/>
+  <text class="body-strong ink" x="760" y="430">REST Controllers</text>
+  <text class="small muted" x="760" y="466">AuthController</text>
+  <text class="small muted" x="760" y="491">GameController</text>
+
+  <rect class="card-signalr" x="730" y="525" width="300" height="92" rx="8"/>
+  <text class="body-strong ink" x="760" y="576">GameRoomHub</text>
+  <text class="small muted" x="760" y="605">SignalR room groups</text>
+
+  <rect class="card" x="1080" y="385" width="245" height="110" rx="8"/>
+  <text class="body-strong ink" x="1110" y="430">Login Sessions</text>
+  <text class="small muted" x="1110" y="466">in-memory token</text>
+  <text class="tiny muted" x="1110" y="491">12 hour expiry</text>
+
+  <rect class="card" x="1360" y="385" width="250" height="110" rx="8"/>
+  <text class="body-strong ink" x="1390" y="430">UserDbService</text>
+  <text class="small muted" x="1390" y="466">Cosmos access</text>
+  <text class="tiny muted" x="1390" y="491">PBKDF2 users</text>
+
+  <rect class="card" x="1080" y="525" width="530" height="92" rx="8"/>
+  <text class="body-strong ink" x="1110" y="576">GameRoomService</text>
+  <text class="small muted" x="1110" y="605">room code, roles, matching, replay cleanup</text>
+
+  <rect class="section" x="690" y="720" width="960" height="420" rx="8"/>
+  <text class="section-title" x="720" y="770">Real-time GameNetworkServer</text>
+
+  <rect class="card-tcp" x="730" y="815" width="220" height="105" rx="8"/>
+  <text class="body-strong ink" x="760" y="861">TCP :7777</text>
+  <text class="small muted" x="760" y="895">join, initial state</text>
+  <text class="tiny muted" x="760" y="918">events and phase</text>
+
+  <rect class="card-udp" x="730" y="955" width="220" height="105" rx="8"/>
+  <text class="body-strong ink" x="760" y="1001">UDP :7778</text>
+  <text class="small muted" x="760" y="1035">input, snapshots</text>
+  <text class="tiny muted" x="760" y="1058">latest state wins</text>
+
+  <rect class="card" x="990" y="885" width="210" height="105" rx="8"/>
+  <text class="body-strong ink" x="1018" y="930">Room</text>
+  <text class="body-strong ink" x="1018" y="962">Command Queue</text>
+  <text class="tiny muted" x="1018" y="987">single reader</text>
+
+  <rect class="card" x="1235" y="815" width="370" height="120" rx="8"/>
+  <text class="body-strong ink" x="1265" y="862">Room Tick Loop</text>
+  <text class="small muted" x="1265" y="898">50 ms loop, coalesced moves</text>
+  <text class="tiny muted" x="1265" y="923">per-room serialized processing</text>
+
+  <rect class="card" x="1235" y="965" width="370" height="130" rx="8"/>
+  <text class="body-strong ink" x="1265" y="1012">Authoritative Simulation</text>
+  <text class="small muted" x="1265" y="1048">movement, collision, vision</text>
+  <text class="small muted" x="1265" y="1076">arrest, jailbreak, winner</text>
+
+  <rect x="990" y="1020" width="210" height="75" rx="8" fill="#F8FAFC" stroke="#CBD5E1" stroke-width="2"/>
+  <text class="body-strong ink" x="1018" y="1061">Metrics</text>
+  <text class="tiny muted" x="1018" y="1088">rate limit, traffic</text>
+
+  <rect class="panel" x="1760" y="180" width="560" height="540" rx="8" fill="#FFFFFF"/>
+  <rect x="1792" y="212" width="92" height="12" rx="6" fill="#0F766E"/>
+  <text class="panel-title" x="1792" y="270">Azure Cosmos DB</text>
+
+  <rect class="card-db" x="1805" y="325" width="470" height="112" rx="8"/>
+  <text class="body-strong ink" x="1840" y="373">PolRobDB / Users</text>
+  <text class="small muted" x="1840" y="410">id, name, passwordHash</text>
+
+  <rect class="card" x="1805" y="470" width="470" height="135" rx="8"/>
+  <text class="body-strong ink" x="1840" y="520">Identity Persistence</text>
+  <text class="small muted" x="1840" y="557">partition key: /id</text>
+  <text class="small muted" x="1840" y="590">unique key: /name</text>
+
+  <rect x="1805" y="635" width="470" height="48" rx="8" fill="#FFF7ED" stroke="#FDBA74" stroke-width="2"/>
+  <text class="label" x="1840" y="667" fill="#9A3412">Gameplay state is not stored here</text>
+
+  <rect class="panel" x="1760" y="760" width="560" height="430" rx="8" fill="#FFFFFF"/>
+  <rect x="1792" y="792" width="92" height="12" rx="6" fill="#64748B"/>
+  <text class="panel-title" x="1792" y="850">Runtime State</text>
+  <text class="subtitle" x="1794" y="895">kept in memory on the server</text>
+  <rect class="card" x="1805" y="930" width="470" height="80" rx="8"/>
+  <text class="body-strong ink" x="1840" y="974">AuthController Sessions</text>
+  <text class="tiny muted" x="1840" y="1003">session token to userId map</text>
+  <rect class="card" x="1805" y="1035" width="470" height="80" rx="8"/>
+  <text class="body-strong ink" x="1840" y="1079">GameRoomService Games</text>
+  <text class="tiny muted" x="1840" y="1108">room list, players, room codes</text>
+  <rect class="card" x="1805" y="1130" width="470" height="58" rx="8"/>
+  <text class="tiny muted" x="1840" y="1155">GameSession: live players, timers</text>
+  <text class="tiny muted" x="1840" y="1180">UDP endpoints and movement tokens</text>
+
+  <path class="arrow-http" d="M565 372 C620 372 658 440 730 440"/>
+  <rect x="595" y="298" width="178" height="36" rx="8" fill="#FFF7ED" stroke="#FDBA74" stroke-width="2"/>
+  <text class="label" x="616" y="323" fill="#EA580C">HTTP + Bearer</text>
+
+  <path class="arrow-signalr" d="M565 558 C630 558 662 571 730 571"/>
+  <rect x="595" y="525" width="176" height="36" rx="8" fill="#F5F3FF" stroke="#C4B5FD" stroke-width="2"/>
+  <text class="label" x="617" y="550" fill="#7C3AED">SignalR / WS</text>
+
+  <path class="arrow-tcp" d="M565 920 C625 920 665 867 730 867"/>
+  <rect x="590" y="885" width="125" height="36" rx="8" fill="#EFF6FF" stroke="#93C5FD" stroke-width="2"/>
+  <text class="label" x="615" y="910" fill="#2563EB">TCP</text>
+
+  <path class="arrow-udp" d="M565 980 C625 980 665 1008 730 1008"/>
+  <rect x="590" y="988" width="125" height="36" rx="8" fill="#ECFDF5" stroke="#86EFAC" stroke-width="2"/>
+  <text class="label" x="613" y="1013" fill="#059669">UDP</text>
+
+  <path class="arrow-neutral" d="M1030 440 L1080 440"/>
+  <path class="arrow-neutral" d="M1030 571 L1080 571"/>
+  <path class="arrow-neutral arrow-dash" d="M1205 495 L1205 525"/>
+  <path class="arrow-neutral" d="M1325 440 L1360 440"/>
+  <path class="arrow-neutral" d="M1610 440 C1685 440 1730 381 1805 381"/>
+
+  <path class="arrow-neutral arrow-dash" d="M1345 617 L1345 720"/>
+  <rect x="1248" y="663" width="194" height="34" rx="8" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="2"/>
+  <text class="tiny muted" x="1270" y="687">room membership</text>
+
+  <path class="arrow-tcp" d="M950 867 C968 867 970 937 990 937"/>
+  <path class="arrow-udp" d="M950 1008 C970 1008 968 937 990 937"/>
+  <path class="arrow-neutral" d="M1200 937 C1218 937 1215 875 1235 875"/>
+  <path class="arrow-neutral" d="M1420 935 L1420 965"/>
+  <path class="arrow-neutral arrow-dash" d="M1235 1030 C1210 1030 1215 1057 1200 1057"/>
+
+  <path class="arrow-neutral arrow-dash" d="M1650 1035 C1710 1035 1730 1055 1805 1075"/>
+
+  <rect x="80" y="1215" width="2240" height="86" rx="8" fill="#111827"/>
+  <text class="section-title" x="120" y="1267" fill="#FFFFFF">Portfolio takeaway:</text>
+  <text class="body" x="445" y="1267" fill="#E5E7EB">the client sends user intent, while the server validates identity, owns rooms, and simulates authoritative gameplay.</text>
+</svg>
