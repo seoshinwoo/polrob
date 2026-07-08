@@ -68,6 +68,7 @@ public partial class GamePlay : ContentPage
     private SKBitmap?[] _robberRunBitmaps = new SKBitmap?[8];
     private SKBitmap? _robberSurrendBitmap;
     private SKBitmap? _robberPrisonBreakBitmap;
+    private SKBitmap? _mapBackgroundBitmap;
     private SKBitmap? _policeStationBitmap;
     private SKBitmap? _jailBitmap;
     private SKBitmap? _wallBitmap;
@@ -476,6 +477,7 @@ public partial class GamePlay : ContentPage
             _policeArrestBitmap = await LoadBitmapAsync("char_police_arrest_v3.png");
             _robberSurrendBitmap = await LoadBitmapAsync("char_robber_surrend_v3.png");
             _robberPrisonBreakBitmap = await LoadBitmapAsync("char_robber_prison_break_v3.png");
+            _mapBackgroundBitmap = await LoadBitmapAsync("generated_map_assets/backgrounds/polrob_map_full_5000x7500.png");
             _policeStationBitmap = await LoadBitmapAsync("police_station.png");
             _jailBitmap = await LoadBitmapAsync("jail_v2.png");
             _wallBitmap = await LoadBitmapAsync("wall.png");
@@ -887,13 +889,15 @@ public partial class GamePlay : ContentPage
             canvas.DrawRect(0, 0, _gameMap.Width, _gameMap.Height, mapPaint);
         }
 
-        DrawBuildings(canvas, visibleWorldBounds);
-        DrawObstacles(canvas, visibleWorldBounds);
+        // The current concept map already contains buildings and props in the background image.
+        // Keep the old separate render paths disabled until collision objects are redrawn for this map.
+        // DrawBuildings(canvas, visibleWorldBounds);
+        // DrawObstacles(canvas, visibleWorldBounds);
 
         DrawVisionOverlay(canvas);
 
         DrawPlayers(canvas);
-        DrawJailForeground(canvas, visibleWorldBounds);
+        // DrawJailForeground(canvas, visibleWorldBounds);
         DrawJailBreakProgressBar(canvas);
 
         canvas.Restore();
@@ -965,6 +969,13 @@ public partial class GamePlay : ContentPage
 
         canvas.Save();
         canvas.ClipRect(mapBounds);
+
+        if (_mapBackgroundBitmap != null)
+        {
+            canvas.DrawBitmap(_mapBackgroundBitmap, mapBounds);
+            canvas.Restore();
+            return;
+        }
 
         DrawTiledRect(canvas, mapBounds, visibleWorldBounds, TerrainTile(0, 2), MissingTerrainColor);
         DrawTerrainRegion(

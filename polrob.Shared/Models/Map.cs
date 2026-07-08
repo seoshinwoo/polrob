@@ -42,14 +42,17 @@ public class GameMap
             RightBottom = new PointF(PoliceStation.RightBottom.X + Width / 12f + 700f, 850f)
         };
 
-        Buildings.Add(PoliceStation);
-        Buildings.Add(Jail);
+        // The full-map background currently contains these visual landmarks already.
+        // Leave the old generated geometry commented out until collision bounds are
+        // re-authored against the new 5000x7500 concept map.
+        // Buildings.Add(PoliceStation);
+        // Buildings.Add(Jail);
 
-        AddWalls();
-        AddStructures();
-        AddBushes();
-        AddTrees();
-        AddPonds();
+        // AddWalls();
+        // AddStructures();
+        // AddBushes();
+        // AddTrees();
+        // AddPonds();
         BuildSpatialIndex();
     }
 
