@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Drawing;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading;
@@ -344,47 +345,7 @@ public partial class GameNetworkServer : BackgroundService
 
     private bool IsMovementPositionBlocked(float x, float y, float radius, List<Obstacle> nearbyObstacles)
     {
-        foreach (var building in _map.Buildings)
-        {
-            if (building.Type is ("PoliceStation" or "Jail") &&
-                IsCircleCollidingWithBuilding(x, y, radius, building))
-            {
-                return true;
-            }
-        }
-
-        _map.GetNearbyObstacles(x, y, radius, nearbyObstacles);
-        foreach (var obstacle in nearbyObstacles)
-        {
-            if (GameMap.IsBushObstacle(obstacle))
-            {
-                continue;
-            }
-
-            if (obstacle.Type == "Rect")
-            {
-                var closestX = Math.Max(obstacle.LeftTop.X, Math.Min(x, obstacle.RightBottom.X));
-                var closestY = Math.Max(obstacle.LeftTop.Y, Math.Min(y, obstacle.RightBottom.Y));
-                var dx = x - closestX;
-                var dy = y - closestY;
-                if ((dx * dx) + (dy * dy) < radius * radius)
-                {
-                    return true;
-                }
-            }
-            else if (obstacle.Type == "Circle")
-            {
-                var dx = x - obstacle.CenterX.X;
-                var dy = y - obstacle.CenterX.Y;
-                var radiusSum = radius + obstacle.Radius;
-                if ((dx * dx) + (dy * dy) < radiusSum * radiusSum)
-                {
-                    return true;
-                }
-            }
-        }
-
-        return false;
+        return _map.IsMovementPositionBlocked(x, y, radius, nearbyObstacles);
     }
 
     private void FlushPendingUdpMovementBroadcasts(GameSession gameSession)
@@ -422,7 +383,9 @@ public partial class GameNetworkServer : BackgroundService
         {
             var startX = _map.PoliceStation.Center.X - (gap / 2f);
             player.X = startX + policeCount * gap;
-            player.Y = _map.PoliceStation.RightBottom.Y + 200f;
+            // Keep the role spawn on the front road, below the canonical
+            // police-car collider copied from the concept map.
+            player.Y = _map.PoliceStation.RightBottom.Y + 350f;
         }
         else
         {
@@ -549,14 +512,15 @@ public partial class GameNetworkServer : BackgroundService
         var row = index / columns;
         var offsetX = (column - ((columns - 1) / 2f)) * gap;
         var offsetY = (row - ((rows - 1) / 2f)) * gap;
-        var minX = _map.Jail.LeftTop.X + robber.Radius;
-        var maxX = _map.Jail.RightBottom.X - robber.Radius;
-        var minY = _map.Jail.LeftTop.Y + robber.Radius;
-        var maxY = _map.Jail.RightBottom.Y - robber.Radius;
+        var jailBounds = GameMap.GetBuildingCollisionBounds(_map.Jail);
+        var minX = jailBounds.Left + robber.Radius;
+        var maxX = jailBounds.Right - robber.Radius;
+        var minY = jailBounds.Top + robber.Radius;
+        var maxY = jailBounds.Bottom - robber.Radius;
 
         return (
-            Math.Clamp(_map.Jail.Center.X + offsetX, minX, maxX),
-            Math.Clamp(_map.Jail.Center.Y + offsetY, minY, maxY));
+            Math.Clamp(_map.Jail.CollisionCenter.X + offsetX, minX, maxX),
+            Math.Clamp(_map.Jail.CollisionCenter.Y + offsetY, minY, maxY));
     }
 
     // 감옥 근처에서 구조 중인 도둑들의 탈옥 진행률을 갱신하고 완료 시 석방합니다.
@@ -752,10 +716,7 @@ public partial class GameNetworkServer : BackgroundService
     // 플레이어의 현재 좌표가 감옥 사각형 안에 있는지 확인합니다.
     private bool IsInJail(Player player)
     {
-        return player.X >= _map.Jail.LeftTop.X &&
-               player.X <= _map.Jail.RightBottom.X &&
-               player.Y >= _map.Jail.LeftTop.Y &&
-               player.Y <= _map.Jail.RightBottom.Y;
+        return GameMap.IsPointInBuilding(player.X, player.Y, _map.Jail);
     }
 
     // 특정 좌표가 플레이어의 시야 거리와 시야각 안에 들어오는지 계산합니다.
@@ -783,15 +744,13 @@ public partial class GameNetworkServer : BackgroundService
     {
         foreach (var building in _map.Buildings)
         {
-            if (DoesSegmentIntersectRectangle(
+            if (building.BlocksVision &&
+                DoesSegmentIntersectBuilding(
                     police.X,
                     police.Y,
                     robber.X,
                     robber.Y,
-                    building.LeftTop.X,
-                    building.LeftTop.Y,
-                    building.RightBottom.X,
-                    building.RightBottom.Y))
+                    building))
             {
                 return true;
             }
@@ -799,11 +758,27 @@ public partial class GameNetworkServer : BackgroundService
 
         foreach (var obstacle in _map.Obstacles)
         {
+            if (!obstacle.BlocksVision)
+            {
+                continue;
+            }
+
             // 경찰이 들어가 있는 부쉬 자체는 경찰과 도둑 사이의 장애물로 보지 않는다.
             if (GameMap.IsBushObstacle(obstacle) &&
                 GameMap.ContainsPoint(obstacle, police.X, police.Y))
             {
                 continue;
+            }
+
+            if (obstacle.Type == "Polygon" &&
+                DoesSegmentIntersectPolygon(
+                    police.X,
+                    police.Y,
+                    robber.X,
+                    robber.Y,
+                    obstacle.PolygonPoints))
+            {
+                return true;
             }
 
             if (obstacle.Type == "Rect" &&
@@ -856,6 +831,198 @@ public partial class GameNetworkServer : BackgroundService
                ClipSegmentToAxis(directionX, right - startX, ref minimum, ref maximum) &&
                ClipSegmentToAxis(-directionY, startY - top, ref minimum, ref maximum) &&
                ClipSegmentToAxis(directionY, bottom - startY, ref minimum, ref maximum);
+    }
+
+    private static bool DoesSegmentIntersectBuilding(
+        float startX,
+        float startY,
+        float endX,
+        float endY,
+        MapBuilding building)
+    {
+        if (building.CollisionPolygon.Length >= 3)
+        {
+            return DoesSegmentIntersectPolygon(
+                startX,
+                startY,
+                endX,
+                endY,
+                building.CollisionPolygon);
+        }
+
+        var localStart = GameMap.ToBuildingCollisionLocalPoint(startX, startY, building);
+        var localEnd = GameMap.ToBuildingCollisionLocalPoint(endX, endY, building);
+        var halfWidth = building.EffectiveCollisionWidth / 2f;
+        var halfHeight = building.EffectiveCollisionHeight / 2f;
+
+        return DoesSegmentIntersectRectangle(
+            localStart.X,
+            localStart.Y,
+            localEnd.X,
+            localEnd.Y,
+            -halfWidth,
+            -halfHeight,
+            halfWidth,
+            halfHeight);
+    }
+
+    private static bool DoesSegmentIntersectPolygon(
+        float startX,
+        float startY,
+        float endX,
+        float endY,
+        IReadOnlyList<PointF> polygon)
+    {
+        if (polygon.Count < 3)
+        {
+            return false;
+        }
+
+        if (IsPointInsidePolygon(startX, startY, polygon) ||
+            IsPointInsidePolygon(endX, endY, polygon))
+        {
+            return true;
+        }
+
+        for (var index = 0; index < polygon.Count; index++)
+        {
+            var edgeStart = polygon[index];
+            var edgeEnd = polygon[(index + 1) % polygon.Count];
+            if (DoSegmentsIntersect(
+                    startX,
+                    startY,
+                    endX,
+                    endY,
+                    edgeStart.X,
+                    edgeStart.Y,
+                    edgeEnd.X,
+                    edgeEnd.Y))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool IsPointInsidePolygon(
+        float pointX,
+        float pointY,
+        IReadOnlyList<PointF> polygon)
+    {
+        var isInside = false;
+
+        for (var index = 0; index < polygon.Count; index++)
+        {
+            var current = polygon[index];
+            var previous = polygon[(index + polygon.Count - 1) % polygon.Count];
+
+            if (IsPointOnSegment(
+                    pointX,
+                    pointY,
+                    previous.X,
+                    previous.Y,
+                    current.X,
+                    current.Y))
+            {
+                return true;
+            }
+
+            if ((current.Y > pointY) != (previous.Y > pointY) &&
+                pointX < (previous.X - current.X) * (pointY - current.Y) /
+                         (previous.Y - current.Y) + current.X)
+            {
+                isInside = !isInside;
+            }
+        }
+
+        return isInside;
+    }
+
+    private static bool DoSegmentsIntersect(
+        float firstStartX,
+        float firstStartY,
+        float firstEndX,
+        float firstEndY,
+        float secondStartX,
+        float secondStartY,
+        float secondEndX,
+        float secondEndY)
+    {
+        var firstStartSide = CrossProduct(
+            firstStartX,
+            firstStartY,
+            firstEndX,
+            firstEndY,
+            secondStartX,
+            secondStartY);
+        var firstEndSide = CrossProduct(
+            firstStartX,
+            firstStartY,
+            firstEndX,
+            firstEndY,
+            secondEndX,
+            secondEndY);
+        var secondStartSide = CrossProduct(
+            secondStartX,
+            secondStartY,
+            secondEndX,
+            secondEndY,
+            firstStartX,
+            firstStartY);
+        var secondEndSide = CrossProduct(
+            secondStartX,
+            secondStartY,
+            secondEndX,
+            secondEndY,
+            firstEndX,
+            firstEndY);
+
+        if (firstStartSide * firstEndSide < 0f &&
+            secondStartSide * secondEndSide < 0f)
+        {
+            return true;
+        }
+
+        return Math.Abs(firstStartSide) <= 0.001f &&
+                   IsPointOnSegment(secondStartX, secondStartY, firstStartX, firstStartY, firstEndX, firstEndY) ||
+               Math.Abs(firstEndSide) <= 0.001f &&
+                   IsPointOnSegment(secondEndX, secondEndY, firstStartX, firstStartY, firstEndX, firstEndY) ||
+               Math.Abs(secondStartSide) <= 0.001f &&
+                   IsPointOnSegment(firstStartX, firstStartY, secondStartX, secondStartY, secondEndX, secondEndY) ||
+               Math.Abs(secondEndSide) <= 0.001f &&
+                   IsPointOnSegment(firstEndX, firstEndY, secondStartX, secondStartY, secondEndX, secondEndY);
+    }
+
+    private static float CrossProduct(
+        float startX,
+        float startY,
+        float endX,
+        float endY,
+        float pointX,
+        float pointY)
+    {
+        return (endX - startX) * (pointY - startY) -
+               (endY - startY) * (pointX - startX);
+    }
+
+    private static bool IsPointOnSegment(
+        float pointX,
+        float pointY,
+        float startX,
+        float startY,
+        float endX,
+        float endY)
+    {
+        if (Math.Abs(CrossProduct(startX, startY, endX, endY, pointX, pointY)) > 0.001f)
+        {
+            return false;
+        }
+
+        return pointX >= Math.Min(startX, endX) - 0.001f &&
+               pointX <= Math.Max(startX, endX) + 0.001f &&
+               pointY >= Math.Min(startY, endY) - 0.001f &&
+               pointY <= Math.Max(startY, endY) + 0.001f;
     }
 
     private static bool ClipSegmentToAxis(
@@ -956,25 +1123,23 @@ public partial class GameNetworkServer : BackgroundService
     // 플레이어가 탈옥 구조를 진행할 만큼 감옥에 가까이 붙어 있는지 확인합니다.
     private bool IsTouchingOrNearJail(Player player)
     {
-        var closestX = Math.Max(_map.Jail.LeftTop.X, Math.Min(player.X, _map.Jail.RightBottom.X));
-        var closestY = Math.Max(_map.Jail.LeftTop.Y, Math.Min(player.Y, _map.Jail.RightBottom.Y));
-        var distanceX = player.X - closestX;
-        var distanceY = player.Y - closestY;
         var allowedDistance = player.Radius + JailBreakContactTolerance;
 
-        return distanceX * distanceX + distanceY * distanceY <= allowedDistance * allowedDistance;
+        return GameMap.GetDistanceSquaredToBuilding(player.X, player.Y, _map.Jail) <=
+               allowedDistance * allowedDistance;
     }
 
     // 감옥 아래쪽에서 장애물과 겹치지 않는 석방 위치를 찾습니다.
     private (float X, float Y) GetJailReleasePosition(float radius, int releaseIndex)
     {
         var jail = _map.Jail;
-        var startY = jail.RightBottom.Y + radius + JailBreakReleaseOffset;
+        var jailBounds = GameMap.GetBuildingCollisionBounds(jail);
+        var startY = jailBounds.Bottom + radius + JailBreakReleaseOffset;
         var candidates = new List<(float X, float Y)>();
         float[][] rowOffsets =
         {
-            new[] { 0f, -jail.Width / 4f, jail.Width / 4f, -jail.Width / 2f + radius, jail.Width / 2f - radius },
-            new[] { -jail.Width / 6f, jail.Width / 6f, -jail.Width / 3f, jail.Width / 3f, 0f }
+            new[] { 0f, -jail.EffectiveCollisionWidth / 4f, jail.EffectiveCollisionWidth / 4f, -jail.EffectiveCollisionWidth / 2f + radius, jail.EffectiveCollisionWidth / 2f - radius },
+            new[] { -jail.EffectiveCollisionWidth / 6f, jail.EffectiveCollisionWidth / 6f, -jail.EffectiveCollisionWidth / 3f, jail.EffectiveCollisionWidth / 3f, 0f }
         };
 
         for (var row = 0; row < 5; row++)
@@ -984,7 +1149,7 @@ public partial class GameNetworkServer : BackgroundService
 
             foreach (var offset in offsets)
             {
-                var x = Math.Clamp(jail.Center.X + offset, radius, _map.Width - radius);
+                var x = Math.Clamp(jail.CollisionCenter.X + offset, radius, _map.Width - radius);
                 if (!IsReleasePositionBlocked(x, y, radius))
                 {
                     candidates.Add((x, y));
@@ -997,56 +1162,13 @@ public partial class GameNetworkServer : BackgroundService
             return candidates[Math.Min(releaseIndex, candidates.Count - 1)];
         }
 
-        return (Math.Clamp(jail.Center.X, radius, _map.Width - radius), Math.Clamp(startY, radius, _map.Height - radius));
+        return (Math.Clamp(jail.CollisionCenter.X, radius, _map.Width - radius), Math.Clamp(startY, radius, _map.Height - radius));
     }
 
     // 석방 후보 위치가 감옥이나 장애물과 충돌하는지 확인합니다.
     private bool IsReleasePositionBlocked(float x, float y, float radius)
     {
-        if (IsCircleCollidingWithBuilding(x, y, radius, _map.Jail))
-        {
-            return true;
-        }
-
-        foreach (var obs in _map.Obstacles)
-        {
-            if (obs.Type == "Rect")
-            {
-                var closestX = Math.Max(obs.LeftTop.X, Math.Min(x, obs.RightBottom.X));
-                var closestY = Math.Max(obs.LeftTop.Y, Math.Min(y, obs.RightBottom.Y));
-                var distanceX = x - closestX;
-                var distanceY = y - closestY;
-
-                if (distanceX * distanceX + distanceY * distanceY < radius * radius)
-                {
-                    return true;
-                }
-            }
-            else if (obs.Type == "Circle")
-            {
-                var dx = x - obs.CenterX.X;
-                var dy = y - obs.CenterX.Y;
-                var radiusSum = radius + obs.Radius;
-
-                if (dx * dx + dy * dy < radiusSum * radiusSum)
-                {
-                    return true;
-                }
-            }
-        }
-
-        return false;
-    }
-
-    // 원형 플레이어가 사각형 건물 영역과 충돌하는지 계산합니다.
-    private static bool IsCircleCollidingWithBuilding(float x, float y, float radius, MapBuilding building)
-    {
-        var closestX = Math.Max(building.LeftTop.X, Math.Min(x, building.RightBottom.X));
-        var closestY = Math.Max(building.LeftTop.Y, Math.Min(y, building.RightBottom.Y));
-        var distanceX = x - closestX;
-        var distanceY = y - closestY;
-
-        return distanceX * distanceX + distanceY * distanceY < radius * radius;
+        return _map.IsMovementPositionBlocked(x, y, radius, new List<Obstacle>());
     }
 
 }

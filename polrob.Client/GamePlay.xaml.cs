@@ -59,6 +59,7 @@ public partial class GamePlay : ContentPage
     private static readonly SKRect PondTerrainBounds = new(512f, 4864f, 2048f, 7424f);
     private readonly List<Obstacle> _nearbyCollisionObstacles = new();
     private readonly SemaphoreSlim _assetLoadLock = new(1, 1);
+    private readonly ExactMapTileCache _exactMapTiles;
     private bool _assetsLoaded;
 
     private SKBitmap? _policeIdleBitmap;
@@ -68,15 +69,6 @@ public partial class GamePlay : ContentPage
     private SKBitmap?[] _robberRunBitmaps = new SKBitmap?[8];
     private SKBitmap? _robberSurrendBitmap;
     private SKBitmap? _robberPrisonBreakBitmap;
-    private SKBitmap? _mapBackgroundBitmap;
-    private SKBitmap? _policeStationBitmap;
-    private SKBitmap? _jailBitmap;
-    private SKBitmap? _wallBitmap;
-    private SKBitmap? _buildingBitmap;
-    private SKBitmap? _houseBitmap;
-    private SKBitmap? _treeBitmap;
-    private SKBitmap? _pondBitmap;
-    private SKBitmap? _bushBitmap;
     private readonly SKBitmap?[,] _terrainTiles = new SKBitmap?[4, 4];
 
     // 체포 상태 만료 시간 기록 (2초 유지용)
@@ -145,6 +137,14 @@ public partial class GamePlay : ContentPage
         InitializeComponent();
 
         _gameMap = new GameMap();
+        if (_gameMap.Width != ExactMapTileCache.WorldWidth ||
+            _gameMap.Height != ExactMapTileCache.WorldHeight)
+        {
+            throw new InvalidOperationException(
+                $"Exact map tiles and shared world disagree: " +
+                $"tiles={ExactMapTileCache.WorldWidth}x{ExactMapTileCache.WorldHeight}, " +
+                $"world={_gameMap.Width}x{_gameMap.Height}.");
+        }
 
         _player = new Player
         {
@@ -165,6 +165,8 @@ public partial class GamePlay : ContentPage
         _canvas.EnableTouchEvents = true;
         _canvas.Touch += Canvas_Touch;
         _canvas.PaintSurface += Canvas_PaintSurface;
+        _exactMapTiles = new ExactMapTileCache(() =>
+            MainThread.BeginInvokeOnMainThread(_canvas.InvalidateSurface));
 
         // Canvas를 가장 뒤(Index 0)에 배치하여 XAML에 정의된 Label 등 UI보다 뒤에 그려지도록 합니다.
         Container.Children.Insert(0, _canvas);
@@ -401,6 +403,7 @@ public partial class GamePlay : ContentPage
     {
         base.OnDisappearing();
         StopGameClient();
+        _exactMapTiles.Dispose();
     }
 
     private void StopGameClient()
@@ -423,11 +426,7 @@ public partial class GamePlay : ContentPage
         var totalRobbers = robbers.Count;
         var capturedRobbers = _gameMap?.Jail == null
             ? 0
-            : robbers.Count(player =>
-                player.X >= _gameMap.Jail.LeftTop.X &&
-                player.X <= _gameMap.Jail.RightBottom.X &&
-                player.Y >= _gameMap.Jail.LeftTop.Y &&
-                player.Y <= _gameMap.Jail.RightBottom.Y);
+            : robbers.Count(player => IsInJail(player.X, player.Y));
 
         return $"GameOver?roomId={roomId}&role={role}&gameType={gameType}&roomCode={roomCode}&isHost={isHost}&winnerRole={winnerRole}&remainingTime={_remainingTime}&capturedRobbers={capturedRobbers}&totalRobbers={totalRobbers}";
     }
@@ -446,11 +445,7 @@ public partial class GamePlay : ContentPage
             {
                 var robbers = _players.Values.Where(p => p.Role == PlayerRole.Robber).ToList();
                 int totalRobbers = robbers.Count;
-                int jailedRobbers = robbers.Count(p =>
-                    p.X >= _gameMap.Jail.LeftTop.X &&
-                    p.X <= _gameMap.Jail.RightBottom.X &&
-                    p.Y >= _gameMap.Jail.LeftTop.Y &&
-                    p.Y <= _gameMap.Jail.RightBottom.Y);
+                int jailedRobbers = robbers.Count(p => IsInJail(p.X, p.Y));
 
                 JailLabel.Text = $"Jail : {jailedRobbers}/{totalRobbers}";
             }
@@ -477,16 +472,13 @@ public partial class GamePlay : ContentPage
             _policeArrestBitmap = await LoadBitmapAsync("char_police_arrest_v3.png");
             _robberSurrendBitmap = await LoadBitmapAsync("char_robber_surrend_v3.png");
             _robberPrisonBreakBitmap = await LoadBitmapAsync("char_robber_prison_break_v3.png");
-            _mapBackgroundBitmap = await LoadBitmapAsync("generated_map_assets/backgrounds/polrob_map_full_5000x7500.png");
-            _policeStationBitmap = await LoadBitmapAsync("police_station.png");
-            _jailBitmap = await LoadBitmapAsync("jail_v2.png");
-            _wallBitmap = await LoadBitmapAsync("wall.png");
-            _buildingBitmap = await LoadBitmapAsync("building.png");
-            _houseBitmap = await LoadBitmapAsync("house_v2.png");
-            _treeBitmap = await LoadBitmapAsync("tree.png");
-            _pondBitmap = await LoadBitmapAsync("pond_v2.png");
-            _bushBitmap = await LoadBitmapAsync("bush.png");
-            await LoadTerrainTilesAsync();
+            var initialMapX = _selectedRole == PlayerRole.Police
+                ? _gameMap.PoliceStation.Center.X
+                : _player.X;
+            var initialMapY = _selectedRole == PlayerRole.Police
+                ? _gameMap.PoliceStation.RightBottom.Y + 350f
+                : _player.Y;
+            await _exactMapTiles.PreloadAroundAsync(initialMapX, initialMapY);
 
             for (int i = 0; i < 8; i++)
             {
@@ -789,67 +781,7 @@ public partial class GamePlay : ContentPage
 
     private bool IsColliding(float x, float y, float radius)
     {
-        // 경찰서와 감옥은 통과할 수 없는 건물이다.
-        foreach (var building in _gameMap.Buildings)
-        {
-            if (building.Type is not ("PoliceStation" or "Jail"))
-                continue;
-
-            if (IsCircleCollidingWithBuilding(x, y, radius, building))
-            {
-                return true;
-            }
-        }
-
-        _gameMap.GetNearbyObstacles(x, y, radius, _nearbyCollisionObstacles);
-        foreach (var obs in _nearbyCollisionObstacles)
-        {
-            // 부쉬는 충돌 장애물이 아니라 자유롭게 드나드는 은신 영역이다.
-            if (GameMap.IsBushObstacle(obs))
-            {
-                continue;
-            }
-
-            if (obs.Type == "Rect")
-            {
-                var rect = new SKRect(obs.LeftTop.X, obs.LeftTop.Y, obs.RightBottom.X, obs.RightBottom.Y);
-
-                // 원의 중심점과 사각형 내 가장 가까운 점 찾기
-                float closestX = Math.Max(rect.Left, Math.Min(x, rect.Right));
-                float closestY = Math.Max(rect.Top, Math.Min(y, rect.Bottom));
-
-                float distanceX = x - closestX;
-                float distanceY = y - closestY;
-
-                if ((distanceX * distanceX) + (distanceY * distanceY) < (radius * radius))
-                {
-                    return true;
-                }
-            }
-            else if (obs.Type == "Circle")
-            {
-                float dx = x - obs.CenterX.X;
-                float dy = y - obs.CenterX.Y;
-                float radiusSum = radius + obs.Radius;
-
-                if ((dx * dx) + (dy * dy) < (radiusSum * radiusSum))
-                {
-                    return true;
-                }
-            }
-        }
-        return false;
-    }
-
-    private static bool IsCircleCollidingWithBuilding(float x, float y, float radius, MapBuilding building)
-    {
-        float closestX = Math.Max(building.LeftTop.X, Math.Min(x, building.RightBottom.X));
-        float closestY = Math.Max(building.LeftTop.Y, Math.Min(y, building.RightBottom.Y));
-
-        float distanceX = x - closestX;
-        float distanceY = y - closestY;
-
-        return (distanceX * distanceX) + (distanceY * distanceY) < (radius * radius);
+        return _gameMap.IsMovementPositionBlocked(x, y, radius, _nearbyCollisionObstacles);
     }
 
     private void ResetJailBreakProgress()
@@ -872,32 +804,27 @@ public partial class GamePlay : ContentPage
 
         canvas.Save();
 
-        // 1. 카메라 설정 (World Space로 이동)
-        // 화면의 중심이 플레이어를 따라다니게 캔버스를 이동시킴
-        canvas.Translate(width / 2f - _player.X, height / 2f - _player.Y);
+        // Keep the camera inside the canonical image so no synthetic color is
+        // exposed beyond the exact source pixels near the forest/water edge.
+        var cameraX = ClampCameraCenter(_player.X, width, _gameMap.Width);
+        var cameraY = ClampCameraCenter(_player.Y, height, _gameMap.Height);
+        canvas.Translate(width / 2f - cameraX, height / 2f - cameraY);
 
         var visibleWorldBounds = new SKRect(
-            _player.X - (width / 2f) - RenderCullPadding,
-            _player.Y - (height / 2f) - RenderCullPadding,
-            _player.X + (width / 2f) + RenderCullPadding,
-            _player.Y + (height / 2f) + RenderCullPadding);
+            cameraX - (width / 2f) - RenderCullPadding,
+            cameraY - (height / 2f) - RenderCullPadding,
+            cameraX + (width / 2f) + RenderCullPadding,
+            cameraY + (height / 2f) + RenderCullPadding);
 
         DrawMapBackground(canvas, visibleWorldBounds);
 
-        using (var mapPaint = new SKPaint { Color = SKColors.LightGray, Style = SKPaintStyle.Stroke, StrokeWidth = 10 })
-        {
-            canvas.DrawRect(0, 0, _gameMap.Width, _gameMap.Height, mapPaint);
-        }
-
-        // The current concept map already contains buildings and props in the background image.
-        // Keep the old separate render paths disabled until collision objects are redrawn for this map.
-        // DrawBuildings(canvas, visibleWorldBounds);
-        // DrawObstacles(canvas, visibleWorldBounds);
-
+        // 시야 암전은 캐릭터 아래에 유지한다.
         DrawVisionOverlay(canvas);
 
+        // World layer order: exact base map -> players -> masked exact foreground.
+        // Foreground source pixels cover players only at annotated structures/obstacles.
         DrawPlayers(canvas);
-        // DrawJailForeground(canvas, visibleWorldBounds);
+        DrawForegroundWorld(canvas, visibleWorldBounds);
         DrawJailBreakProgressBar(canvas);
 
         canvas.Restore();
@@ -963,57 +890,261 @@ public partial class GamePlay : ContentPage
         }
     }
 
+    private static float ClampCameraCenter(float target, float viewportSize, float worldSize)
+    {
+        if (viewportSize >= worldSize)
+        {
+            return worldSize / 2f;
+        }
+
+        var halfViewport = viewportSize / 2f;
+        return Math.Clamp(target, halfViewport, worldSize - halfViewport);
+    }
+
     private void DrawMapBackground(SKCanvas canvas, SKRect visibleWorldBounds)
     {
         var mapBounds = new SKRect(0, 0, _gameMap.Width, _gameMap.Height);
 
         canvas.Save();
         canvas.ClipRect(mapBounds);
+        _exactMapTiles.DrawLayer(canvas, ExactMapTileLayer.Base, visibleWorldBounds);
+        canvas.Restore();
+    }
 
-        if (_mapBackgroundBitmap != null)
+    private void DrawOuterTerrain(SKCanvas canvas, SKRect visibleWorldBounds)
+    {
+        var forestTile = TerrainTile(0, 0);
+        var waterTile = TerrainTile(0, 3);
+
+        SKRect[] forestRegions =
+        [
+            new(0f, 0f, _gameMap.Width, 520f),
+            new(0f, 0f, 300f, _gameMap.Height),
+            new(_gameMap.Width - 340f, 0f, _gameMap.Width, _gameMap.Height),
+            new(0f, _gameMap.Height - 420f, _gameMap.Width, _gameMap.Height)
+        ];
+
+        foreach (var region in forestRegions)
         {
-            canvas.DrawBitmap(_mapBackgroundBitmap, mapBounds);
-            canvas.Restore();
+            DrawTiledRect(canvas, region, visibleWorldBounds, forestTile, SKColor.Parse("#355222"));
+        }
+
+        SKRect[] waterRegions =
+        [
+            new(0f, 6050f, 470f, _gameMap.Height),
+            new(_gameMap.Width - 500f, 6120f, _gameMap.Width, _gameMap.Height),
+            new(430f, 7180f, 1700f, _gameMap.Height),
+            new(3720f, 7180f, _gameMap.Width, _gameMap.Height)
+        ];
+
+        foreach (var region in waterRegions)
+        {
+            DrawTiledRect(canvas, region, visibleWorldBounds, waterTile, SKColor.Parse("#1D7794"));
+        }
+    }
+
+    private void DrawGeneratedMapLots(SKCanvas canvas, SKRect visibleWorldBounds)
+    {
+        DrawPavedLot(canvas, visibleWorldBounds, new SKRect(430f, 1090f, 1510f, 2040f));
+        DrawPavedLot(canvas, visibleWorldBounds, new SKRect(1450f, 880f, 2290f, 1660f));
+        DrawPavedLot(canvas, visibleWorldBounds, new SKRect(2800f, 470f, 3700f, 1300f));
+        DrawPavedLot(canvas, visibleWorldBounds, new SKRect(3780f, 650f, 4710f, 1550f));
+        DrawPavedLot(canvas, visibleWorldBounds, new SKRect(3260f, 1850f, 4380f, 2950f));
+        DrawPavedLot(canvas, visibleWorldBounds, new SKRect(430f, 3560f, 1420f, 4560f));
+        DrawPavedLot(canvas, visibleWorldBounds, new SKRect(3400f, 4170f, 4470f, 5240f));
+        DrawPavedLot(canvas, visibleWorldBounds, new SKRect(1980f, 2380f, 2760f, 3200f));
+
+        DrawDirtLot(canvas, visibleWorldBounds, new SKRect(1580f, 1710f, 2360f, 2420f));
+        DrawDirtLot(canvas, visibleWorldBounds, new SKRect(2570f, 5580f, 3700f, 6260f));
+        DrawDirtLot(canvas, visibleWorldBounds, new SKRect(3910f, 3300f, 4590f, 3970f));
+    }
+
+    private static void DrawPavedLot(SKCanvas canvas, SKRect visibleWorldBounds, SKRect rect)
+    {
+        if (!RectsIntersect(rect, visibleWorldBounds))
+        {
             return;
         }
 
-        DrawTiledRect(canvas, mapBounds, visibleWorldBounds, TerrainTile(0, 2), MissingTerrainColor);
-        DrawTerrainRegion(
-            canvas,
-            VillageTerrainBounds,
-            visibleWorldBounds,
-            fillTile: TerrainTile(0, 1),
-            verticalEdgeTile: TerrainTile(1, 1),
-            horizontalEdgeTile: TerrainTile(3, 1),
-            fallbackColor: SKColor.Parse("#CDB78B"));
+        using var basePaint = new SKPaint
+        {
+            Color = SKColor.Parse("#B9AA91"),
+            IsAntialias = true,
+            Style = SKPaintStyle.Fill
+        };
+        using var insetPaint = new SKPaint
+        {
+            Color = SKColor.Parse("#9C9283"),
+            IsAntialias = true,
+            Style = SKPaintStyle.Fill
+        };
+        using var linePaint = new SKPaint
+        {
+            Color = new SKColor(118, 110, 98, 100),
+            IsAntialias = true,
+            Style = SKPaintStyle.Stroke,
+            StrokeWidth = 3f
+        };
 
-        DrawTerrainRegion(
-            canvas,
-            WestForestTerrainBounds,
-            visibleWorldBounds,
-            fillTile: TerrainTile(0, 0),
-            verticalEdgeTile: TerrainTile(1, 0),
-            horizontalEdgeTile: TerrainTile(3, 0),
-            fallbackColor: SKColor.Parse("#766243"));
+        canvas.DrawRoundRect(rect, 70f, 70f, basePaint);
+        var inset = SKRect.Inflate(rect, -95f, -95f);
+        canvas.DrawRoundRect(inset, 45f, 45f, insetPaint);
 
-        DrawTerrainRegion(
-            canvas,
-            EastForestTerrainBounds,
-            visibleWorldBounds,
-            fillTile: TerrainTile(0, 0),
-            verticalEdgeTile: TerrainTile(1, 0),
-            horizontalEdgeTile: TerrainTile(3, 0),
-            fallbackColor: SKColor.Parse("#766243"));
+        for (var x = inset.Left + 90f; x < inset.Right; x += 90f)
+        {
+            canvas.DrawLine(x, inset.Top, x, inset.Bottom, linePaint);
+        }
 
-        DrawTerrainRegion(
-            canvas,
-            PondTerrainBounds,
-            visibleWorldBounds,
-            fillTile: TerrainTile(0, 3),
-            verticalEdgeTile: TerrainTile(1, 3),
-            horizontalEdgeTile: TerrainTile(3, 3),
-            fallbackColor: SKColor.Parse("#6F8F83"),
-            invertWaterEdges: true);
+        for (var y = inset.Top + 90f; y < inset.Bottom; y += 90f)
+        {
+            canvas.DrawLine(inset.Left, y, inset.Right, y, linePaint);
+        }
+    }
+
+    private static void DrawDirtLot(SKCanvas canvas, SKRect visibleWorldBounds, SKRect rect)
+    {
+        if (!RectsIntersect(rect, visibleWorldBounds))
+        {
+            return;
+        }
+
+        using var paint = new SKPaint
+        {
+            Color = SKColor.Parse("#BA9351"),
+            IsAntialias = true,
+            Style = SKPaintStyle.Fill
+        };
+        using var edgePaint = new SKPaint
+        {
+            Color = SKColor.Parse("#786442"),
+            IsAntialias = true,
+            Style = SKPaintStyle.Stroke,
+            StrokeWidth = 18f
+        };
+
+        canvas.DrawRoundRect(rect, 48f, 48f, paint);
+        canvas.DrawRoundRect(rect, 48f, 48f, edgePaint);
+    }
+
+    private void DrawGeneratedRoadNetwork(SKCanvas canvas, SKRect visibleWorldBounds)
+    {
+        foreach (var path in GeneratedRoadPaths())
+        {
+            DrawRoad(canvas, path);
+        }
+
+        DrawCrosswalk(canvas, new SKPoint(1340f, 2090f), 0f);
+        DrawCrosswalk(canvas, new SKPoint(2790f, 1830f), 0f);
+        DrawCrosswalk(canvas, new SKPoint(3090f, 3310f), 90f);
+        DrawCrosswalk(canvas, new SKPoint(1480f, 3920f), 90f);
+        DrawCrosswalk(canvas, new SKPoint(3330f, 5350f), 0f);
+        DrawCrosswalk(canvas, new SKPoint(2480f, 6550f), 90f);
+    }
+
+    private static List<SKPath> GeneratedRoadPaths()
+    {
+        var main = new SKPath();
+        main.MoveTo(2520f, 450f);
+        main.CubicTo(2180f, 920f, 2520f, 1360f, 2360f, 1880f);
+        main.CubicTo(2140f, 2500f, 2620f, 2980f, 2420f, 3650f);
+        main.CubicTo(2220f, 4310f, 2810f, 4960f, 2500f, 5700f);
+        main.CubicTo(2250f, 6290f, 2520f, 6780f, 2630f, 7250f);
+
+        var leftLoop = new SKPath();
+        leftLoop.MoveTo(2360f, 1740f);
+        leftLoop.CubicTo(1710f, 1480f, 1010f, 1480f, 650f, 1910f);
+        leftLoop.CubicTo(260f, 2380f, 500f, 3060f, 1190f, 3260f);
+        leftLoop.CubicTo(1810f, 3440f, 2290f, 3090f, 2420f, 2700f);
+
+        var rightLoop = new SKPath();
+        rightLoop.MoveTo(2520f, 1450f);
+        rightLoop.CubicTo(3120f, 980f, 4080f, 1060f, 4410f, 1680f);
+        rightLoop.CubicTo(4750f, 2320f, 4180f, 3090f, 3470f, 3150f);
+        rightLoop.CubicTo(3000f, 3190f, 2690f, 2920f, 2500f, 2560f);
+
+        var lowerLeft = new SKPath();
+        lowerLeft.MoveTo(2380f, 4100f);
+        lowerLeft.CubicTo(1780f, 3840f, 920f, 3910f, 520f, 4520f);
+        lowerLeft.CubicTo(120f, 5120f, 730f, 5790f, 1420f, 5660f);
+        lowerLeft.CubicTo(1970f, 5560f, 2350f, 5180f, 2520f, 4740f);
+
+        var lowerRight = new SKPath();
+        lowerRight.MoveTo(2600f, 4070f);
+        lowerRight.CubicTo(3220f, 3820f, 4240f, 4040f, 4490f, 4710f);
+        lowerRight.CubicTo(4770f, 5480f, 3950f, 6070f, 3250f, 5800f);
+        lowerRight.CubicTo(2790f, 5620f, 2560f, 5200f, 2520f, 4780f);
+
+        var bottom = new SKPath();
+        bottom.MoveTo(930f, 7060f);
+        bottom.CubicTo(1260f, 6510f, 1810f, 6280f, 2440f, 6550f);
+        bottom.CubicTo(3040f, 6810f, 3630f, 6620f, 4140f, 6160f);
+
+        return new List<SKPath> { main, leftLoop, rightLoop, lowerLeft, lowerRight, bottom };
+    }
+
+    private static void DrawRoad(SKCanvas canvas, SKPath path)
+    {
+        using var sidewalkPaint = new SKPaint
+        {
+            Color = SKColor.Parse("#B7AA95"),
+            IsAntialias = true,
+            Style = SKPaintStyle.Stroke,
+            StrokeWidth = 560f,
+            StrokeCap = SKStrokeCap.Round,
+            StrokeJoin = SKStrokeJoin.Round
+        };
+        using var curbPaint = new SKPaint
+        {
+            Color = SKColor.Parse("#7F766A"),
+            IsAntialias = true,
+            Style = SKPaintStyle.Stroke,
+            StrokeWidth = 470f,
+            StrokeCap = SKStrokeCap.Round,
+            StrokeJoin = SKStrokeJoin.Round
+        };
+        using var asphaltPaint = new SKPaint
+        {
+            Color = SKColor.Parse("#2F3438"),
+            IsAntialias = true,
+            Style = SKPaintStyle.Stroke,
+            StrokeWidth = 420f,
+            StrokeCap = SKStrokeCap.Round,
+            StrokeJoin = SKStrokeJoin.Round
+        };
+        using var dashPaint = new SKPaint
+        {
+            Color = new SKColor(224, 165, 48, 220),
+            IsAntialias = true,
+            Style = SKPaintStyle.Stroke,
+            StrokeWidth = 22f,
+            StrokeCap = SKStrokeCap.Round,
+            PathEffect = SKPathEffect.CreateDash(new[] { 82f, 92f }, 0f)
+        };
+
+        canvas.DrawPath(path, sidewalkPaint);
+        canvas.DrawPath(path, curbPaint);
+        canvas.DrawPath(path, asphaltPaint);
+        canvas.DrawPath(path, dashPaint);
+    }
+
+    private static void DrawCrosswalk(SKCanvas canvas, SKPoint center, float rotationDegrees)
+    {
+        canvas.Save();
+        canvas.Translate(center.X, center.Y);
+        canvas.RotateDegrees(rotationDegrees);
+
+        using var paint = new SKPaint
+        {
+            Color = new SKColor(240, 240, 230, 220),
+            IsAntialias = true,
+            Style = SKPaintStyle.Fill
+        };
+
+        for (var i = -2; i <= 2; i++)
+        {
+            var x = i * 54f;
+            canvas.DrawRoundRect(new SKRect(x - 18f, -145f, x + 18f, 145f), 6f, 6f, paint);
+        }
 
         canvas.Restore();
     }
@@ -1258,160 +1389,29 @@ public partial class GamePlay : ContentPage
         return suffix;
     }
 
-    private void DrawBuildings(SKCanvas canvas, SKRect visibleWorldBounds)
+    private void DrawForegroundWorld(SKCanvas canvas, SKRect visibleWorldBounds)
     {
-        foreach (var building in _gameMap.Buildings)
+        // Exact source pixels are repeated above players only where the generated
+        // foreground mask is opaque. SrcATop then keeps those pixels under the
+        // same fog treatment as their matching base-map pixels.
+        canvas.SaveLayer();
+        canvas.ClipRect(new SKRect(0f, 0f, _gameMap.Width, _gameMap.Height));
+        _exactMapTiles.DrawLayer(canvas, ExactMapTileLayer.Foreground, visibleWorldBounds);
+
+        using var fogPath = new SKPath { FillType = SKPathFillType.EvenOdd };
+        fogPath.AddRect(new SKRect(0f, 0f, _gameMap.Width, _gameMap.Height));
+        using var visionPath = CreateVisionPath(_player);
+        fogPath.AddPath(visionPath);
+
+        using var foregroundFogPaint = new SKPaint
         {
-            var rect = new SKRect(
-                building.LeftTop.X,
-                building.LeftTop.Y,
-                building.RightBottom.X,
-                building.RightBottom.Y);
-
-            if (!RectsIntersect(rect, visibleWorldBounds))
-            {
-                continue;
-            }
-
-            var bitmap = building.Type switch
-            {
-                "PoliceStation" => _policeStationBitmap,
-                "Jail" => _jailBitmap,
-                _ => null
-            };
-
-            if (bitmap != null)
-            {
-                canvas.DrawBitmap(bitmap, rect);
-            }
-        }
-    }
-
-    private void DrawJailForeground(SKCanvas canvas, SKRect visibleWorldBounds)
-    {
-        if (_jailBitmap == null)
-        {
-            return;
-        }
-
-        var jail = _gameMap.Jail;
-        var rect = new SKRect(
-            jail.LeftTop.X,
-            jail.LeftTop.Y,
-            jail.RightBottom.X,
-            jail.RightBottom.Y);
-
-        if (!RectsIntersect(rect, visibleWorldBounds))
-        {
-            return;
-        }
-
-        // 플레이어 위에 쇠창살을 다시 그려 감옥 안에 갇혀 있는 깊이감을 만든다.
-        using var foregroundPaint = new SKPaint
-        {
-            Color = SKColors.White.WithAlpha(235),
-            IsAntialias = true
-        };
-        canvas.DrawBitmap(_jailBitmap, rect, foregroundPaint);
-    }
-
-    private void DrawObstacles(SKCanvas canvas, SKRect visibleWorldBounds)
-    {
-        using var fallbackPaint = new SKPaint
-        {
-            Color = SKColors.AliceBlue,
+            Color = new SKColor(0, 0, 0, FogOpacity),
+            BlendMode = SKBlendMode.SrcATop,
             Style = SKPaintStyle.Fill,
             IsAntialias = true
         };
-
-        foreach (var obstacle in _gameMap.Obstacles)
-        {
-            SKRect collisionRect;
-            if (obstacle.Type == "Rect")
-            {
-                collisionRect = new SKRect(
-                    obstacle.LeftTop.X,
-                    obstacle.LeftTop.Y,
-                    obstacle.RightBottom.X,
-                    obstacle.RightBottom.Y);
-            }
-            else if (obstacle.Type == "Circle")
-            {
-                collisionRect = new SKRect(
-                    obstacle.CenterX.X - obstacle.Radius,
-                    obstacle.CenterX.Y - obstacle.Radius,
-                    obstacle.CenterX.X + obstacle.Radius,
-                    obstacle.CenterX.Y + obstacle.Radius);
-            }
-            else
-            {
-                continue;
-            }
-
-            var imageScale = obstacle.ImageFileName switch
-            {
-                // tree.png 자체의 좌우 투명 여백을 감안해 실제 수관이 충돌 원보다 살짝 크게 보이게 한다.
-                "tree.png" => 1.70f,
-                "bush.png" => 1.15f,
-                _ => 1f
-            };
-            var imageRect = ScaleRectFromCenter(collisionRect, imageScale);
-
-            if (!RectsIntersect(imageRect, visibleWorldBounds))
-            {
-                continue;
-            }
-
-            var bitmap = obstacle.ImageFileName switch
-            {
-                "wall.png" => _wallBitmap,
-                "building.png" => _buildingBitmap,
-                "house_v2.png" => _houseBitmap,
-                "tree.png" => _treeBitmap,
-                "pond_v2.png" => _pondBitmap,
-                "bush.png" => _bushBitmap,
-                _ => null
-            };
-
-            if (obstacle.Type == "Rect")
-            {
-                if (bitmap != null)
-                {
-                    canvas.DrawBitmap(bitmap, imageRect);
-                }
-                else
-                {
-                    canvas.DrawRect(collisionRect, fallbackPaint);
-                }
-            }
-            else if (obstacle.Type == "Circle")
-            {
-                if (bitmap != null)
-                {
-                    canvas.DrawBitmap(bitmap, imageRect);
-                }
-                else
-                {
-                    canvas.DrawCircle(obstacle.CenterX.X, obstacle.CenterX.Y, obstacle.Radius, fallbackPaint);
-                }
-            }
-        }
-    }
-
-    private static SKRect ScaleRectFromCenter(SKRect rect, float scale)
-    {
-        if (scale == 1f)
-        {
-            return rect;
-        }
-
-        var halfWidth = rect.Width * scale / 2f;
-        var halfHeight = rect.Height * scale / 2f;
-        return new SKRect(
-            rect.MidX - halfWidth,
-            rect.MidY - halfHeight,
-            rect.MidX + halfWidth,
-            rect.MidY + halfHeight);
+        canvas.DrawPath(fogPath, foregroundFogPaint);
+        canvas.Restore();
     }
 
     private static bool RectsIntersect(SKRect first, SKRect second) =>
@@ -1505,8 +1505,7 @@ public partial class GamePlay : ContentPage
     private bool IsInJail(float x, float y)
     {
         var jail = _gameMap.Jail;
-        return x >= jail.LeftTop.X && x <= jail.RightBottom.X &&
-               y >= jail.LeftTop.Y && y <= jail.RightBottom.Y;
+        return GameMap.IsPointInBuilding(x, y, jail);
     }
 
     private SKPath CreateVisionPath(Player player)

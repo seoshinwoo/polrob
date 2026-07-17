@@ -69,6 +69,8 @@
 
 		<!-- Raw Assets (also remove the "Resources\Raw" prefix) -->
 		<MauiAsset Include="Resources\Raw\**" LogicalName="%(RecursiveDir)%(Filename)%(Extension)" />
+		<!-- The exact_map tile pyramid replaces every approximate generated map asset at runtime. -->
+		<MauiAsset Remove="Resources\Raw\generated_map_assets\**" />
 	</ItemGroup>
 
 	<ItemGroup>

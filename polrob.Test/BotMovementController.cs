@@ -10,6 +10,7 @@ public sealed class BotMovementController
     private static readonly float[] SteeringAngles = [0f, 25f, -25f, 50f, -50f, 90f, -90f, 135f, -135f, 180f];
 
     private readonly GameMap _map = new();
+    private readonly List<Obstacle> _nearbyCollisionObstacles = new();
     private readonly Random _random;
     private Vector2 _wanderDirection;
     private DateTime _nextDirectionChangeUtc = DateTime.MinValue;
@@ -135,14 +136,15 @@ public sealed class BotMovementController
     private Vector2 GetRescueContactPoint(float radius, int rescuerIndex)
     {
         var jail = _map.Jail;
+        var jailBounds = GameMap.GetBuildingCollisionBounds(jail);
         var contactGap = radius + 15f;
         var candidates = new[]
         {
-            new Vector2(jail.LeftTop.X - contactGap, jail.Center.Y),
-            new Vector2(jail.RightBottom.X + contactGap, jail.Center.Y),
-            new Vector2(jail.LeftTop.X + jail.Width * 0.2f, jail.RightBottom.Y + contactGap),
-            new Vector2(jail.LeftTop.X + jail.Width * 0.8f, jail.RightBottom.Y + contactGap),
-            new Vector2(jail.Center.X, jail.LeftTop.Y - contactGap)
+            new Vector2(jailBounds.Left - contactGap, jail.CollisionCenter.Y),
+            new Vector2(jailBounds.Right + contactGap, jail.CollisionCenter.Y),
+            new Vector2(jailBounds.Left + jail.EffectiveCollisionWidth * 0.2f, jailBounds.Bottom + contactGap),
+            new Vector2(jailBounds.Left + jail.EffectiveCollisionWidth * 0.8f, jailBounds.Bottom + contactGap),
+            new Vector2(jail.CollisionCenter.X, jailBounds.Top - contactGap)
         };
 
         for (var offset = 0; offset < candidates.Length; offset++)
@@ -154,7 +156,7 @@ public sealed class BotMovementController
             }
         }
 
-        return new Vector2(jail.LeftTop.X - contactGap, jail.Center.Y);
+        return new Vector2(jailBounds.Left - contactGap, jail.CollisionCenter.Y);
     }
 
     private bool Move(Player player, Vector2 preferredDirection, TimeSpan elapsed)
@@ -211,58 +213,12 @@ public sealed class BotMovementController
 
     private bool IsColliding(float x, float y, float radius)
     {
-        if (IsCircleCollidingWithRectangle(x, y, radius, _map.Jail))
-        {
-            return true;
-        }
-
-        foreach (var obstacle in _map.Obstacles)
-        {
-            if (obstacle.Type == "Rect")
-            {
-                var closestX = Math.Clamp(x, obstacle.LeftTop.X, obstacle.RightBottom.X);
-                var closestY = Math.Clamp(y, obstacle.LeftTop.Y, obstacle.RightBottom.Y);
-                var dx = x - closestX;
-                var dy = y - closestY;
-                if (dx * dx + dy * dy < radius * radius)
-                {
-                    return true;
-                }
-            }
-            else if (obstacle.Type == "Circle")
-            {
-                var dx = x - obstacle.CenterX.X;
-                var dy = y - obstacle.CenterX.Y;
-                var combinedRadius = radius + obstacle.Radius;
-                if (dx * dx + dy * dy < combinedRadius * combinedRadius)
-                {
-                    return true;
-                }
-            }
-        }
-
-        return false;
+        return _map.IsMovementPositionBlocked(x, y, radius, _nearbyCollisionObstacles);
     }
 
     private bool IsInJail(Player player)
     {
-        return player.X >= _map.Jail.LeftTop.X &&
-               player.X <= _map.Jail.RightBottom.X &&
-               player.Y >= _map.Jail.LeftTop.Y &&
-               player.Y <= _map.Jail.RightBottom.Y;
-    }
-
-    private static bool IsCircleCollidingWithRectangle(
-        float x,
-        float y,
-        float radius,
-        MapBuilding building)
-    {
-        var closestX = Math.Clamp(x, building.LeftTop.X, building.RightBottom.X);
-        var closestY = Math.Clamp(y, building.LeftTop.Y, building.RightBottom.Y);
-        var dx = x - closestX;
-        var dy = y - closestY;
-        return dx * dx + dy * dy < radius * radius;
+        return GameMap.IsPointInBuilding(player.X, player.Y, _map.Jail);
     }
 
     private Vector2 CreateRandomDirection()
