@@ -37,9 +37,5 @@
 	</dict>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>멀티플레이 서버에 접속하기 위해 로컬 네트워크 권한이 필요합니다.</string>
-	<key>NSBonjourServices</key>
-	<array>
-		<string>_tcp._tcp</string>
-	</array>
 </dict>
 </plist>
