@@ -20,7 +20,7 @@ public class GameSession
     }
 
     public object CommandGate { get; } = new();
-    public Channel<RoomCommand> Commands { get; }
+    public Channel<RoomCommand> Commands { get; } // 해당 방으로 들어온 입장, 퇴자 , 이동 명령이 잠시 쌓임. 
     public int QueuedCommandCount;
     public ConcurrentDictionary<string, PlayerSession> Sessions { get; } = new();
     public ConcurrentDictionary<string, DateTime> JailEntryTimes { get; } = new();

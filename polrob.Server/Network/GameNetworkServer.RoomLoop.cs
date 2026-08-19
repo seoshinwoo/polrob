@@ -160,11 +160,15 @@ public partial class GameNetworkServer
         }
     }
 
+    // 한 방의 명령 큐에 쌓인 네트워크 이벤트를 꺼내서 처리하는 함수. 처리하는 대상은 Join, Leave, Move 3가지..
+    // 핵심은 이동 명령 전부를 처리하지 않고 최신 입력 1개만 남김. 이것을 coalescing(입력 병합)이라고 함.
+    // UDP만 coalescing을 하고 입장 및 퇴장은 순서가 중요하기 때문에 즉시 처리해
     private void DrainRoomCommands(string roomId, GameSession gameSession)
     {
+        // key : 플레이어ID, value : 최신 이동 명령
         Dictionary<string, MoveRoomCommand>? latestMoveByPlayerId = null;
 
-        while (gameSession.Commands.Reader.TryRead(out var command))
+        while (gameSession.Commands.Reader.TryRead(out var command)) // 큐에 명령이 있으면 하나 꺼냄..
         {
             Interlocked.Decrement(ref gameSession.QueuedCommandCount);
             switch (command)
@@ -189,6 +193,8 @@ public partial class GameNetworkServer
         FlushCoalescedMoves(roomId, gameSession, latestMoveByPlayerId);
     }
 
+    // 모아 둔 최신 이동 입력들을 실제로 처리하는 함수..
+    // 이동 패킷을 받자마자 처리하지 않고, 플레이별로 최신 것만 임시로 모아둠..
     private void FlushCoalescedMoves(
         string roomId,
         GameSession gameSession,

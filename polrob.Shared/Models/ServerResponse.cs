@@ -7,7 +7,7 @@ public class ServerResponse
     public string? RoomId { get; set; }
     public string? RoomCode { get; set; }
     public PlayerRole? Role { get; set; }
-    public int CurrentCount { get; set; }
+    public int CurrentCount { get; set; } // 현재 방에 들어있는 플레이어 수
     public int MaxCount { get; set; }
     public bool CreatedRoom { get; set; }
     public bool Matched { get; set; }

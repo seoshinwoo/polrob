@@ -130,7 +130,7 @@ public class GameController : ControllerBase
             });
         }
 
-        var response = await _gameRoomService.ResetRoomForReplay(request.RoomId, userId, request.Role);
+        var response = await _gameRoomService.RejoinCustomRoomForReplay(request.RoomId, userId, request.Role);
         if (!response.Success)
         {
             return BadRequest(response);

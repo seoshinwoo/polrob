@@ -9,9 +9,11 @@ public static class AuthSession
     // iPhone 개인용 핫스팟에 연결된 현재 MacBook(en0)의 IPv4 주소입니다.
     // iOS 실기기는 이 주소로 MacBook에서 실행 중인 HTTP/TCP/UDP 서버에 접속합니다.
     private const string LocalNetworkServerHost = "192.0.0.2";
-    private static readonly SemaphoreSlim LoadLock = new(1, 1);
+    private static readonly SemaphoreSlim LoadLock = new(1, 1); // 한 번에 한 작업만 통과시키는 잠금장치.. 
     private static bool _isLoaded;
 
+    // SecureStorage는 운영체제의 보안 저장 기능을 이용.. iOS에서는 Keychain, Android에서는 Keystore 기반 암호화 저장소를 사용.. 일반 앱 데이터나 단순 파일을 들여다보는 것보다 훨씬 보호받음..
+    // Preferencessms 일반 설정용 key-value 저장소.. 암호화를 보장하는 보안 저장소가 아니므로, 인증·토큰·비밀번호·API 키 같은 민감정보를 저장하면 안됨..
     public static string? SessionToken { get; private set; }
     public static string? UserId { get; private set; }
     public static string? Name { get; private set; }
@@ -23,12 +25,12 @@ public static class AuthSession
 
     public static async Task LoadAsync()
     {
-        if (_isLoaded)
+        if (_isLoaded) // 이미 기기 저장소에서 로그인 정보를 읽어 온 적이 있다면 즉시 끝냄.. 
         {
             return;
         }
 
-        await LoadLock.WaitAsync();
+        await LoadLock.WaitAsync(); // 여러 화면이 동시에 LoadAsync()를 불러도, 한 작업만 저장소를 읽도록 줄을 세움.. 
         try
         {
             if (_isLoaded)
@@ -36,7 +38,7 @@ public static class AuthSession
                 return;
             }
 
-            SessionToken = await SecureStorage.GetAsync("sessionToken");
+            SessionToken = await SecureStorage.GetAsync("sessionToken"); // 보안 저장소 접근이 비동기 작업일 수 있어 await가 필요.. 
             UserId = Preferences.Get("userId", null);
             Name = Preferences.Get("name", null);
             _isLoaded = true;

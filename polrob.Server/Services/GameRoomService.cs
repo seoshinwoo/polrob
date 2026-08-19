@@ -37,7 +37,7 @@ public class GameRoomService
             };
         }
 
-        lock (_roomLock)
+        lock (_roomLock) // 방 목록은 List<Game>으로 관리되고 있고, List<T>는 여러 요청이 동시에 읽고 수정하는 상황에 안전하지 않음.. 그래서 락을 거는 것..
         {
             RemoveExpiredEmptyRoomsCore(DateTime.UtcNow);
 
@@ -222,6 +222,9 @@ public class GameRoomService
         }
     }
 
+    // 사용자가 해당 roomID 방에 실제로 참가 등록이 되어있는지, 되어있다면 그 플레이어의 로비 정보를 가져올 수 있는지를 확인.. 
+    // 로그인한 A가 다른 방 ID를 알아냈더라도 이 검증이 없으면 그 방에 참가할 수 없음..
+    // TCP 게임 입장과 SignalR 허브 JoinRoom()에서도 사용됨.. 게임 접속 뿐 아니라 실시간 로비 업데이트 구독도 참가자에게만 허용..
     public Player? GetAuthenticatedGamePlayer(string roomId, string userId)
     {
         lock (_roomLock)
@@ -297,6 +300,7 @@ public class GameRoomService
         }
     }
 
+    // 랜덤 매칭 방이 게임을 시작하기 직전(대기/카운트다운)에 누군가 나가면, 시작을 취소하고 남은 사람들을 다시 매칭 대기 상태로 돌리는 메소드..
     public ServerResponse AbortRandomGameStart(string roomId, string leavingUserId)
     {
         lock (_roomLock)
@@ -386,7 +390,7 @@ public class GameRoomService
         }
     }
 
-    public async Task<ServerResponse> ResetRoomForReplay(string roomId, string userId, PlayerRole role)
+    public async Task<ServerResponse> RejoinCustomRoomForReplay(string roomId, string userId, PlayerRole role)
     {
         var user = await GetUserAsync(userId);
         if (user == null)
@@ -472,7 +476,7 @@ public class GameRoomService
             if (game.IsPrivate)
             {
                 game.IsOnGame = false;
-                game.Players.Clear();
+                game.Players.Clear(); // 랜덤 게임방인 경우 그냥 방을 삭제(방 재사용이 필요 없으니..)
                 game.EmptyRoomExpiresAtUtc = DateTime.UtcNow.Add(EmptyCustomRoomReplayLifetime);
                 return CreateRoomStatusResponse(game, message: "게임이 종료되었습니다.");
             }

@@ -12,19 +12,19 @@ public partial class GameNetworkServer : BackgroundService
 {
     private readonly TcpListener _tcpListener;
     private readonly UdpClient _udpClient;
-    private readonly ConcurrentDictionary<string, GameSession> _gameSessions = new();
-    private readonly ConcurrentDictionary<string, string> _playerRooms = new();
-    private readonly ConcurrentDictionary<string, UdpRateLimitState> _udpRateLimits = new();
+    private readonly ConcurrentDictionary<string, GameSession> _gameSessions = new(); // Key : Game의 ID, Value : 해당 게임의 GameSession
+    private readonly ConcurrentDictionary<string, string> _playerRooms = new(); // Key : playerId, Value : roomId
+    private readonly ConcurrentDictionary<string, UdpRateLimitState> _udpRateLimits = new(); // UDP 패킷 제한 상태를 저장하는 딕셔너리.. Key : playerID
     private readonly GameRoomService _gameRoomService;
     private readonly ILogger<GameNetworkServer> _logger;
     private readonly GameMap _map = new();
     private readonly RuntimeMetricSampler _runtimeMetrics = new();
-    private readonly int _roomCommandQueueCapacity;
-    private readonly double _udpPacketsPerSecond;
-    private readonly double _udpBurstSize;
+    private readonly int _roomCommandQueueCapacity; // 방마다 갖는 명령 큐의 최대 길이.. 큐가 꽉 차면 새 명령을 받지 못하고 드롭함..
+    private readonly double _udpPacketsPerSecond; // 플레이어 한 명이 초당 처리할 수 있는 UDP 이동 패킷 수.. 
+    private readonly double _udpBurstSize; // 잠시 몰아서 허용할 수 있는 UDP 패킷의 최대량.. 
 
     private Timer? _metricsTimer;
-    private long _udpPacketsReceivedThisSecond;
+    private long _udpPacketsReceivedThisSecond; // 
     private long _udpPacketsSentThisSecond;
     private long _udpBytesReceivedThisSecond;
     private long _udpBytesSentThisSecond;
@@ -35,7 +35,7 @@ public partial class GameNetworkServer : BackgroundService
     private long _tcpSendFailuresThisSecond;
     private long _tcpPacketsSentThisSecond;
     private long _jsonSerializationsThisSecond;
-    private int _currentTcpConnections;
+    private int _currentTcpConnections; // 현재 열려 있는 TCP 연결 수.. 누적 카운터가 아니라 현재 상태값..
     private static readonly TimeSpan RoomTickInterval = TimeSpan.FromMilliseconds(50);
     private static readonly TimeSpan UdpMovementBroadcastInterval = TimeSpan.FromMilliseconds(100);
     private static readonly TimeSpan GameRuleTickInterval = TimeSpan.FromMilliseconds(100);

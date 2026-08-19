@@ -10,8 +10,8 @@ namespace polrob.Server.Controllers;
 [Route("auth")]
 public class AuthController : ControllerBase
 {
+    // 키 : sessionId(무작위 문자열 토큰), 값 : (유저 ID, 만료 시각)
     private static readonly ConcurrentDictionary<string, (string UserId, DateTime Expires)> Sessions = new();
-
     private readonly UserDbService _userDbService;
     private readonly BotIdentityService _botIdentityService;
     private readonly IConfiguration _configuration;
@@ -104,10 +104,12 @@ public class AuthController : ControllerBase
         return Ok(new BotLoginResponse(CreateSession(bot.Id), bot.Id, bot.Name));
     }
 
+    // 이 함수의 반환값은 2개.. 
+    // 1. return bool : 세션이 유효한가?(true/false), 2. out userId : 유효하다면, 그 세션에 연결된 사용자 ID는 무엇인가?
     public static bool ValidateSession(string sessionToken, out string? userId)
     {
         userId = null;
-        if (string.IsNullOrEmpty(sessionToken))
+        if (string.IsNullOrEmpty(sessionToken)) // sessionToken 과 sessionId는 같은 것이다..
         {
             return false;
         }

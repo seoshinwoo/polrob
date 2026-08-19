@@ -57,6 +57,7 @@ public class UserDbService
 
         try
         {
+            // PartitionKey는 Cosmos DB가 데이터를 여러 서버/저장 구역에 나눠 보관할 때, 어느 구역에 이 문서를 넣고 찾아야 하는지 정하는 값.. 
             await _container.CreateItemAsync(document, new PartitionKey(document.Id));
             var user = document.ToUser();
             _usersById[user.Id] = user;
@@ -105,12 +106,14 @@ public class UserDbService
     {
         var query = new QueryDefinition("SELECT TOP 1 * FROM c WHERE c.name = @name")
             .WithParameter("@name", normalizedName);
-        using var iterator = _container.GetItemQueryIterator<UserDocument>(query);
 
-        while (iterator.HasMoreResults)
+        // iterator는 결과를 한 번에 전부 가져오는 객체가 아니라, 결과를 페이지 단위로 조금씩 읽어오는 객체..     
+        using var iterator = _container.GetItemQueryIterator<UserDocument>(query); // GetItemQueryIterator : 쿼리를 실행할 준비를 하고 결과 읽기 도구를 만듦
+
+        while (iterator.HasMoreResults) // 아직 다음 페이지가 있는지 확인
         {
-            var response = await iterator.ReadNextAsync();
-            var document = response.Resource.FirstOrDefault();
+            var response = await iterator.ReadNextAsync(); // 다음 결과 페이지를 서버에서 받아옴
+            var document = response.Resource.FirstOrDefault(); // 그 페이지에 포함된 UserDocument ahrfhr
             if (document is not null)
             {
                 return document;

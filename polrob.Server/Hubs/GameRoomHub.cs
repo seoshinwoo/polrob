@@ -8,9 +8,15 @@ namespace polrob.Server.Hubs;
 
 public class GameRoomHub : Hub
 {
-    private static readonly TimeSpan DisconnectGracePeriod = TimeSpan.FromSeconds(10);
-    private static readonly ConcurrentDictionary<string, RoomConnection> Connections = new();
-    private static readonly ConcurrentDictionary<string, string> ActiveUserConnections = new();
+    private static readonly TimeSpan DisconnectGracePeriod = TimeSpan.FromSeconds(10); // SignalR 연결이 끊어진 뒤 서버가 10초 기다리는 유예 시간..
+
+    // 2개의 딕셔너리를 만든 이유.. 재연결 처리에서 필요한 정보를 서로 반대 방향으로 빠르게 찾기 위한 인덱스..
+    // 특정 연결이 끊기면 서버는 이 연결이 누구의 것인지 알아야 함.. 이것은 Connections으로 알 수 있음..
+    // 그 다음 서버는 10초 유예 시간 뒤 해당 방의 해당 유저가 다시 접속했는지 확인.. 이것은 ActiveUserConnections으로 알 수 있음..
+    // 이때 연결문자열이 다르면 재접속한 것이므로, 이전 연결이 끊겼더라도 사용자를 방에서 제거하지 않음.. 
+    // Connections 하나만 두고 전체를 순회해서 찾는 것도 가능은 하지만 그러면 접속시간 또는 순서를 따로 관리해야하고 매번 전체 연결을 검사해야함..
+    private static readonly ConcurrentDictionary<string, RoomConnection> Connections = new(); // Key : Context.ConnectionId, Value : (RoomId, UserId)
+    private static readonly ConcurrentDictionary<string, string> ActiveUserConnections = new(); // Key : "roomId:userId", Value : 가장 최근의 ConnectionId
     private const string AuthenticatedUserIdKey = "AuthenticatedUserId";
     private const string AuthenticatedSessionTokenKey = "AuthenticatedSessionToken";
 
@@ -25,9 +31,10 @@ public class GameRoomHub : Hub
 
     public override async Task OnConnectedAsync()
     {
-        var httpContext = Context.GetHttpContext();
-        var authorization = httpContext?.Request.Headers.Authorization.ToString();
-        var token = httpContext?.Request.Query["access_token"].ToString();
+        var httpContext = Context.GetHttpContext(); // SignalR 연결을 처음에는 HTTP 요청을 시작..
+        var authorization = httpContext?.Request.Headers.Authorization.ToString(); // HTTP 헤더에서 토큰을 찾음..
+        var token = httpContext?.Request.Query["access_token"].ToString(); // 쿼리 문자열에서 토큰을 찾음..
+
         const string bearerPrefix = "Bearer ";
         if (string.IsNullOrWhiteSpace(token) &&
             authorization?.StartsWith(bearerPrefix, StringComparison.OrdinalIgnoreCase) == true)
@@ -36,12 +43,14 @@ public class GameRoomHub : Hub
         }
 
         if (!AuthController.ValidateSession(token ?? string.Empty, out var userId) ||
-            string.IsNullOrWhiteSpace(userId))
+            string.IsNullOrWhiteSpace(userId)) // 토큰이 서버의 Sessions 딕셔너리에 있는지, 만료되지 않았는지 확인..
         {
-            Context.Abort();
+            Context.Abort(); // 유효하지 않다면 SignalR 연결을 끊음..
             return;
         }
 
+        // Context.Items는 현재 SignalR 연결 하나에만 연결된 임시 저장소.. 
+        // 이 연결 이후 Hub 메소드를 호출하면, 매번 토큰 문자열을 클라이언트에게 다시 받지 않고 이곳의 값을 이용..
         Context.Items[AuthenticatedUserIdKey] = userId;
         Context.Items[AuthenticatedSessionTokenKey] = token;
         await base.OnConnectedAsync();
@@ -170,7 +179,7 @@ public class GameRoomHub : Hub
             };
         }
 
-        var startedAt = Stopwatch.GetTimestamp();
+        var startedAt = Stopwatch.GetTimestamp(); // 취소 처리에 걸린 시간을 로그로 남기기 위한 시작 시각
         var status = _gameRoomService.RemovePlayer(roomId, userId);
         if (!status.Success)
         {
