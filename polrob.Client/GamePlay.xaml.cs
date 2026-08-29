@@ -61,6 +61,9 @@ public partial class GamePlay : ContentPage
     private readonly SemaphoreSlim _assetLoadLock = new(1, 1);
     private readonly ExactMapTileCache _exactMapTiles;
     private bool _assetsLoaded;
+    private readonly ProximityHaptics _proximityHaptics = new();
+    private int _proximityVibrationPulseMilliseconds;
+    private long _nextProximityVibrationAt;
 
     private SKBitmap? _policeIdleBitmap;
     private SKBitmap?[] _policeRunBitmaps = new SKBitmap?[8];
@@ -177,6 +180,7 @@ public partial class GamePlay : ContentPage
         {
             UpdateRemotePlayerInterpolation();
             UpdatePhysics();
+            UpdateProximityVibration();
             _canvas.InvalidateSurface();
             UpdateUI();
         };
@@ -329,6 +333,19 @@ public partial class GamePlay : ContentPage
             ScheduleTeamVoiceRosterRefresh();
         };
 
+        _networkClient.OnOpponentProximityReceived += (syncData) =>
+        {
+            var pulseMilliseconds = OpponentProximitySync.NormalizePulseMilliseconds(
+                syncData.PulseMilliseconds);
+            if (_proximityVibrationPulseMilliseconds == pulseMilliseconds)
+            {
+                return;
+            }
+
+            StopProximityVibration();
+            _proximityVibrationPulseMilliseconds = pulseMilliseconds;
+        };
+
         _networkClient.OnPlayerArrested += (policeId, robberId) =>
         {
             MainThread.BeginInvokeOnMainThread(() =>
@@ -442,9 +459,44 @@ public partial class GamePlay : ContentPage
     private void StopGameClient()
     {
         _timer.Stop();
+        StopProximityVibration();
+        _proximityVibrationPulseMilliseconds = 0;
         _networkClient?.Disconnect();
         _networkClient = null;
         _remotePlayerInterpolations.Clear();
+    }
+
+    private void UpdateProximityVibration()
+    {
+        if (!_isInitialized ||
+            _gamePhase != GamePhase.Playing ||
+            _proximityVibrationPulseMilliseconds == 0)
+        {
+            StopProximityVibration();
+            return;
+        }
+
+        var now = Environment.TickCount64;
+        if (now < _nextProximityVibrationAt)
+        {
+            return;
+        }
+
+        _proximityHaptics.PlayPulse(
+            TimeSpan.FromMilliseconds(_proximityVibrationPulseMilliseconds));
+        _nextProximityVibrationAt =
+            now + _proximityVibrationPulseMilliseconds * 2L;
+    }
+
+    private void StopProximityVibration()
+    {
+        if (_nextProximityVibrationAt == 0)
+        {
+            return;
+        }
+
+        _proximityHaptics.Stop();
+        _nextProximityVibrationAt = 0;
     }
 
     private string BuildGameOverRoute()

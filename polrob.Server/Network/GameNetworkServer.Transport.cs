@@ -168,6 +168,7 @@ public partial class GameNetworkServer
     private void BroadcastPlayerState(GameSession gameSession, Player player)
     {
         RefreshOpponentVisibility(gameSession);
+        RefreshOpponentProximityAlerts(gameSession);
         var payload = SerializeForMetrics(player);
 
         foreach (var session in gameSession.Sessions.Values)
@@ -177,6 +178,51 @@ public partial class GameNetworkServer
             {
                 TrySendTcp(session.Writer, TcpMessageType.PlayerState, payload);
             }
+        }
+    }
+
+    // 시야와 무관하게 각 플레이어에게 가장 가까운 상대 팀과의 거리 단계만 전송합니다.
+    // 상대의 좌표나 ID는 보내지 않으므로 시야 밖 위치 정보는 노출되지 않습니다.
+    private void RefreshOpponentProximityAlerts(GameSession gameSession)
+    {
+        var sessions = gameSession.Sessions.Values.ToList();
+
+        foreach (var recipientSession in sessions)
+        {
+            var recipient = recipientSession.PlayerState;
+            var nearestSurfaceDistance = float.PositiveInfinity;
+
+            foreach (var opponentSession in sessions)
+            {
+                var opponent = opponentSession.PlayerState;
+                if (opponent.Role == recipient.Role)
+                {
+                    continue;
+                }
+
+                var deltaX = opponent.X - recipient.X;
+                var deltaY = opponent.Y - recipient.Y;
+                var centerDistance = MathF.Sqrt(deltaX * deltaX + deltaY * deltaY);
+                var surfaceDistance = MathF.Max(
+                    0f,
+                    centerDistance - recipient.Radius - opponent.Radius);
+                nearestSurfaceDistance = MathF.Min(nearestSurfaceDistance, surfaceDistance);
+            }
+
+            var pulseMilliseconds = OpponentProximitySync.FromSurfaceDistance(nearestSurfaceDistance);
+            if (recipientSession.LastOpponentProximityPulseMilliseconds == pulseMilliseconds)
+            {
+                continue;
+            }
+
+            recipientSession.LastOpponentProximityPulseMilliseconds = pulseMilliseconds;
+            TrySendTcp(
+                recipientSession.Writer,
+                TcpMessageType.OpponentProximity,
+                SerializeForMetrics(new OpponentProximitySync
+                {
+                    PulseMilliseconds = pulseMilliseconds
+                }));
         }
     }
 

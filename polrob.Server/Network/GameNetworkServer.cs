@@ -165,6 +165,7 @@ public partial class GameNetworkServer : BackgroundService
             SerializeForMetrics(player),
             playerId);
         RefreshOpponentVisibility(gameSession);
+        RefreshOpponentProximityAlerts(gameSession);
         Console.WriteLine($"{roomId} 방 {player.Role} 역할에 플레이어 입장 브로드캐스트!!");
     }
 
@@ -210,6 +211,8 @@ public partial class GameNetworkServer : BackgroundService
                 TrySendTcp(remainingSession.Writer, TcpMessageType.Left, command.PlayerId);
             }
         }
+
+        RefreshOpponentProximityAlerts(gameSession);
     }
 
     private bool TryAbortRandomGameStart(string roomId, GameSession gameSession, string leavingPlayerId)
@@ -358,6 +361,7 @@ public partial class GameNetworkServer : BackgroundService
         var playerIds = gameSession.PendingUdpMovementPlayerIds.ToList();
         gameSession.PendingUdpMovementPlayerIds.Clear();
         RefreshOpponentVisibility(gameSession);
+        RefreshOpponentProximityAlerts(gameSession);
 
         foreach (var playerId in playerIds)
         {

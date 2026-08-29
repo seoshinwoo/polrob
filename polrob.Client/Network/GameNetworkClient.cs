@@ -24,6 +24,7 @@ public class GameNetworkClient
     public event Action<JailBreakSync>? OnPlayerJailBroken;
     public event Action<JailBreakProgressSync>? OnJailBreakProgressReceived;
     public event Action<GameStateSync>? OnGameStateReceived;
+    public event Action<OpponentProximitySync>? OnOpponentProximityReceived;
 
     public async Task ConnectAsync(string ipAddress, Player localPlayer, string sessionToken)
     {
@@ -150,6 +151,11 @@ public class GameNetworkClient
                     else if (type == TcpMessageType.MovementSession)
                     {
                         _movementSessionToken = json;
+                    }
+                    else if (type == TcpMessageType.OpponentProximity)
+                    {
+                        var proximity = JsonSerializer.Deserialize<OpponentProximitySync>(json);
+                        if (proximity != null) OnOpponentProximityReceived?.Invoke(proximity);
                     }
                 });
             }

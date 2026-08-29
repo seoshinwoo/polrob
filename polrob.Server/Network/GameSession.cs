@@ -70,4 +70,5 @@ public class PlayerSession
     public string MovementSessionToken { get; init; } = string.Empty;
     public List<Obstacle> NearbyCollisionObstacles { get; } = new();
     public HashSet<string> VisibleOpponentPlayerIds { get; } = new();
+    public int LastOpponentProximityPulseMilliseconds { get; set; } = -1;
 }
