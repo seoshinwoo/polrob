@@ -3,4 +3,8 @@
 	<application android:allowBackup="true" android:icon="@mipmap/polrobicon_new" android:roundIcon="@mipmap/polrobicon_new_round" android:supportsRtl="true" android:usesCleartextTraffic="true" />
 	<uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 	<uses-permission android:name="android.permission.INTERNET" />
+	<!-- 팀 보이스 채팅에서 사용자의 마이크 입력을 받기 위해 필요합니다. -->
+	<uses-permission android:name="android.permission.RECORD_AUDIO" />
+	<!-- WebRTC가 통화용 오디오 출력/입력 장치를 제어할 때 필요합니다. -->
+	<uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
 </manifest>

@@ -33,6 +33,8 @@ if (!cosmosDbConnString.Contains("AccountEndpoint=", StringComparison.OrdinalIgn
 builder.Services.AddSingleton<UserDbService>(sp => new UserDbService(cosmosDbConnString));
 builder.Services.AddSingleton<BotIdentityService>();
 builder.Services.AddSingleton<GameRoomService>();
+builder.Services.Configure<LiveKitOptions>(builder.Configuration.GetSection(LiveKitOptions.SectionName));
+builder.Services.AddSingleton<LiveKitTokenService>();
 
 var app = builder.Build();
 using (var scope = app.Services.CreateAsyncScope())

@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="ko">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>PolRob Team Voice</title>
+    <link rel="icon" href="data:,">
+
+    <!-- MAUI C# 코드와 JSON 메시지를 주고받는 공식 HybridWebView 브리지입니다. -->
+    <script src="_framework/hybridwebview.js"></script>
+
+    <!--
+      공식 LiveKit JavaScript SDK의 버전을 고정합니다.
+      게임은 LiveKit Cloud 연결이 필요하므로 이 파일도 HTTPS CDN에서 가져옵니다.
+      장기적으로 네이티브 SDK 바인딩을 도입해도 C#의 IVoiceRoomClient 경계는 유지됩니다.
+    -->
+    <script
+        src="https://cdn.jsdelivr.net/npm/livekit-client@2.22.0/dist/livekit-client.umd.js"
+        integrity="sha384-coyUTBMmNfvdQWNZuqzEO+zY/cw795xduqRTqTGzltGgV0Kimm13lpmB2DZpsgDA"
+        crossorigin="anonymous"
+        onerror="window.__liveKitScriptFailed = true"></script>
+    <script src="voice-room.js"></script>
+    <style>
+        html, body { width: 1px; height: 1px; margin: 0; overflow: hidden; background: transparent; }
+        #audio-root { width: 1px; height: 1px; overflow: hidden; }
+    </style>
+</head>
+<body>
+    <!-- 구독한 팀원의 audio 요소는 이 컨테이너 아래에 자동으로 붙습니다. -->
+    <div id="audio-root" aria-hidden="true"></div>
+</body>
+</html>

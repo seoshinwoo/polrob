@@ -181,11 +181,14 @@ public partial class GamePlay : ContentPage
             UpdateUI();
         };
         _timer.Start();
+
+        InitializeTeamVoiceControls();
     }
 
     protected override async void OnAppearing()
     {
         base.OnAppearing();
+        BeginTeamVoiceLifetime();
         await AuthSession.LoadAsync();
         if (!string.IsNullOrWhiteSpace(AuthSession.UserId) && _player.Id != AuthSession.UserId)
         {
@@ -196,9 +199,13 @@ public partial class GamePlay : ContentPage
         _player.RoomId = _roomId;
         _player.Role = _selectedRole;
         _player.Name = GetLocalName();
+        ScheduleTeamVoiceRosterRefresh();
 
         await LoadAssetsAsync();
-        await InitializeNetworkAsync();
+        // 게임 네트워크와 팀 보이스는 서로 실패를 전파하지 않도록 독립적으로 시작합니다.
+        var networkTask = InitializeNetworkAsync();
+        var voiceTask = InitializeTeamVoiceAsync();
+        await Task.WhenAll(networkTask, voiceTask);
     }
 
     private string GetServerIpAddress()
@@ -218,13 +225,21 @@ public partial class GamePlay : ContentPage
             {
                 _players[p.Id] = p;
             }
-            // _players[_player.Id] = _player;
-            _player = _players[_player.Id]; // Test
+            if (_players.TryGetValue(_player.Id, out var authenticatedPlayer))
+            {
+                _player = authenticatedPlayer;
+            }
+            else
+            {
+                // 초기 패킷에 본인이 아직 없다면 기존 로컬 플레이어를 유지합니다.
+                _players[_player.Id] = _player;
+            }
             foreach (var remotePlayer in _players.Values.Where(p => p.Id != _player.Id))
             {
                 ResetRemotePlayerInterpolation(remotePlayer);
             }
             _isInitialized = true;
+            ScheduleTeamVoiceRosterRefresh();
         };
 
         _networkClient.OnPlayerJoined += (p) =>
@@ -234,16 +249,21 @@ public partial class GamePlay : ContentPage
                 _players[p.Id] = p;
                 ResetRemotePlayerInterpolation(p);
             }
+            ScheduleTeamVoiceRosterRefresh();
         };
 
         _networkClient.OnPlayerMoved += (p) =>
         {
+            var rosterChanged = false;
             if (!_players.TryGetValue(p.Id, out var player))
             {
                 _players[p.Id] = p;
                 player = p;
+                rosterChanged = true;
             }
 
+            var previousRole = player.Role;
+            var previousName = player.Name;
             player.RoomId = p.RoomId;
             player.X = p.X;
             player.Y = p.Y;
@@ -257,6 +277,10 @@ public partial class GamePlay : ContentPage
                 player.Name = p.Name;
             }
 
+            rosterChanged = rosterChanged ||
+                            previousRole != player.Role ||
+                            !string.Equals(previousName, player.Name, StringComparison.Ordinal);
+
             if (p.Id == _player.Id)
             {
                 _player = player;
@@ -268,6 +292,11 @@ public partial class GamePlay : ContentPage
             else
             {
                 ResetRemotePlayerInterpolation(player);
+            }
+
+            if (rosterChanged)
+            {
+                ScheduleTeamVoiceRosterRefresh();
             }
         };
 
@@ -297,6 +326,7 @@ public partial class GamePlay : ContentPage
         {
             _players.Remove(playerId);
             _remotePlayerInterpolations.Remove(playerId);
+            ScheduleTeamVoiceRosterRefresh();
         };
 
         _networkClient.OnPlayerArrested += (policeId, robberId) =>
@@ -365,6 +395,7 @@ public partial class GamePlay : ContentPage
 
                         await Task.Delay(3000);
                         StopGameClient();
+                        await StopTeamVoiceAsync();
                         await Shell.Current.GoToAsync(BuildGameOverRoute());
                     }
                 }
@@ -380,6 +411,7 @@ public partial class GamePlay : ContentPage
 
                         await Task.Delay(1000);
                         StopGameClient();
+                        await StopTeamVoiceAsync();
                         await Shell.Current.GoToAsync(BuildRematchingRoute());
                     }
                 }
@@ -399,10 +431,11 @@ public partial class GamePlay : ContentPage
         }
     }
 
-    protected override void OnDisappearing()
+    protected override async void OnDisappearing()
     {
         base.OnDisappearing();
         StopGameClient();
+        await StopTeamVoiceAsync();
         _exactMapTiles.Dispose();
     }
 
