@@ -181,8 +181,8 @@ public partial class GameNetworkServer
         }
     }
 
-    // 시야와 무관하게 각 플레이어에게 가장 가까운 상대 팀과의 거리 단계만 전송합니다.
-    // 상대의 좌표나 ID는 보내지 않으므로 시야 밖 위치 정보는 노출되지 않습니다.
+    // 시야와 무관하게 가장 가까운 상대 팀과의 거리 단계만 보냅니다.
+    // 좌표나 상대 ID는 전송하지 않아 시야 밖 위치는 노출되지 않습니다.
     private void RefreshOpponentProximityAlerts(GameSession gameSession)
     {
         var sessions = gameSession.Sessions.Values.ToList();

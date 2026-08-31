@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
+using Microsoft.Maui.Graphics;
 
 namespace polrob.Client.Voice;
 
@@ -12,6 +13,8 @@ public sealed class TeamVoiceMemberViewModel : INotifyPropertyChanged
     private bool _isMuted;
     private bool _isVoiceConnected;
     private bool _isBusy;
+    private int _slotNumber;
+    private Color _slotColor = Colors.SlateGray;
 
     public TeamVoiceMemberViewModel(string identity, string displayName)
     {
@@ -20,6 +23,18 @@ public sealed class TeamVoiceMemberViewModel : INotifyPropertyChanged
     }
 
     public string Identity { get; }
+
+    public int SlotNumber
+    {
+        get => _slotNumber;
+        private set => SetField(ref _slotNumber, value);
+    }
+
+    public Color SlotColor
+    {
+        get => _slotColor;
+        private set => SetField(ref _slotColor, value);
+    }
 
     public string DisplayName
     {
@@ -104,12 +119,16 @@ public sealed class TeamVoiceMemberViewModel : INotifyPropertyChanged
 
     public void Update(
         string displayName,
+        int slotNumber,
+        Color slotColor,
         bool isLocal,
         bool isSpeaking,
         bool isMuted,
         bool isVoiceConnected)
     {
         DisplayName = displayName;
+        SlotNumber = slotNumber;
+        SlotColor = slotColor;
         IsLocal = isLocal;
         IsSpeaking = isSpeaking;
         IsMuted = isMuted;

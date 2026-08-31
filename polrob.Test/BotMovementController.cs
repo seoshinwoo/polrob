@@ -218,7 +218,7 @@ public sealed class BotMovementController
 
     private bool IsInJail(Player player)
     {
-        return GameMap.IsPointInBuilding(player.X, player.Y, _map.Jail);
+        return player.Role == PlayerRole.Robber && player.IsJailed;
     }
 
     private Vector2 CreateRandomDirection()

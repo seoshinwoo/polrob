@@ -114,6 +114,7 @@ public partial class GameNetworkServer : BackgroundService
         player.Radius = ServerPlayerRadius;
         player.Angle = 0f;
         player.IsMoving = false;
+        player.IsJailed = false;
 
         PositionPlayerForRoom(player, gameSession);
 
@@ -154,7 +155,11 @@ public partial class GameNetworkServer : BackgroundService
             CountdownTime = gameSession.CountdownTime,
             GameTime = gameSession.GameTime,
             WinnerRole = gameSession.WinnerRole,
-            ElapsedGameTime = gameSession.ElapsedGameTime
+            ElapsedGameTime = gameSession.ElapsedGameTime,
+            TotalRobbers = gameSession.Sessions.Values.Count(
+                session => session.PlayerState.Role == PlayerRole.Robber),
+            JailedRobbers = gameSession.Sessions.Values.Count(
+                session => IsInJail(session.PlayerState))
         };
         TrySendTcp(command.Writer, TcpMessageType.GameState, SerializeForMetrics(syncData));
 
@@ -242,7 +247,11 @@ public partial class GameNetworkServer : BackgroundService
             CountdownTime = 0,
             GameTime = gameSession.GameTime,
             WinnerRole = null,
-            ElapsedGameTime = 0
+            ElapsedGameTime = 0,
+            TotalRobbers = gameSession.Sessions.Values.Count(
+                session => session.PlayerState.Role == PlayerRole.Robber),
+            JailedRobbers = gameSession.Sessions.Values.Count(
+                session => IsInJail(session.PlayerState))
         };
 
         BroadcastTcp(gameSession, TcpMessageType.GameState, SerializeForMetrics(syncData), null);
@@ -421,6 +430,7 @@ public partial class GameNetworkServer : BackgroundService
             robber.Y = jailPosition.Y;
             robber.Angle = 0f;
             robber.IsMoving = false;
+            robber.IsJailed = true;
 
             gameSession.JailEntryTimes[robber.Id] = now;
             gameSession.ActiveArrestsByRobberId.Remove(robber.Id);
@@ -632,6 +642,7 @@ public partial class GameNetworkServer : BackgroundService
             target.Y = releasePosition.Y;
             target.Angle = 0f;
             target.IsMoving = false;
+            target.IsJailed = false;
             gameSession.JailEntryTimes.TryRemove(target.Id, out _);
 
             var syncData = new JailBreakSync
@@ -685,7 +696,7 @@ public partial class GameNetworkServer : BackgroundService
             null);
     }
 
-    // 도둑의 현재 위치를 기준으로 감옥 입장 시간 기록을 추가하거나 제거합니다.
+    // 서버가 확정한 수감 상태를 기준으로 감옥 입장 시간 기록을 유지합니다.
     private void RefreshJailEntry(GameSession gameSession, Player player)
     {
         if (player.Role != PlayerRole.Robber)
@@ -717,10 +728,11 @@ public partial class GameNetworkServer : BackgroundService
                (player.Role == PlayerRole.Robber && IsInJail(player));
     }
 
-    // 플레이어의 현재 좌표가 감옥 사각형 안에 있는지 확인합니다.
-    private bool IsInJail(Player player)
+    // 보이지 않는 임시 감옥 영역에 걸어 들어간 플레이어가 수감되는 일을 막기 위해
+    // 좌표가 아니라 체포 완료 시 서버가 확정한 상태만 사용합니다.
+    private static bool IsInJail(Player player)
     {
-        return GameMap.IsPointInBuilding(player.X, player.Y, _map.Jail);
+        return player.Role == PlayerRole.Robber && player.IsJailed;
     }
 
     // 특정 좌표가 플레이어의 시야 거리와 시야각 안에 들어오는지 계산합니다.

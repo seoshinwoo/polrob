@@ -155,7 +155,10 @@ public class GameNetworkClient
                     else if (type == TcpMessageType.OpponentProximity)
                     {
                         var proximity = JsonSerializer.Deserialize<OpponentProximitySync>(json);
-                        if (proximity != null) OnOpponentProximityReceived?.Invoke(proximity);
+                        if (proximity != null)
+                        {
+                            OnOpponentProximityReceived?.Invoke(proximity);
+                        }
                     }
                 });
             }

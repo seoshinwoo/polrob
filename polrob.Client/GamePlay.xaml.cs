@@ -36,6 +36,8 @@ public partial class GamePlay : ContentPage
     private readonly Dictionary<string, RemotePlayerInterpolationState> _remotePlayerInterpolations = new();
     private GamePhase _gamePhase = GamePhase.Waiting;
     private int _remainingTime = 300;
+    private int _totalRobberCount;
+    private int _jailedRobberCount;
     private PlayerRole? _winnerRole;
     private bool _isGameOverTransitioning = false;
     private static readonly TimeSpan MovingUdpSyncInterval = TimeSpan.FromMilliseconds(50);
@@ -50,7 +52,10 @@ public partial class GamePlay : ContentPage
     private const float PlayerNameMaxWidth = 180f;
     private const byte BushPlayerOpacity = 185;
     private const float RenderCullPadding = 100f;
+    private const float PlayerBodyVisualWidthRatio = 0.86f;
     private const float TerrainTileWorldSize = 256f;
+    private const float ForestGroundTop = 12f * TerrainTileWorldSize;
+    private const int StreetTileCount = 7;
     private static readonly SKColor MapOutsideColor = SKColor.Parse("#4C4F4A");
     private static readonly SKColor MissingTerrainColor = SKColor.Parse("#7F865F");
     private static readonly SKRect VillageTerrainBounds = new(256f, 1280f, 4352f, 4352f);
@@ -59,7 +64,6 @@ public partial class GamePlay : ContentPage
     private static readonly SKRect PondTerrainBounds = new(512f, 4864f, 2048f, 7424f);
     private readonly List<Obstacle> _nearbyCollisionObstacles = new();
     private readonly SemaphoreSlim _assetLoadLock = new(1, 1);
-    private readonly ExactMapTileCache _exactMapTiles;
     private bool _assetsLoaded;
     private readonly ProximityHaptics _proximityHaptics = new();
     private int _proximityVibrationPulseMilliseconds;
@@ -72,7 +76,83 @@ public partial class GamePlay : ContentPage
     private SKBitmap?[] _robberRunBitmaps = new SKBitmap?[8];
     private SKBitmap? _robberSurrendBitmap;
     private SKBitmap? _robberPrisonBreakBitmap;
+    private SKBitmap? _cityGroundBitmap;
+    private SKBitmap? _forestGroundBitmap;
+    private readonly SKBitmap?[] _streetBitmaps = new SKBitmap?[StreetTileCount];
     private readonly SKBitmap?[,] _terrainTiles = new SKBitmap?[4, 4];
+    private readonly Dictionary<SKBitmap, SKRect> _spriteVisibleBounds = new();
+    private readonly Dictionary<string, SKBitmap?> _mapPropBitmaps = new(StringComparer.Ordinal);
+    private static readonly float[] PoliceRunBodyWidths = [475f, 470f, 466f, 464f, 466f, 470f, 475f, 470f];
+    private static readonly float[] RobberRunBodyWidths = [418f, 409f, 402f, 411f, 402f, 409f, 418f, 409f];
+
+    // The Canva reference is a 10 x 15 grid of 256 px cells. Rotations are
+    // clockwise in the screen coordinate system used by SkiaSharp.
+    private static readonly RoadTilePlacement[] RoadTilePlacements =
+    [
+        new(2, 1, 1, 0),
+        new(2, 2, 3, 0),
+        new(2, 3, 1, 90),
+        new(2, 4, 1, 90),
+        new(2, 5, 4, 0),
+        new(2, 6, 1, 90),
+        new(2, 7, 1, 90),
+        new(2, 8, 3, 90),
+
+        new(3, 1, 3, 270),
+        new(3, 2, 5, 0),
+        new(3, 5, 1, 0),
+        new(3, 8, 1, 0),
+
+        new(4, 2, 1, 0),
+        new(4, 5, 1, 0),
+        new(4, 8, 1, 0),
+
+        new(5, 0, 3, 0),
+        new(5, 1, 1, 90),
+        new(5, 2, 2, 90),
+        new(5, 5, 1, 0),
+        new(5, 8, 1, 0),
+
+        new(6, 0, 1, 0),
+        new(6, 5, 1, 0),
+        new(6, 8, 1, 0),
+
+        new(7, 0, 4, 270),
+        new(7, 1, 1, 90),
+        new(7, 2, 1, 90),
+        new(7, 3, 1, 90),
+        new(7, 4, 1, 90),
+        new(7, 5, 7, 0),
+        new(7, 6, 1, 90),
+        new(7, 7, 1, 90),
+        new(7, 8, 4, 90),
+
+        new(8, 0, 1, 0),
+        new(8, 5, 1, 0),
+        new(8, 8, 1, 0),
+        new(9, 0, 1, 0),
+        new(9, 5, 1, 0),
+        new(9, 8, 1, 0),
+        new(10, 0, 1, 0),
+        new(10, 5, 1, 0),
+        new(10, 8, 1, 0),
+
+        new(11, 0, 3, 270),
+        new(11, 1, 1, 90),
+        new(11, 2, 1, 90),
+        new(11, 3, 1, 90),
+        new(11, 4, 1, 90),
+        new(11, 5, 7, 0),
+        new(11, 6, 1, 90),
+        new(11, 7, 1, 90),
+        new(11, 8, 2, 90),
+
+        new(12, 5, 1, 0),
+        new(13, 5, 1, 0),
+        new(14, 5, 1, 0)
+    ];
+
+    private static readonly MapPropLayout[] MapPropPlacements = GameMap.PropLayouts;
 
     // 체포 상태 만료 시간 기록 (2초 유지용)
     private Dictionary<string, DateTime> _arrestVisualTimers = new();
@@ -81,8 +161,9 @@ public partial class GamePlay : ContentPage
     // 화면 중앙 체포 텍스트 표시 목표 시간
     private DateTime _showArrestedTextUntil = DateTime.MinValue;
 
-    // 부자연스러운 애니메이션과 진동을 막기 위해 좌우대칭을 맞춘 프레임 시퀀스 구성 (오른쪽이 두 번 흔들리는 문제 해결)
-    private int[] _runFramePattern = { 0, 1, 2, 3, 5, 6, 7, 1 };
+    // Four arm-swing poses play forward and then backward, keeping the
+    // top-down body fixed while motion is communicated only by the arms.
+    private int[] _runFramePattern = { 0, 1, 2, 3, 4, 5, 6, 7 };
     private int _currentRunFrameIndex = 0;
     private float _animationTimer = 0f;
     private bool _isInitialized = false;
@@ -140,12 +221,12 @@ public partial class GamePlay : ContentPage
         InitializeComponent();
 
         _gameMap = new GameMap();
-        if (_gameMap.Width != ExactMapTileCache.WorldWidth ||
-            _gameMap.Height != ExactMapTileCache.WorldHeight)
+        if (_gameMap.Width != 10f * TerrainTileWorldSize ||
+            _gameMap.Height != 15f * TerrainTileWorldSize)
         {
             throw new InvalidOperationException(
-                $"Exact map tiles and shared world disagree: " +
-                $"tiles={ExactMapTileCache.WorldWidth}x{ExactMapTileCache.WorldHeight}, " +
+                $"Road grid and shared world disagree: " +
+                $"tiles={10f * TerrainTileWorldSize}x{15f * TerrainTileWorldSize}, " +
                 $"world={_gameMap.Width}x{_gameMap.Height}.");
         }
 
@@ -168,8 +249,6 @@ public partial class GamePlay : ContentPage
         _canvas.EnableTouchEvents = true;
         _canvas.Touch += Canvas_Touch;
         _canvas.PaintSurface += Canvas_PaintSurface;
-        _exactMapTiles = new ExactMapTileCache(() =>
-            MainThread.BeginInvokeOnMainThread(_canvas.InvalidateSurface));
 
         // Canvas를 가장 뒤(Index 0)에 배치하여 XAML에 정의된 Label 등 UI보다 뒤에 그려지도록 합니다.
         Container.Children.Insert(0, _canvas);
@@ -206,10 +285,10 @@ public partial class GamePlay : ContentPage
         ScheduleTeamVoiceRosterRefresh();
 
         await LoadAssetsAsync();
-        // 게임 네트워크와 팀 보이스는 서로 실패를 전파하지 않도록 독립적으로 시작합니다.
-        var networkTask = InitializeNetworkAsync();
-        var voiceTask = InitializeTeamVoiceAsync();
-        await Task.WhenAll(networkTask, voiceTask);
+        await InitializeNetworkAsync();
+        // 보이스 토큰은 서버가 게임방 참가자를 확인한 뒤에만 발급되므로
+        // 게임 네트워크 입장이 끝난 다음 팀 보이스에 연결합니다.
+        await InitializeTeamVoiceAsync();
     }
 
     private string GetServerIpAddress()
@@ -229,15 +308,8 @@ public partial class GamePlay : ContentPage
             {
                 _players[p.Id] = p;
             }
-            if (_players.TryGetValue(_player.Id, out var authenticatedPlayer))
-            {
-                _player = authenticatedPlayer;
-            }
-            else
-            {
-                // 초기 패킷에 본인이 아직 없다면 기존 로컬 플레이어를 유지합니다.
-                _players[_player.Id] = _player;
-            }
+            // _players[_player.Id] = _player;
+            _player = _players[_player.Id]; // Test
             foreach (var remotePlayer in _players.Values.Where(p => p.Id != _player.Id))
             {
                 ResetRemotePlayerInterpolation(remotePlayer);
@@ -275,6 +347,7 @@ public partial class GamePlay : ContentPage
             player.Radius = p.Radius;
             player.Angle = p.Angle;
             player.IsMoving = p.IsMoving;
+            player.IsJailed = p.IsJailed;
             player.Role = p.Role;
             if (!string.IsNullOrWhiteSpace(p.Name))
             {
@@ -288,7 +361,7 @@ public partial class GamePlay : ContentPage
             if (p.Id == _player.Id)
             {
                 _player = player;
-                if (_player.Role == PlayerRole.Robber && IsInJail(_player.X, _player.Y))
+                if (_player.IsJailed)
                 {
                     _activeTouchId = -1;
                 }
@@ -315,7 +388,7 @@ public partial class GamePlay : ContentPage
             {
                 movement.ApplyTo(player);
                 _player = player;
-                if (_player.Role == PlayerRole.Robber && IsInJail(_player.X, _player.Y))
+                if (_player.IsJailed)
                 {
                     _activeTouchId = -1;
                 }
@@ -383,6 +456,12 @@ public partial class GamePlay : ContentPage
                 _gamePhase = syncData.Phase;
                 _remainingTime = syncData.GameTime;
                 _winnerRole = syncData.WinnerRole;
+                _totalRobberCount = Math.Max(0, syncData.TotalRobbers);
+                _jailedRobberCount = Math.Clamp(
+                    syncData.JailedRobbers,
+                    0,
+                    _totalRobberCount);
+                JailLabel.Text = $"{_jailedRobberCount}/{_totalRobberCount}";
 
                 if (_gamePhase == GamePhase.Countdown)
                 {
@@ -394,7 +473,7 @@ public partial class GamePlay : ContentPage
                     {
                         CenterMessageLabel.Text = "";
                     }
-                    TimerLabel.Text = $"Timer : {_remainingTime}";
+                    TimerLabel.Text = _remainingTime.ToString();
                 }
                 else if (_gamePhase == GamePhase.Ended)
                 {
@@ -453,7 +532,6 @@ public partial class GamePlay : ContentPage
         base.OnDisappearing();
         StopGameClient();
         await StopTeamVoiceAsync();
-        _exactMapTiles.Dispose();
     }
 
     private void StopGameClient()
@@ -507,11 +585,8 @@ public partial class GamePlay : ContentPage
         var roomCode = Uri.EscapeDataString(_roomCode);
         var isHost = _isHost.ToString().ToLowerInvariant();
         var winnerRole = Uri.EscapeDataString((_winnerRole ?? PlayerRole.Robber).ToString());
-        var robbers = _players.Values.Where(player => player.Role == PlayerRole.Robber).ToList();
-        var totalRobbers = robbers.Count;
-        var capturedRobbers = _gameMap?.Jail == null
-            ? 0
-            : robbers.Count(player => IsInJail(player.X, player.Y));
+        var totalRobbers = _totalRobberCount;
+        var capturedRobbers = _jailedRobberCount;
 
         return $"GameOver?roomId={roomId}&role={role}&gameType={gameType}&roomCode={roomCode}&isHost={isHost}&winnerRole={winnerRole}&remainingTime={_remainingTime}&capturedRobbers={capturedRobbers}&totalRobbers={totalRobbers}";
     }
@@ -526,14 +601,7 @@ public partial class GamePlay : ContentPage
     {
         MainThread.BeginInvokeOnMainThread(() =>
         {
-            if (_gameMap?.Jail != null)
-            {
-                var robbers = _players.Values.Where(p => p.Role == PlayerRole.Robber).ToList();
-                int totalRobbers = robbers.Count;
-                int jailedRobbers = robbers.Count(p => IsInJail(p.X, p.Y));
-
-                JailLabel.Text = $"Jail : {jailedRobbers}/{totalRobbers}";
-            }
+            JailLabel.Text = $"{_jailedRobberCount}/{_totalRobberCount}";
         });
     }
 
@@ -552,23 +620,30 @@ public partial class GamePlay : ContentPage
                 return;
             }
 
-            _policeIdleBitmap = await LoadBitmapAsync("char_police_v3.png");
-            _robberIdleBitmap = await LoadBitmapAsync("char_robber_v3.png");
-            _policeArrestBitmap = await LoadBitmapAsync("char_police_arrest_v3.png");
-            _robberSurrendBitmap = await LoadBitmapAsync("char_robber_surrend_v3.png");
-            _robberPrisonBreakBitmap = await LoadBitmapAsync("char_robber_prison_break_v3.png");
-            var initialMapX = _selectedRole == PlayerRole.Police
-                ? _gameMap.PoliceStation.Center.X
-                : _player.X;
-            var initialMapY = _selectedRole == PlayerRole.Police
-                ? _gameMap.PoliceStation.RightBottom.Y + 350f
-                : _player.Y;
-            await _exactMapTiles.PreloadAroundAsync(initialMapX, initialMapY);
+            _policeIdleBitmap = await LoadBitmapAsync("char_police.png");
+            _robberIdleBitmap = await LoadBitmapAsync("char_robber.png");
+            _policeArrestBitmap = await LoadBitmapAsync("char_police_arrest.png");
+            _robberSurrendBitmap = await LoadBitmapAsync("char_robber_surrend.png");
+            _robberPrisonBreakBitmap = await LoadBitmapAsync("char_robber_prison-break.png");
+            _cityGroundBitmap = await LoadBitmapAsync("FloorTiles/city_ground.png");
+            _forestGroundBitmap = await LoadBitmapAsync("FloorTiles/forest_ground.png");
+
+            for (var index = 0; index < _streetBitmaps.Length; index++)
+            {
+                _streetBitmaps[index] = await LoadBitmapAsync($"FloorTiles/street-{index + 1}.png");
+            }
+
+            foreach (var assetPath in MapPropPlacements
+                .Select(placement => placement.AssetPath)
+                .Distinct(StringComparer.Ordinal))
+            {
+                _mapPropBitmaps[assetPath] = await LoadBitmapAsync(assetPath);
+            }
 
             for (int i = 0; i < 8; i++)
             {
-                _policeRunBitmaps[i] = await LoadBitmapAsync($"char_police_run_v3_{i + 1}.png");
-                _robberRunBitmaps[i] = await LoadBitmapAsync($"char_robber_run_v3_{i + 1}.png");
+                _policeRunBitmaps[i] = await LoadBitmapAsync($"char_police_run_{i + 1}.png");
+                _robberRunBitmaps[i] = await LoadBitmapAsync($"char_robber_run_{i + 1}.png");
             }
 
             _assetsLoaded = true;
@@ -794,7 +869,7 @@ public partial class GamePlay : ContentPage
         // 체포 상태이면 이동 불가
         bool isArrestedOrArresting = _arrestVisualTimers.TryGetValue(_player.Id, out var freezeEnd) && DateTime.Now < freezeEnd;
 
-        if (_activeTouchId != -1 && !isArrestedOrArresting)
+        if (_activeTouchId != -1 && !isArrestedOrArresting && !_player.IsJailed)
         {
             var dx = _joystickThumb.X - _joystickCenter.X;
             var dy = _joystickThumb.Y - _joystickCenter.Y;
@@ -889,8 +964,7 @@ public partial class GamePlay : ContentPage
 
         canvas.Save();
 
-        // Keep the camera inside the canonical image so no synthetic color is
-        // exposed beyond the exact source pixels near the forest/water edge.
+        // Keep the camera inside the new 10 x 15 tile map.
         var cameraX = ClampCameraCenter(_player.X, width, _gameMap.Width);
         var cameraY = ClampCameraCenter(_player.Y, height, _gameMap.Height);
         canvas.Translate(width / 2f - cameraX, height / 2f - cameraY);
@@ -903,13 +977,12 @@ public partial class GamePlay : ContentPage
 
         DrawMapBackground(canvas, visibleWorldBounds);
 
+        DrawMapProps(canvas, visibleWorldBounds);
+
         // 시야 암전은 캐릭터 아래에 유지한다.
         DrawVisionOverlay(canvas);
 
-        // World layer order: exact base map -> players -> masked exact foreground.
-        // Foreground source pixels cover players only at annotated structures/obstacles.
         DrawPlayers(canvas);
-        DrawForegroundWorld(canvas, visibleWorldBounds);
         DrawJailBreakProgressBar(canvas);
 
         canvas.Restore();
@@ -992,8 +1065,102 @@ public partial class GamePlay : ContentPage
 
         canvas.Save();
         canvas.ClipRect(mapBounds);
-        _exactMapTiles.DrawLayer(canvas, ExactMapTileLayer.Base, visibleWorldBounds);
+        var cityGroundBounds = new SKRect(0f, 0f, _gameMap.Width, ForestGroundTop);
+        DrawTiledRect(
+            canvas,
+            cityGroundBounds,
+            visibleWorldBounds,
+            _cityGroundBitmap,
+            MissingTerrainColor);
+
+        var forestGroundBounds = new SKRect(0f, ForestGroundTop, _gameMap.Width, _gameMap.Height);
+        DrawTiledRect(
+            canvas,
+            forestGroundBounds,
+            visibleWorldBounds,
+            _forestGroundBitmap,
+            MissingTerrainColor);
+
+        foreach (var placement in RoadTilePlacements)
+        {
+            DrawRoadTile(canvas, visibleWorldBounds, placement);
+        }
+
         canvas.Restore();
+    }
+
+    private void DrawRoadTile(
+        SKCanvas canvas,
+        SKRect visibleWorldBounds,
+        RoadTilePlacement placement)
+    {
+        var bitmapIndex = placement.AssetNumber - 1;
+        if (bitmapIndex < 0 || bitmapIndex >= _streetBitmaps.Length)
+        {
+            return;
+        }
+
+        var bitmap = _streetBitmaps[bitmapIndex];
+        if (bitmap == null)
+        {
+            return;
+        }
+
+        var left = placement.Column * TerrainTileWorldSize;
+        var top = placement.Row * TerrainTileWorldSize;
+        var destination = new SKRect(
+            left,
+            top,
+            left + TerrainTileWorldSize,
+            top + TerrainTileWorldSize);
+        if (!RectsIntersect(destination, visibleWorldBounds))
+        {
+            return;
+        }
+
+        var halfTile = TerrainTileWorldSize / 2f;
+        var localDestination = new SKRect(-halfTile, -halfTile, halfTile, halfTile);
+
+        canvas.Save();
+        canvas.Translate(destination.MidX, destination.MidY);
+        canvas.RotateDegrees(placement.RotationDegrees);
+
+        if (placement.AssetNumber is 2 or 3)
+        {
+            // The supplied corner PNGs are opaque asphalt squares. The Canva
+            // layout uses a quarter-disc footprint, so clip away the single
+            // convex outer corner while retaining the source artwork.
+            var clipCenterX = placement.AssetNumber == 2 ? -halfTile : halfTile;
+            using var cornerClip = new SKPath();
+            cornerClip.AddCircle(clipCenterX, halfTile, TerrainTileWorldSize);
+            canvas.ClipPath(cornerClip, SKClipOperation.Intersect, antialias: true);
+        }
+
+        canvas.DrawBitmap(bitmap, localDestination);
+        canvas.Restore();
+    }
+
+    private void DrawMapProps(SKCanvas canvas, SKRect visibleWorldBounds)
+    {
+        foreach (var placement in MapPropPlacements)
+        {
+            if (!_mapPropBitmaps.TryGetValue(placement.AssetPath, out var bitmap) || bitmap == null)
+            {
+                continue;
+            }
+
+            var destination = new SKRect(
+                placement.CenterX - placement.Width / 2f,
+                placement.CenterY - placement.Height / 2f,
+                placement.CenterX + placement.Width / 2f,
+                placement.CenterY + placement.Height / 2f);
+            if (!RectsIntersect(destination, visibleWorldBounds))
+            {
+                continue;
+            }
+
+            canvas.DrawBitmap(bitmap, destination);
+        }
     }
 
     private void DrawOuterTerrain(SKCanvas canvas, SKRect visibleWorldBounds)
@@ -1346,6 +1513,7 @@ public partial class GamePlay : ContentPage
 
             // 플레이어 렌더링
             SKBitmap? currentBitmap = null;
+            var spriteProfile = default(PlayerSpriteProfile);
             bool isArrested = _arrestVisualTimers.TryGetValue(player.Id, out var arrestEnd) && DateTime.Now < arrestEnd;
             bool isJailBreaking = _jailBreakVisualTimers.TryGetValue(player.Id, out var jailBreakEnd) && DateTime.Now < jailBreakEnd;
 
@@ -1357,18 +1525,48 @@ public partial class GamePlay : ContentPage
             if (isArrested)
             {
                 currentBitmap = player.Role == PlayerRole.Police ? _policeArrestBitmap : _robberSurrendBitmap;
+                spriteProfile = player.Role == PlayerRole.Police
+                    ? new PlayerSpriteProfile(521f, 512f, 450f)
+                    : new PlayerSpriteProfile(510f, 512f, 505f);
             }
             else if (isJailBreaking && player.Role == PlayerRole.Robber)
             {
                 currentBitmap = _robberPrisonBreakBitmap;
+                spriteProfile = new PlayerSpriteProfile(460f, 512f, 440f);
             }
             else if (player.Role == PlayerRole.Police)
             {
-                currentBitmap = player.IsMoving ? _policeRunBitmaps[_runFramePattern[_currentRunFrameIndex]] : _policeIdleBitmap;
+                if (player.IsMoving)
+                {
+                    var frameIndex = _runFramePattern[_currentRunFrameIndex];
+                    currentBitmap = _policeRunBitmaps[frameIndex];
+                    spriteProfile = new PlayerSpriteProfile(
+                        PoliceRunBodyWidths[frameIndex],
+                        313.5f,
+                        297f);
+                }
+                else
+                {
+                    currentBitmap = _policeIdleBitmap;
+                    spriteProfile = new PlayerSpriteProfile(562f, 512f, 500f);
+                }
             }
             else if (player.Role == PlayerRole.Robber)
             {
-                currentBitmap = player.IsMoving ? _robberRunBitmaps[_runFramePattern[_currentRunFrameIndex]] : _robberIdleBitmap;
+                if (player.IsMoving)
+                {
+                    var frameIndex = _runFramePattern[_currentRunFrameIndex];
+                    currentBitmap = _robberRunBitmaps[frameIndex];
+                    spriteProfile = new PlayerSpriteProfile(
+                        RobberRunBodyWidths[frameIndex],
+                        313.5f,
+                        270f);
+                }
+                else
+                {
+                    currentBitmap = _robberIdleBitmap;
+                    spriteProfile = new PlayerSpriteProfile(527f, 512f, 510f);
+                }
             }
 
             if (currentBitmap != null)
@@ -1377,10 +1575,14 @@ public partial class GamePlay : ContentPage
                 canvas.Translate(player.X, player.Y);
                 canvas.RotateDegrees(player.Angle);
 
-                float drawRadius = player.Radius * 2f; // 100f (기본 렌더링 범위: 200x200)
-
-                // 모든 v3 캐릭터 이미지는 같은 512x512 캔버스와 중심점으로 정규화되어 있습니다.
-                var destRect = new SKRect(-drawRadius, -drawRadius, drawRadius, drawRadius);
+                // Props and outstretched arms must not make the character body shrink.
+                // Every state uses the same on-screen body width and a stable body pivot;
+                // pose-specific artwork is allowed to extend beyond the collision circle.
+                var sourceRect = GetVisibleSpriteBounds(currentBitmap);
+                var destRect = CreatePlayerDestinationRect(
+                    sourceRect,
+                    spriteProfile,
+                    player.Radius * 2f);
                 if (isInsideBush)
                 {
                     using var bushPaint = new SKPaint
@@ -1388,11 +1590,11 @@ public partial class GamePlay : ContentPage
                         Color = SKColors.White.WithAlpha(BushPlayerOpacity),
                         IsAntialias = true
                     };
-                    canvas.DrawBitmap(currentBitmap, destRect, bushPaint);
+                    canvas.DrawBitmap(currentBitmap, sourceRect, destRect, bushPaint);
                 }
                 else
                 {
-                    canvas.DrawBitmap(currentBitmap, destRect);
+                    canvas.DrawBitmap(currentBitmap, sourceRect, destRect);
                 }
 
                 canvas.Restore();
@@ -1411,6 +1613,55 @@ public partial class GamePlay : ContentPage
 
             DrawPlayerName(canvas, player);
         }
+    }
+
+    private SKRect GetVisibleSpriteBounds(SKBitmap bitmap)
+    {
+        if (_spriteVisibleBounds.TryGetValue(bitmap, out var bounds))
+        {
+            return bounds;
+        }
+
+        const byte minimumVisibleAlpha = 32;
+        var left = bitmap.Width;
+        var top = bitmap.Height;
+        var right = -1;
+        var bottom = -1;
+
+        for (var y = 0; y < bitmap.Height; y++)
+        {
+            for (var x = 0; x < bitmap.Width; x++)
+            {
+                if (bitmap.GetPixel(x, y).Alpha < minimumVisibleAlpha)
+                {
+                    continue;
+                }
+
+                left = Math.Min(left, x);
+                top = Math.Min(top, y);
+                right = Math.Max(right, x);
+                bottom = Math.Max(bottom, y);
+            }
+        }
+
+        bounds = right < left || bottom < top
+            ? new SKRect(0f, 0f, bitmap.Width, bitmap.Height)
+            : new SKRect(left, top, right + 1f, bottom + 1f);
+        _spriteVisibleBounds[bitmap] = bounds;
+        return bounds;
+    }
+
+    private static SKRect CreatePlayerDestinationRect(
+        SKRect sourceRect,
+        PlayerSpriteProfile profile,
+        float playerDiameter)
+    {
+        var scale = playerDiameter * PlayerBodyVisualWidthRatio / profile.BodyWidthPixels;
+        return new SKRect(
+            (sourceRect.Left - profile.PivotX) * scale,
+            (sourceRect.Top - profile.PivotY) * scale,
+            (sourceRect.Right - profile.PivotX) * scale,
+            (sourceRect.Bottom - profile.PivotY) * scale);
     }
 
     private static string GetLocalName()
@@ -1432,7 +1683,9 @@ public partial class GamePlay : ContentPage
 
         name = FitTextToWidth(name, font, PlayerNameMaxWidth);
 
-        var y = player.Y - (player.Radius * 2.4f);
+        // The sprite's maximum height equals the collision diameter; keep the
+        // existing 20 world-unit gap between its top edge and the name.
+        var y = player.Y - (player.Radius * 1.4f);
 
         using var outlinePaint = new SKPaint
         {
@@ -1472,31 +1725,6 @@ public partial class GamePlay : ContentPage
         }
 
         return suffix;
-    }
-
-    private void DrawForegroundWorld(SKCanvas canvas, SKRect visibleWorldBounds)
-    {
-        // Exact source pixels are repeated above players only where the generated
-        // foreground mask is opaque. SrcATop then keeps those pixels under the
-        // same fog treatment as their matching base-map pixels.
-        canvas.SaveLayer();
-        canvas.ClipRect(new SKRect(0f, 0f, _gameMap.Width, _gameMap.Height));
-        _exactMapTiles.DrawLayer(canvas, ExactMapTileLayer.Foreground, visibleWorldBounds);
-
-        using var fogPath = new SKPath { FillType = SKPathFillType.EvenOdd };
-        fogPath.AddRect(new SKRect(0f, 0f, _gameMap.Width, _gameMap.Height));
-        using var visionPath = CreateVisionPath(_player);
-        fogPath.AddPath(visionPath);
-
-        using var foregroundFogPaint = new SKPaint
-        {
-            Color = new SKColor(0, 0, 0, FogOpacity),
-            BlendMode = SKBlendMode.SrcATop,
-            Style = SKPaintStyle.Fill,
-            IsAntialias = true
-        };
-        canvas.DrawPath(fogPath, foregroundFogPaint);
-        canvas.Restore();
     }
 
     private static bool RectsIntersect(SKRect first, SKRect second) =>
@@ -1587,12 +1815,6 @@ public partial class GamePlay : ContentPage
         canvas.Restore();
     }
 
-    private bool IsInJail(float x, float y)
-    {
-        var jail = _gameMap.Jail;
-        return GameMap.IsPointInBuilding(x, y, jail);
-    }
-
     private SKPath CreateVisionPath(Player player)
     {
         float visionRange = GetVisionRange(player);
@@ -1658,6 +1880,7 @@ public partial class GamePlay : ContentPage
         robber.Y = syncData.Y;
         robber.Angle = 0f;
         robber.IsMoving = false;
+        robber.IsJailed = false;
 
         if (robber.Id != _player.Id)
         {
@@ -1684,6 +1907,17 @@ public partial class GamePlay : ContentPage
     {
         public List<RemoteMovementSnapshot> Snapshots { get; } = new();
     }
+
+    private readonly record struct RoadTilePlacement(
+        int Row,
+        int Column,
+        int AssetNumber,
+        float RotationDegrees);
+
+    private readonly record struct PlayerSpriteProfile(
+        float BodyWidthPixels,
+        float PivotX,
+        float PivotY);
 
     private readonly record struct RemoteMovementSnapshot(
         float X,

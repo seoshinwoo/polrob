@@ -17,5 +17,6 @@ public class Player
     public float Radius { get; set; } = 50f;
     public float Angle { get; set; }
     public bool IsMoving { get; set; }
+    public bool IsJailed { get; set; }
     public PlayerRole Role { get; set; }
 }

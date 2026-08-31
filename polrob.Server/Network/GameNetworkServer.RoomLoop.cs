@@ -300,7 +300,11 @@ public partial class GameNetworkServer
             CountdownTime = gameSession.CountdownTime,
             GameTime = gameSession.GameTime,
             WinnerRole = gameSession.WinnerRole,
-            ElapsedGameTime = gameSession.ElapsedGameTime
+            ElapsedGameTime = gameSession.ElapsedGameTime,
+            TotalRobbers = gameSession.Sessions.Values.Count(
+                session => session.PlayerState.Role == PlayerRole.Robber),
+            JailedRobbers = gameSession.Sessions.Values.Count(
+                session => IsInJail(session.PlayerState))
         };
 
         BroadcastTcp(gameSession, TcpMessageType.GameState, SerializeForMetrics(syncData), null);

@@ -358,6 +358,7 @@ public class BotClient : IAsyncDisposable
                 robber.X = jailBreak.X;
                 robber.Y = jailBreak.Y;
                 robber.IsMoving = false;
+                robber.IsJailed = false;
             }
         };
 
@@ -424,6 +425,7 @@ public class BotClient : IAsyncDisposable
             Radius = source.Radius,
             Angle = source.Angle,
             IsMoving = source.IsMoving,
+            IsJailed = source.IsJailed,
             Role = source.Role
         };
     }
@@ -438,6 +440,7 @@ public class BotClient : IAsyncDisposable
         destination.Radius = source.Radius;
         destination.Angle = source.Angle;
         destination.IsMoving = source.IsMoving;
+        destination.IsJailed = source.IsJailed;
         destination.Role = source.Role;
     }
 

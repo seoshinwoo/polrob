@@ -4,22 +4,61 @@ namespace polrob.Shared;
 
 public class GameMap
 {
-    // The canonical map is the 5120x7680 concept image.  Older collision
-    // annotations were authored in the proportional 5000x7500 world, so all
-    // internal placement helpers convert those values once at construction.
-    private const float CanonicalCoordinateScale = 5120f / 5000f;
-    private const float SpatialCellSize = 500f;
-    private const float LayoutScale = 10f;
+    // This is the single source of truth for the 2D prop layout. The client
+    // renders these exact rectangles and both client/server use them for
+    // movement collision, so prediction cannot disagree with the server.
+    public static readonly MapPropLayout[] PropLayouts =
+    [
+        new("2D/heli.png", 896f, 250f, 366.6f, 424f),
+
+        new("2D/bank.png", 1024f, 1040f, 379.5f, 391.5f),
+        new("2D/pond.png", 1024f, 1560f, 400f, 242.4f),
+        new("2D/bush.png", 390f, 1560f, 145f, 142.4f),
+        new("2D/bush.png", 610f, 1560f, 145f, 142.4f),
+        new("2D/donut.png", 1792f, 1015f, 353.4f, 395.3f),
+        new("2D/cafe.png", 1792f, 1515f, 356.5f, 369.1f),
+
+        new("2D/house.png", 768f, 2280f, 305.3f, 304.9f),
+        new("2D/house.png", 480f, 2605f, 305.3f, 304.9f),
+        new("2D/house.png", 1056f, 2605f, 305.3f, 304.9f),
+
+        new("2D/tree-round.png", 1660f, 2220f, 170f, 183.7f),
+        new("2D/tree-round.png", 1910f, 2220f, 170f, 183.7f),
+        new("2D/tree-round.png", 1660f, 2470f, 170f, 183.7f),
+        new("2D/tree-round.png", 1910f, 2470f, 170f, 183.7f),
+        new("2D/tree-round.png", 1660f, 2710f, 170f, 183.7f),
+        new("2D/tree-round.png", 1910f, 2710f, 170f, 183.7f),
+
+        new("2D/tree-sharp.png", 160f, 3260f, 110f, 194.3f, IsTriangular: true),
+        new("2D/tree-sharp.png", 480f, 3300f, 110f, 194.3f, IsTriangular: true),
+        new("2D/tree-sharp.png", 800f, 3260f, 110f, 194.3f, IsTriangular: true),
+        new("2D/tree-sharp.png", 1100f, 3320f, 110f, 194.3f, IsTriangular: true),
+        new("2D/tree-sharp.png", 240f, 3560f, 110f, 194.3f, IsTriangular: true),
+        new("2D/tree-sharp.png", 600f, 3600f, 110f, 194.3f, IsTriangular: true),
+        new("2D/tree-sharp.png", 1000f, 3560f, 110f, 194.3f, IsTriangular: true),
+        new("2D/tree-sharp.png", 1660f, 3260f, 110f, 194.3f, IsTriangular: true),
+        new("2D/tree-sharp.png", 1980f, 3300f, 110f, 194.3f, IsTriangular: true),
+        new("2D/tree-sharp.png", 2300f, 3260f, 110f, 194.3f, IsTriangular: true),
+        new("2D/tree-sharp.png", 2440f, 3480f, 110f, 194.3f, IsTriangular: true),
+        new("2D/tree-sharp.png", 1740f, 3580f, 110f, 194.3f, IsTriangular: true),
+        new("2D/tree-sharp.png", 2100f, 3540f, 110f, 194.3f, IsTriangular: true),
+        new("2D/tree-sharp.png", 2400f, 3620f, 110f, 194.3f, IsTriangular: true)
+    ];
+    // The new tile map is 2560x3840. Legacy geometry helpers remain at the
+    // matching half scale as migration references, but the road-only stage
+    // activates only the logical gameplay regions created in the constructor.
+    private const float CanonicalCoordinateScale = 2560f / 5000f;
+    private const float LegacyMapScale = 0.5f;
+    private const float SpatialCellSize = 250f;
+    private const float LayoutScale = 5f;
     private const float WallSize = 15f * LayoutScale;
     private const float BuildingStructureSize = 75f * LayoutScale;
     private const float HouseSize = 50f * LayoutScale;
     private const float TreeRadius = 25f * LayoutScale;
     private const float PondRadius = 36f * LayoutScale;
     private const float BushSize = 32f * LayoutScale;
-    // LabelMe `map` land contour from docs/concepts/polrob_map_upscale.json.
-    // This contour supplies the curved outer safety boundary. Physics-only
-    // landmark colliders below close the forest pockets it intentionally wraps.
-    private static readonly PointF[] PlayableBoundary =
+    // Legacy LabelMe land contour retained for a later terrain/boundary pass.
+    private static readonly PointF[] PlayableBoundary = ScaleLegacyBoundary(
     [
         new(3915.3f, 468.9f),
         new(3710f, 274.2f),
@@ -153,13 +192,30 @@ public class GameMap
         new(4352.1f, 937.4f),
         new(4210f, 853.2f),
         new(4094.2f, 737.4f)
-    ];
+    ]);
+
+    private static PointF[] ScaleLegacyBoundary(PointF[] sourcePoints)
+    {
+        var scaledPoints = new PointF[sourcePoints.Length];
+        for (var index = 0; index < sourcePoints.Length; index++)
+        {
+            scaledPoints[index] = new PointF(
+                sourcePoints[index].X * LegacyMapScale,
+                sourcePoints[index].Y * LegacyMapScale);
+        }
+
+        return scaledPoints;
+    }
+
     private readonly Dictionary<(int X, int Y), List<Obstacle>> _obstaclesByCell = new();
     private readonly List<Obstacle> _bushes = new();
 
-    public float Width = 5120f;
-    public float Height = 7680f;
-    public float BuildingSize = 1024f;
+    public const float WorldWidth = 2560f;
+    public const float WorldHeight = 3840f;
+
+    public float Width = WorldWidth;
+    public float Height = WorldHeight;
+    public float BuildingSize = 512f;
     public List<Obstacle> Obstacles = new();
     public List<MapBuilding> Buildings = new();
     public MapBuilding PoliceStation { get; private set; } = null!;
@@ -167,15 +223,105 @@ public class GameMap
 
     public GameMap()
     {
-        AddLabelMeCentralColliders();
-        AddOuterLandmarkColliders();
+        AddStagedGameplayReferences();
+        AddMapPropColliders();
         BuildSpatialIndex();
+    }
+
+    private void AddStagedGameplayReferences()
+    {
+        // Buildings and their final collision geometry are intentionally deferred
+        // during the 2D rebuild. Keep non-blocking logical regions so spawning,
+        // arrests and jail-break rules remain operational without invisible walls.
+        PoliceStation = AddGameplayReference(
+            "PoliceStation",
+            left: 192f,
+            top: 32f,
+            right: 576f,
+            bottom: 448f);
+        Jail = AddGameplayReference(
+            "Jail",
+            left: 1536f,
+            top: 2048f,
+            right: 2048f,
+            bottom: 2560f);
+    }
+
+    private void AddMapPropColliders()
+    {
+        foreach (var layout in PropLayouts)
+        {
+            var halfWidth = layout.Width / 2f;
+            var halfHeight = layout.Height / 2f;
+            var left = layout.CenterX - halfWidth;
+            var top = layout.CenterY - halfHeight;
+            var right = layout.CenterX + halfWidth;
+            var bottom = layout.CenterY + halfHeight;
+
+            var obstacle = new Obstacle
+            {
+                ImageFileName = layout.AssetPath,
+                IsVisible = false,
+                BlocksMovement = true,
+                // This pass adds physical obstacles only. Vision behavior can
+                // be tuned independently when stealth props are introduced.
+                BlocksVision = false
+            };
+
+            if (layout.IsTriangular)
+            {
+                // The conifer sprite fills a rectangular bitmap, but its
+                // visible silhouette is a triangle: narrow at the crown and
+                // broad at the bottom.
+                obstacle.Type = "Polygon";
+                obstacle.PolygonPoints =
+                [
+                    new PointF(layout.CenterX, top),
+                    new PointF(right, bottom),
+                    new PointF(left, bottom)
+                ];
+            }
+            else
+            {
+                obstacle.Type = "Rect";
+            }
+
+            obstacle.LeftTop = new PointF(left, top);
+            obstacle.LeftBottom = new PointF(left, bottom);
+            obstacle.RightTop = new PointF(right, top);
+            obstacle.RightBottom = new PointF(right, bottom);
+            Obstacles.Add(obstacle);
+        }
+    }
+
+    private MapBuilding AddGameplayReference(
+        string type,
+        float left,
+        float top,
+        float right,
+        float bottom)
+    {
+        var building = new MapBuilding
+        {
+            Type = type,
+            ImageFileName = string.Empty,
+            LeftTop = new PointF(left, top),
+            RightBottom = new PointF(right, bottom),
+            CollisionWidth = right - left,
+            CollisionHeight = bottom - top,
+            IsVisible = false,
+            BlocksMovement = false,
+            BlocksVision = false
+        };
+
+        Buildings.Add(building);
+        return building;
     }
 
     private void AddLabelMeCentralColliders()
     {
         // These polygons were authored in LabelMe against a 1280x1920 preview.
-        // LabelMeCollisionData performs the sole x4 conversion to this 5120x7680 world.
+        // LabelMeCollisionData converts them x2 into the new 2560x3840 world.
         PoliceStation = AddLabelMeBuilding("PoliceStation", "police_station");
         Jail = AddLabelMeBuilding("Jail", "jail");
         AddLabelMeBuilding("CoffeeShop", "cafe");
@@ -241,8 +387,7 @@ public class GameMap
         if (x - radius < 0f ||
             x + radius > Width ||
             y - radius < 0f ||
-            y + radius > Height ||
-            !IsCircleInsidePlayableBoundary(x, y, radius))
+            y + radius > Height)
         {
             return true;
         }
@@ -1379,6 +1524,14 @@ public class GameMap
         return obstacle;
     }
 }
+
+public readonly record struct MapPropLayout(
+    string AssetPath,
+    float CenterX,
+    float CenterY,
+    float Width,
+    float Height,
+    bool IsTriangular = false);
 
 public class MapBuilding
 {

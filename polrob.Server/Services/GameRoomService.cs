@@ -677,6 +677,7 @@ public class GameRoomService
             Radius = player.Radius,
             Angle = player.Angle,
             IsMoving = player.IsMoving,
+            IsJailed = player.IsJailed,
             Role = player.Role
         };
     }

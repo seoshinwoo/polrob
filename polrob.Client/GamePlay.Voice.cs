@@ -6,6 +6,16 @@ namespace polrob.Client;
 
 public partial class GamePlay
 {
+    private static readonly Color[] TeamVoiceSlotColors =
+    [
+        Color.FromArgb("#D8B62E"),
+        Color.FromArgb("#E57C2F"),
+        Color.FromArgb("#3977D7"),
+        Color.FromArgb("#20B69A"),
+        Color.FromArgb("#A768D4"),
+        Color.FromArgb("#D94D68")
+    ];
+
     private readonly SemaphoreSlim _voiceToggleLock = new(1, 1);
     private readonly VoiceWebViewPlatformConfiguration _voiceWebViewPlatformConfiguration = new();
     private VoiceChatService? _voiceChatService;
@@ -218,6 +228,8 @@ public partial class GamePlay
 
             member.Update(
                 string.IsNullOrWhiteSpace(gamePlayer.Name) ? gamePlayer.Id : gamePlayer.Name,
+                targetIndex + 1,
+                TeamVoiceSlotColors[targetIndex % TeamVoiceSlotColors.Length],
                 isLocal,
                 voiceState?.IsSpeaking ?? false,
                 muted,
@@ -278,7 +290,9 @@ public partial class GamePlay
 
     private void SetVoiceStatus(string status)
     {
-        MainThread.BeginInvokeOnMainThread(() => VoiceStatusLabel.Text = status);
+        // 연결 실패를 포함한 상태는 게임 화면에 노출하지 않습니다.
+        // 개발 빌드의 디버그 출력으로만 남겨 플레이를 방해하지 않습니다.
+        System.Diagnostics.Debug.WriteLine($"Team voice: {status}");
     }
 
     private static string GetVoiceErrorMessage(Exception exception)

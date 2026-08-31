@@ -6,9 +6,9 @@ namespace polrob.Client;
 
 public static class AuthSession
 {
-    // 같은 Wi-Fi에 연결된 현재 MacBook(en0)의 IPv4 주소입니다.
-    // iOS/Android 실기기는 이 주소로 MacBook의 HTTP/TCP/UDP 서버에 접속합니다.
-    private const string LocalNetworkServerHost = "192.168.0.83";
+    // iPhone 개인용 핫스팟에 연결된 현재 MacBook(en0)의 IPv4 주소입니다.
+    // iOS 실기기는 이 주소로 MacBook에서 실행 중인 HTTP/TCP/UDP 서버에 접속합니다.
+    private const string LocalNetworkServerHost = "192.0.0.2";
     private static readonly SemaphoreSlim LoadLock = new(1, 1); // 한 번에 한 작업만 통과시키는 잠금장치.. 
     private static bool _isLoaded;
 

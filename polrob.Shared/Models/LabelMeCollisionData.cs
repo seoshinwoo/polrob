@@ -4,12 +4,12 @@ namespace polrob.Shared;
 
 /// <summary>
 /// Collision polygons authored against the 1280x1920 runtime-map preview.
-/// The exact map world is 5120x7680, so the only coordinate conversion is x4.
-/// Outer water/forest physics remain owned by <see cref="GameMap"/>.
+/// Retained at x2 for a later 2560x3840 building-collision migration; the
+/// road-only map stage does not activate these legacy polygons.
 /// </summary>
 internal static class LabelMeCollisionData
 {
-    private const float WorldScale = 4f;
+    private const float WorldScale = 2f;
 
     private static readonly Dictionary<string, PointF[]> SourcePolygons = new(StringComparer.Ordinal)
     {

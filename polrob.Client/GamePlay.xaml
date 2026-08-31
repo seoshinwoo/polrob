@@ -10,10 +10,7 @@
     <Grid x:Name="Container">
         <!-- 런타임에서 SKGLView(기기) 또는 SKCanvasView(시뮬레이터) 를 추가합니다 -->
 
-        <!--
-          LiveKit 오디오를 실행하는 보이지 않는 브리지입니다.
-          IsVisible=False로 만들면 운영체제가 오디오를 중단할 수 있어 1x1 크기로 유지합니다.
-        -->
+        <!-- LiveKit 오디오를 유지하는 보이지 않는 네이티브/WebRTC 브리지입니다. -->
         <HybridWebView x:Name="VoiceWebView"
                        HybridRoot="voice"
                        DefaultFile="index.html"
@@ -22,105 +19,108 @@
                        Opacity="0.01"
                        InputTransparent="True"
                        HorizontalOptions="Start"
-                       VerticalOptions="End" />
+                       VerticalOptions="End"/>
 
-        <!-- 같은 팀 목록 및 보이스 상태. 각 행을 누르면 해당 대상의 음소거가 토글됩니다. -->
-        <Border BackgroundColor="#DC111827"
-                Stroke="#667085"
-                StrokeThickness="1"
-                Padding="12,10"
-                Margin="16,76,0,0"
-                MaximumWidthRequest="250"
-                HorizontalOptions="Start"
-                VerticalOptions="Start"
-                StrokeShape="RoundRectangle 12">
-            <VerticalStackLayout Spacing="8">
-                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
-                    <Label Text="팀 보이스"
-                           TextColor="White"
-                           FontAttributes="Bold"
-                           FontSize="16" />
-                    <Label Grid.Column="1"
-                           Text="LIVE"
-                           TextColor="#86EFAC"
-                           FontAttributes="Bold"
-                           FontSize="10"
-                           VerticalTextAlignment="Center" />
-                </Grid>
-
-                <Label x:Name="VoiceStatusLabel"
-                       Text="연결 준비 중..."
-                       TextColor="#CBD5E1"
-                       FontSize="11"
-                       LineBreakMode="TailTruncation" />
-
-                <BoxView HeightRequest="1" Color="#475569" />
-
-                <VerticalStackLayout Spacing="4"
-                                     BindableLayout.ItemsSource="{Binding VoiceMembers, Source={x:Reference GamePage}}">
-                    <BindableLayout.ItemTemplate>
-                        <DataTemplate x:DataType="voice:TeamVoiceMemberViewModel">
-                            <Border BackgroundColor="#80233446"
+        <!-- 오류 문구 없이 팀원과 발화 상태만 보여주는 화면 고정 로스터입니다. -->
+        <VerticalStackLayout Spacing="4"
+                             Margin="0,0,14,32"
+                             MaximumWidthRequest="220"
+                             HorizontalOptions="End"
+                             VerticalOptions="End"
+                             InputTransparent="True"
+                             BindableLayout.ItemsSource="{Binding VoiceMembers, Source={x:Reference GamePage}}">
+            <BindableLayout.ItemTemplate>
+                <DataTemplate x:DataType="voice:TeamVoiceMemberViewModel">
+                    <Border BackgroundColor="#B30F172A"
+                            Stroke="#805E6B7D"
+                            StrokeThickness="1"
+                            Padding="0"
+                            HeightRequest="38"
+                            StrokeShape="RoundRectangle 7">
+                        <Grid ColumnDefinitions="38,*,Auto"
+                                ColumnSpacing="9">
+                            <Border BackgroundColor="{Binding SlotColor}"
                                     StrokeThickness="0"
-                                    Padding="8,6"
-                                    Opacity="{Binding RowOpacity}"
-                                    StrokeShape="RoundRectangle 8">
-                                <Border.GestureRecognizers>
-                                    <TapGestureRecognizer Tapped="OnVoiceMemberTapped"
-                                                          CommandParameter="{Binding Identity}" />
-                                </Border.GestureRecognizers>
-                                <Grid ColumnDefinitions="14,*,Auto" ColumnSpacing="7">
-                                    <Label Text="●"
-                                           TextColor="#4ADE80"
-                                           FontSize="12"
-                                           IsVisible="{Binding IsSpeaking}"
-                                           HorizontalTextAlignment="Center"
-                                           VerticalTextAlignment="Center" />
-                                    <VerticalStackLayout Grid.Column="1" Spacing="0">
-                                        <Label Text="{Binding DisplayNameWithSelf}"
-                                               TextColor="White"
-                                               FontAttributes="Bold"
-                                               FontSize="13"
-                                               LineBreakMode="TailTruncation" />
-                                        <Label Text="{Binding StatusText}"
-                                               TextColor="#CBD5E1"
-                                               FontSize="10"
-                                               LineBreakMode="TailTruncation" />
-                                    </VerticalStackLayout>
-                                    <Label Grid.Column="2"
-                                           Text="{Binding MuteGlyph}"
-                                           FontSize="17"
-                                           VerticalTextAlignment="Center" />
-                                </Grid>
+                                    Margin="2"
+                                    Padding="0"
+                                    StrokeShape="RoundRectangle 5">
+                                <Label Text="{Binding SlotNumber}"
+                                       TextColor="White"
+                                       FontAttributes="Bold"
+                                       FontSize="16"
+                                       HorizontalTextAlignment="Center"
+                                       VerticalTextAlignment="Center"/>
                             </Border>
-                        </DataTemplate>
-                    </BindableLayout.ItemTemplate>
-                </VerticalStackLayout>
-            </VerticalStackLayout>
+
+                            <Label Grid.Column="1"
+                                   Text="{Binding DisplayName}"
+                                   TextColor="White"
+                                   FontAttributes="Bold"
+                                   FontSize="13"
+                                   LineBreakMode="TailTruncation"
+                                   VerticalTextAlignment="Center"/>
+
+                            <Label Grid.Column="2"
+                                   Text="🔊"
+                                   TextColor="#7DD3FC"
+                                   FontSize="16"
+                                   Margin="0,0,9,0"
+                                   IsVisible="{Binding IsSpeaking}"
+                                   VerticalTextAlignment="Center"/>
+                        </Grid>
+                    </Border>
+                </DataTemplate>
+            </BindableLayout.ItemTemplate>
+        </VerticalStackLayout>
+
+        <!-- 남은 시간은 문구 없이 숫자만 보여주는 중앙 HUD입니다. -->
+        <Border BackgroundColor="#D9182029"
+                Stroke="#8094A3B8"
+                StrokeThickness="1"
+                Padding="18,5"
+                Margin="0,18,0,0"
+                MinimumWidthRequest="92"
+                HorizontalOptions="Center"
+                VerticalOptions="Start"
+                InputTransparent="True"
+                StrokeShape="RoundRectangle 14">
+            <Label x:Name="TimerLabel"
+                   Text="300"
+                   TextColor="#FFF7E6"
+                   FontAttributes="Bold"
+                   FontSize="28"
+                   CharacterSpacing="1.4"
+                   HorizontalTextAlignment="Center"
+                   VerticalTextAlignment="Center"/>
         </Border>
 
-        <!-- UI 오버레이 예시 (게임 화면 위에 그려짐) -->
-        <!-- 타이머 레이블 (중앙 상단) -->
-        <Label x:Name="TimerLabel"
-               Text="Timer : 300"
-               TextColor="White"
-               FontAttributes="Bold"
-               FontSize="32"
-               HorizontalOptions="Center"
-               VerticalOptions="Start"
-               Margin="0, 20, 0, 0"
-               InputTransparent="True"/>
-
-        <!-- 감옥 현황 레이블 (우측 상단) -->
-        <Label x:Name="JailLabel"
-               Text="Jail : 0/0"
-               TextColor="White"
-               FontAttributes="Bold"
-               FontSize="16"
-               HorizontalOptions="End"
-               VerticalOptions="Start"
-               Margin="0, 20, 20, 0"
-               InputTransparent="True"/>
+        <!-- 감옥 아이콘과 현재/전체 도둑 수만 보여주는 우측 HUD입니다. -->
+        <Border BackgroundColor="#D9182029"
+                Stroke="#8094A3B8"
+                StrokeThickness="1"
+                Padding="6,4,11,4"
+                Margin="0,18,14,0"
+                HorizontalOptions="End"
+                VerticalOptions="Start"
+                InputTransparent="True"
+                StrokeShape="RoundRectangle 14">
+            <Grid ColumnDefinitions="34,Auto"
+                    ColumnSpacing="7">
+                <Image Source="robber_in_jail2.png"
+                       WidthRequest="32"
+                       HeightRequest="32"
+                       Aspect="AspectFit"
+                       VerticalOptions="Center"/>
+                <Label x:Name="JailLabel"
+                       Grid.Column="1"
+                       Text="0/0"
+                       TextColor="White"
+                       FontAttributes="Bold"
+                       FontSize="17"
+                       CharacterSpacing="0.6"
+                       VerticalTextAlignment="Center"/>
+            </Grid>
+        </Border>
 
         <!-- 화면 중앙 메세지 (카운트다운 등) -->
         <Label x:Name="CenterMessageLabel"
