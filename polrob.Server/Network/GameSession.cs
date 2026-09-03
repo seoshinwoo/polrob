@@ -34,6 +34,10 @@ public class GameSession
     public PlayerRole? WinnerRole { get; set; }
     public int ElapsedGameTime { get; set; }
     public DateTime? GameStartedAtUtc { get; set; }
+    public string GameRecordId { get; set; } = string.Empty;
+    public IReadOnlyList<string> StartingPolicePlayerIds { get; set; } = Array.Empty<string>();
+    public IReadOnlyList<string> StartingRobberPlayerIds { get; set; } = Array.Empty<string>();
+    public bool GameRecordEnqueueAttempted { get; set; }
     public bool HasHadPlayers { get; set; }
     public DateTime? EmptySinceUtc { get; set; }
     public bool IsStopping { get; set; }
@@ -44,11 +48,14 @@ public abstract record RoomCommand;
 public sealed record JoinRoomCommand(
     Player Player,
     TcpClient Client,
-    BinaryWriter Writer) : RoomCommand;
+    BinaryWriter Writer,
+    string ConnectionId) : RoomCommand;
 
-public sealed record LeaveRoomCommand(string PlayerId) : RoomCommand;
+public sealed record LeaveRoomCommand(string PlayerId, string ConnectionId) : RoomCommand;
 
 public sealed record MoveRoomCommand(PlayerMovementInput Input, IPEndPoint RemoteEndPoint) : RoomCommand;
+
+public readonly record struct PlayerRoomRegistration(string RoomId, string ConnectionId);
 
 public class ArrestState
 {
@@ -59,6 +66,7 @@ public class ArrestState
 
 public class PlayerSession
 {
+    public string ConnectionId { get; init; } = string.Empty;
     public TcpClient Client { get; set; } = null!;
     public BinaryWriter Writer { get; set; } = null!;
     public Player PlayerState { get; set; } = null!;

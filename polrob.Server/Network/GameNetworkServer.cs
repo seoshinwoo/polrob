@@ -13,9 +13,11 @@ public partial class GameNetworkServer : BackgroundService
     private readonly TcpListener _tcpListener;
     private readonly UdpClient _udpClient;
     private readonly ConcurrentDictionary<string, GameSession> _gameSessions = new(); // Key : Game의 ID, Value : 해당 게임의 GameSession
-    private readonly ConcurrentDictionary<string, string> _playerRooms = new(); // Key : playerId, Value : roomId
+    private readonly ConcurrentDictionary<long, Task> _roomLoopTasks = new();
+    private readonly ConcurrentDictionary<string, PlayerRoomRegistration> _playerRooms = new(); // Key : playerId, Value : current room/connection
     private readonly ConcurrentDictionary<string, UdpRateLimitState> _udpRateLimits = new(); // UDP 패킷 제한 상태를 저장하는 딕셔너리.. Key : playerID
     private readonly GameRoomService _gameRoomService;
+    private readonly IGameRecordQueue _gameRecordQueue;
     private readonly ILogger<GameNetworkServer> _logger;
     private readonly GameMap _map = new();
     private readonly RuntimeMetricSampler _runtimeMetrics = new();
@@ -36,6 +38,7 @@ public partial class GameNetworkServer : BackgroundService
     private long _tcpPacketsSentThisSecond;
     private long _jsonSerializationsThisSecond;
     private int _currentTcpConnections; // 현재 열려 있는 TCP 연결 수.. 누적 카운터가 아니라 현재 상태값..
+    private long _nextRoomLoopId;
     private static readonly TimeSpan RoomTickInterval = TimeSpan.FromMilliseconds(50);
     private static readonly TimeSpan UdpMovementBroadcastInterval = TimeSpan.FromMilliseconds(100);
     private static readonly TimeSpan GameRuleTickInterval = TimeSpan.FromMilliseconds(100);
@@ -58,10 +61,12 @@ public partial class GameNetworkServer : BackgroundService
     // TCP/UDP 소켓과 방 서비스를 준비합니다.
     public GameNetworkServer(
         GameRoomService gameRoomService,
+        IGameRecordQueue gameRecordQueue,
         IConfiguration configuration,
         ILogger<GameNetworkServer> logger)
     {
         _gameRoomService = gameRoomService;
+        _gameRecordQueue = gameRecordQueue;
         _logger = logger;
         _roomCommandQueueCapacity = Math.Max(
             256,
@@ -90,16 +95,35 @@ public partial class GameNetworkServer : BackgroundService
 
         _metricsTimer = new Timer(LogLoadMetricsCallback, null, 1000, 1000);
 
-        _ = Task.Run(() => AcceptTcpClientsAsync(stoppingToken), stoppingToken);
-        _ = Task.Run(() => ReceiveUdpAsync(stoppingToken), stoppingToken);
+        var acceptTask = AcceptTcpClientsAsync(stoppingToken);
+        var receiveTask = ReceiveUdpAsync(stoppingToken);
 
-        await Task.CompletedTask;
+        try
+        {
+            await Task.WhenAll(acceptTask, receiveTask);
+        }
+        finally
+        {
+            // Room loops are record producers. Do not let the hosted service finish
+            // until they have observed cancellation and exited.
+            while (!_roomLoopTasks.IsEmpty)
+            {
+                var roomLoops = _roomLoopTasks.ToArray();
+                await Task.WhenAll(roomLoops.Select(entry => entry.Value));
+                foreach (var roomLoop in roomLoops)
+                {
+                    _roomLoopTasks.TryRemove(roomLoop.Key, out _);
+                }
+            }
+        }
     }
 
     // 서버가 종료될 때 주기적으로 돌던 타이머를 정리합니다.
     public override void Dispose()
     {
         _metricsTimer?.Dispose();
+        _tcpListener.Stop();
+        _udpClient.Dispose();
         _runtimeMetrics.Dispose();
         base.Dispose();
     }
@@ -120,6 +144,7 @@ public partial class GameNetworkServer : BackgroundService
 
         var playerSession = new PlayerSession
         {
+            ConnectionId = command.ConnectionId,
             Client = command.Client,
             Writer = command.Writer,
             PlayerState = player,
@@ -128,7 +153,7 @@ public partial class GameNetworkServer : BackgroundService
         gameSession.Sessions[playerId] = playerSession;
         gameSession.HasHadPlayers = true;
         gameSession.EmptySinceUtc = null;
-        _playerRooms[playerId] = roomId;
+        _playerRooms[playerId] = new PlayerRoomRegistration(roomId, command.ConnectionId);
         _udpRateLimits.TryRemove(playerId, out _);
 
         var visiblePlayers = gameSession.Sessions.Values
@@ -176,9 +201,16 @@ public partial class GameNetworkServer : BackgroundService
 
     private void HandleRoomLeave(string roomId, GameSession gameSession, LeaveRoomCommand command)
     {
+        if (!gameSession.Sessions.TryGetValue(command.PlayerId, out var currentSession) ||
+            !string.Equals(currentSession.ConnectionId, command.ConnectionId, StringComparison.Ordinal))
+        {
+            // A replacement connection for this player is already active. The old
+            // socket's delayed cleanup must not remove the new player session.
+            return;
+        }
+
         if (!gameSession.Sessions.TryRemove(command.PlayerId, out var removedSession))
         {
-            _playerRooms.TryRemove(command.PlayerId, out _);
             return;
         }
 
@@ -194,7 +226,7 @@ public partial class GameNetworkServer : BackgroundService
             gameSession.ActiveArrestsByRobberId.Remove(arrest.RobberId);
         }
 
-        _playerRooms.TryRemove(command.PlayerId, out _);
+        RemovePlayerRoomRegistration(command.PlayerId, command.ConnectionId);
         Console.WriteLine($"Player Disconnected: {command.PlayerId} / room {roomId}");
 
         if (TryAbortRandomGameStart(roomId, gameSession, command.PlayerId))
@@ -218,6 +250,18 @@ public partial class GameNetworkServer : BackgroundService
         }
 
         RefreshOpponentProximityAlerts(gameSession);
+    }
+
+    private void RemovePlayerRoomRegistration(string playerId, string connectionId)
+    {
+        if (!_playerRooms.TryGetValue(playerId, out var registration) ||
+            !string.Equals(registration.ConnectionId, connectionId, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        ((ICollection<KeyValuePair<string, PlayerRoomRegistration>>)_playerRooms)
+            .Remove(new KeyValuePair<string, PlayerRoomRegistration>(playerId, registration));
     }
 
     private bool TryAbortRandomGameStart(string roomId, GameSession gameSession, string leavingPlayerId)

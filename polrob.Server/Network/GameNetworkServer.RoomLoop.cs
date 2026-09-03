@@ -28,11 +28,28 @@ public partial class GameNetworkServer
                 continue;
             }
 
-            _ = Task.Run(() => RunRoomTickLoopAsync(roomId, createdSession, stoppingToken), CancellationToken.None);
+            var loopId = Interlocked.Increment(ref _nextRoomLoopId);
+            var loopTask = Task.Run(
+                () => RunRoomTickLoopAsync(roomId, createdSession, stoppingToken),
+                CancellationToken.None);
+            _roomLoopTasks[loopId] = loopTask;
+            _ = RemoveCompletedRoomLoopAsync(loopId, loopTask);
             return createdSession;
         }
 
         throw new OperationCanceledException(stoppingToken);
+    }
+
+    private async Task RemoveCompletedRoomLoopAsync(long loopId, Task loopTask)
+    {
+        try
+        {
+            await loopTask;
+        }
+        finally
+        {
+            _roomLoopTasks.TryRemove(loopId, out _);
+        }
     }
 
     private bool TryWriteRoomCommand(GameSession gameSession, RoomCommand command)
@@ -251,9 +268,40 @@ public partial class GameNetworkServer
             gameSession.CountdownTime--;
             if (gameSession.CountdownTime < 0)
             {
-                gameSession.GamePhase = GamePhase.Playing;
-                gameSession.CountdownTime = 0;
-                gameSession.GameStartedAtUtc = DateTime.UtcNow;
+                var isManagedRoom = !string.Equals(roomId, DefaultRoomId, StringComparison.Ordinal);
+                if (isManagedRoom &&
+                    (!IsRoomReadyForCountdown(roomId, gameSession) ||
+                     !HasRequiredConnectedRoles(gameSession)))
+                {
+                    // A custom-room player can disconnect during the countdown. Wait
+                    // for the full roster again instead of creating a one-sided result.
+                    gameSession.GamePhase = GamePhase.Waiting;
+                    gameSession.CountdownTime = 3;
+                    gameSession.GameStartedAtUtc = null;
+                }
+                else
+                {
+                    var startedAtUtc = DateTime.UtcNow;
+                    gameSession.GamePhase = GamePhase.Playing;
+                    gameSession.CountdownTime = 0;
+                    gameSession.GameStartedAtUtc = startedAtUtc;
+                    gameSession.GameRecordId = Guid.NewGuid().ToString("N");
+                    gameSession.StartingPolicePlayerIds = gameSession.Sessions.Values
+                        .Where(session => session.PlayerState.Role == PlayerRole.Police)
+                        .Select(session => session.PlayerState.Id)
+                        .Where(playerId => !string.IsNullOrWhiteSpace(playerId))
+                        .Distinct(StringComparer.Ordinal)
+                        .OrderBy(playerId => playerId, StringComparer.Ordinal)
+                        .ToArray();
+                    gameSession.StartingRobberPlayerIds = gameSession.Sessions.Values
+                        .Where(session => session.PlayerState.Role == PlayerRole.Robber)
+                        .Select(session => session.PlayerState.Id)
+                        .Where(playerId => !string.IsNullOrWhiteSpace(playerId))
+                        .Distinct(StringComparer.Ordinal)
+                        .OrderBy(playerId => playerId, StringComparer.Ordinal)
+                        .ToArray();
+                    gameSession.GameRecordEnqueueAttempted = false;
+                }
             }
         }
         else if (gameSession.GamePhase == GamePhase.Playing)
@@ -277,6 +325,7 @@ public partial class GameNetworkServer
 
             if (gameSession.GameTime <= 0 || allRobbersCaught)
             {
+                var endedAtUtc = DateTime.UtcNow;
                 gameSession.GamePhase = GamePhase.Ended;
                 gameSession.GameTime = Math.Max(0, gameSession.GameTime);
                 gameSession.WinnerRole = gameSession.GameTime <= 0
@@ -285,10 +334,11 @@ public partial class GameNetworkServer
                 gameSession.ElapsedGameTime = gameSession.GameStartedAtUtc.HasValue
                     ? Math.Clamp(
                         (int)Math.Round(
-                            (DateTime.UtcNow - gameSession.GameStartedAtUtc.Value).TotalSeconds),
+                            (endedAtUtc - gameSession.GameStartedAtUtc.Value).TotalSeconds),
                         0,
                         GameDurationSeconds)
                     : GameDurationSeconds - gameSession.GameTime;
+                TryEnqueueCompletedGameRecord(roomId, gameSession, endedAtUtc);
                 _gameRoomService.CompleteGame(roomId);
             }
         }
@@ -310,6 +360,61 @@ public partial class GameNetworkServer
         BroadcastTcp(gameSession, TcpMessageType.GameState, SerializeForMetrics(syncData), null);
     }
 
+    private void TryEnqueueCompletedGameRecord(
+        string roomId,
+        GameSession gameSession,
+        DateTime endedAtUtc)
+    {
+        if (gameSession.GameRecordEnqueueAttempted)
+        {
+            return;
+        }
+
+        // The room loop is single-reader, but mark the attempt before calling the queue so
+        // an unexpected queue failure can never produce a duplicate record attempt.
+        gameSession.GameRecordEnqueueAttempted = true;
+
+        if (string.IsNullOrWhiteSpace(gameSession.GameRecordId) ||
+            gameSession.GameStartedAtUtc is not { } startedAtUtc ||
+            gameSession.WinnerRole is not { } winnerRole)
+        {
+            _logger.LogWarning(
+                "Skipped completed game record for room {RoomId} because its start or result snapshot was missing.",
+                roomId);
+            return;
+        }
+
+        try
+        {
+            var accepted = _gameRecordQueue.TryEnqueue(new CompletedGameRecord(
+                Id: gameSession.GameRecordId,
+                RoomId: roomId,
+                WinnerRole: winnerRole,
+                PolicePlayerIds: gameSession.StartingPolicePlayerIds,
+                RobberPlayerIds: gameSession.StartingRobberPlayerIds,
+                StartedAtUtc: startedAtUtc,
+                EndedAtUtc: endedAtUtc,
+                DurationSeconds: gameSession.ElapsedGameTime));
+
+            if (!accepted)
+            {
+                _logger.LogWarning(
+                    "Completed game record queue rejected game {GameRecordId} for room {RoomId}.",
+                    gameSession.GameRecordId,
+                    roomId);
+            }
+        }
+        catch (Exception ex)
+        {
+            // Persistence must never prevent room cleanup or the final state broadcast.
+            _logger.LogError(
+                ex,
+                "Failed to enqueue completed game record {GameRecordId} for room {RoomId}.",
+                gameSession.GameRecordId,
+                roomId);
+        }
+    }
+
     private bool IsRoomReadyForCountdown(string roomId, GameSession gameSession)
     {
         if (string.Equals(roomId, DefaultRoomId, StringComparison.Ordinal))
@@ -325,5 +430,14 @@ public partial class GameNetworkServer
 
         var expectedPlayerCount = Math.Max(1, roomStatus.CurrentCount);
         return gameSession.Sessions.Count >= expectedPlayerCount;
+    }
+
+    private static bool HasRequiredConnectedRoles(GameSession gameSession)
+    {
+        var connectedRoles = gameSession.Sessions.Values
+            .Select(session => session.PlayerState.Role)
+            .ToHashSet();
+        return connectedRoles.Contains(PlayerRole.Police) &&
+               connectedRoles.Contains(PlayerRole.Robber);
     }
 }

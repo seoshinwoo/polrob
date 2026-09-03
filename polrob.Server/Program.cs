@@ -1,3 +1,5 @@
+using Microsoft.Azure.Cosmos;
+using Microsoft.Extensions.Hosting;
 using polrob.Server.Hubs;
 using polrob.Server.Network;
 
@@ -7,11 +9,6 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddOpenApi();
 builder.Services.AddControllers();
 builder.Services.AddSignalR();
-
-if (builder.Configuration.GetValue<bool>("EnableGameServer", true))
-{
-    builder.Services.AddHostedService<GameNetworkServer>(); // Add Custom raw TCP/UDP server
-}
 
 var cosmosDbConnString = new[]
     {
@@ -30,7 +27,31 @@ if (!cosmosDbConnString.Contains("AccountEndpoint=", StringComparison.OrdinalIgn
         "Cosmos DB connection string is invalid. Use the full connection string from Azure Portal > Cosmos DB account > Keys > Primary Connection String. An endpoint URL alone is not enough.");
 }
 
-builder.Services.AddSingleton<UserDbService>(sp => new UserDbService(cosmosDbConnString));
+builder.Services.Configure<CosmosDbOptions>(
+    builder.Configuration.GetSection(CosmosDbOptions.SectionName));
+builder.Services.AddSingleton(_ => new CosmosClient(
+    cosmosDbConnString,
+    new CosmosClientOptions
+    {
+        SerializerOptions = new CosmosSerializationOptions
+        {
+            PropertyNamingPolicy = CosmosPropertyNamingPolicy.CamelCase
+        },
+        ConnectionMode = ConnectionMode.Direct
+    }));
+builder.Services.AddSingleton<UserDbService>();
+builder.Services.AddSingleton<GameRecordDbService>();
+builder.Services.AddSingleton<GameRecordWriter>();
+builder.Services.AddSingleton<IGameRecordQueue>(sp => sp.GetRequiredService<GameRecordWriter>());
+builder.Services.AddSingleton<IHostedService>(sp => sp.GetRequiredService<GameRecordWriter>());
+
+if (builder.Configuration.GetValue<bool>("EnableGameServer", true))
+{
+    // Hosted services start in registration order and stop in reverse order, so the
+    // record writer remains available while the network server is shutting down.
+    builder.Services.AddHostedService<GameNetworkServer>(); // Add Custom raw TCP/UDP server
+}
+
 builder.Services.AddSingleton<BotIdentityService>();
 builder.Services.AddSingleton<GameRoomService>();
 builder.Services.Configure<LiveKitOptions>(builder.Configuration.GetSection(LiveKitOptions.SectionName));
@@ -41,6 +62,8 @@ using (var scope = app.Services.CreateAsyncScope())
 {
     var cosmosService = scope.ServiceProvider.GetRequiredService<UserDbService>();
     await cosmosService.InitializeAsync();
+    var gameRecordDbService = scope.ServiceProvider.GetRequiredService<GameRecordDbService>();
+    await gameRecordDbService.InitializeAsync();
 }
 
 // Configure the HTTP request pipeline.

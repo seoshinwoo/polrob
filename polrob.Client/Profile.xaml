@@ -247,6 +247,193 @@
                                 </Border>
                             </VerticalStackLayout>
 
+                            <Border Padding="4"
+                                    Margin="0,4,0,0"
+                                    BackgroundColor="#030913"
+                                    Stroke="#F2D292"
+                                    StrokeThickness="3">
+                                <Border.StrokeShape>
+                                    <RoundRectangle CornerRadius="22" />
+                                </Border.StrokeShape>
+                                <Border Padding="14,14,14,12"
+                                        BackgroundColor="#0A2349"
+                                        Stroke="#385E8F"
+                                        StrokeThickness="2">
+                                    <Border.StrokeShape>
+                                        <RoundRectangle CornerRadius="18" />
+                                    </Border.StrokeShape>
+
+                                    <VerticalStackLayout Spacing="10">
+                                        <Grid ColumnDefinitions="*,Auto,Auto"
+                                              ColumnSpacing="10">
+                                            <Label Text="게임 전적"
+                                                   FontFamily="OpenSansSemibold"
+                                                   FontAttributes="Bold"
+                                                   FontSize="22"
+                                                   TextColor="#FFF8E8"
+                                                   VerticalTextAlignment="Center" />
+                                            <Button x:Name="StatsRefreshButton"
+                                                    Grid.Column="1"
+                                                    Text="새로고침"
+                                                    Padding="10,4"
+                                                    FontFamily="OpenSansSemibold"
+                                                    FontSize="12"
+                                                    TextColor="#DCEBFF"
+                                                    BackgroundColor="#173C6C"
+                                                    BorderColor="#3975AD"
+                                                    BorderWidth="1"
+                                                    CornerRadius="10"
+                                                    Clicked="OnStatsRefreshClicked"
+                                                    VerticalOptions="Center" />
+                                            <ActivityIndicator x:Name="StatsLoadingIndicator"
+                                                               Grid.Column="2"
+                                                               WidthRequest="24"
+                                                               HeightRequest="24"
+                                                               Color="#39B8FF"
+                                                               IsRunning="False"
+                                                               IsVisible="False"
+                                                               VerticalOptions="Center" />
+                                        </Grid>
+
+                                        <Label x:Name="StatsStatusLabel"
+                                               Text="전적을 불러오는 중..."
+                                               FontFamily="OpenSansSemibold"
+                                               FontSize="14"
+                                               TextColor="#B9C7DB"
+                                               HorizontalTextAlignment="Center"
+                                               IsVisible="False" />
+
+                                        <Grid x:Name="StatsGrid"
+                                              RowDefinitions="62,1,62,1,62"
+                                              ColumnDefinitions="46,*,Auto"
+                                              ColumnSpacing="9"
+                                              IsVisible="False">
+                                            <Label Text="★"
+                                                   FontSize="27"
+                                                   TextColor="#FFD118"
+                                                   HorizontalTextAlignment="Center"
+                                                   VerticalTextAlignment="Center" />
+                                            <VerticalStackLayout Grid.Column="1"
+                                                                 Spacing="1"
+                                                                 VerticalOptions="Center">
+                                                <Label Text="전체"
+                                                       FontFamily="OpenSansSemibold"
+                                                       FontAttributes="Bold"
+                                                       FontSize="17"
+                                                       TextColor="#FFF8E8" />
+                                                <Label x:Name="OverallRecordLabel"
+                                                       Text="0전 0승 0패"
+                                                       FontFamily="OpenSansSemibold"
+                                                       FontSize="14"
+                                                       TextColor="#B9C7DB" />
+                                            </VerticalStackLayout>
+                                            <VerticalStackLayout Grid.Column="2"
+                                                                 Spacing="0"
+                                                                 VerticalOptions="Center">
+                                                <Label Text="승률"
+                                                       FontFamily="OpenSansSemibold"
+                                                       FontSize="12"
+                                                       TextColor="#8FA6C2"
+                                                       HorizontalTextAlignment="End" />
+                                                <Label x:Name="OverallWinRateLabel"
+                                                       Text="0%"
+                                                       FontFamily="OpenSansSemibold"
+                                                       FontAttributes="Bold"
+                                                       FontSize="20"
+                                                       TextColor="#FFD118"
+                                                       HorizontalTextAlignment="End" />
+                                            </VerticalStackLayout>
+
+                                            <BoxView Grid.Row="1"
+                                                     Grid.ColumnSpan="3"
+                                                     Color="#285285" />
+
+                                            <Image Grid.Row="2"
+                                                   Source="lobby_police_avatar.png"
+                                                   WidthRequest="40"
+                                                   HeightRequest="40"
+                                                   Aspect="AspectFit"
+                                                   VerticalOptions="Center" />
+                                            <VerticalStackLayout Grid.Row="2"
+                                                                 Grid.Column="1"
+                                                                 Spacing="1"
+                                                                 VerticalOptions="Center">
+                                                <Label Text="경찰"
+                                                       FontFamily="OpenSansSemibold"
+                                                       FontAttributes="Bold"
+                                                       FontSize="17"
+                                                       TextColor="#62C7FF" />
+                                                <Label x:Name="PoliceRecordLabel"
+                                                       Text="0전 0승 0패"
+                                                       FontFamily="OpenSansSemibold"
+                                                       FontSize="14"
+                                                       TextColor="#B9C7DB" />
+                                            </VerticalStackLayout>
+                                            <VerticalStackLayout Grid.Row="2"
+                                                                 Grid.Column="2"
+                                                                 Spacing="0"
+                                                                 VerticalOptions="Center">
+                                                <Label Text="승률"
+                                                       FontFamily="OpenSansSemibold"
+                                                       FontSize="12"
+                                                       TextColor="#8FA6C2"
+                                                       HorizontalTextAlignment="End" />
+                                                <Label x:Name="PoliceWinRateLabel"
+                                                       Text="0%"
+                                                       FontFamily="OpenSansSemibold"
+                                                       FontAttributes="Bold"
+                                                       FontSize="20"
+                                                       TextColor="#62C7FF"
+                                                       HorizontalTextAlignment="End" />
+                                            </VerticalStackLayout>
+
+                                            <BoxView Grid.Row="3"
+                                                     Grid.ColumnSpan="3"
+                                                     Color="#285285" />
+
+                                            <Image Grid.Row="4"
+                                                   Source="lobby_robber_avatar.png"
+                                                   WidthRequest="40"
+                                                   HeightRequest="40"
+                                                   Aspect="AspectFit"
+                                                   VerticalOptions="Center" />
+                                            <VerticalStackLayout Grid.Row="4"
+                                                                 Grid.Column="1"
+                                                                 Spacing="1"
+                                                                 VerticalOptions="Center">
+                                                <Label Text="도둑"
+                                                       FontFamily="OpenSansSemibold"
+                                                       FontAttributes="Bold"
+                                                       FontSize="17"
+                                                       TextColor="#FF9A49" />
+                                                <Label x:Name="RobberRecordLabel"
+                                                       Text="0전 0승 0패"
+                                                       FontFamily="OpenSansSemibold"
+                                                       FontSize="14"
+                                                       TextColor="#B9C7DB" />
+                                            </VerticalStackLayout>
+                                            <VerticalStackLayout Grid.Row="4"
+                                                                 Grid.Column="2"
+                                                                 Spacing="0"
+                                                                 VerticalOptions="Center">
+                                                <Label Text="승률"
+                                                       FontFamily="OpenSansSemibold"
+                                                       FontSize="12"
+                                                       TextColor="#8FA6C2"
+                                                       HorizontalTextAlignment="End" />
+                                                <Label x:Name="RobberWinRateLabel"
+                                                       Text="0%"
+                                                       FontFamily="OpenSansSemibold"
+                                                       FontAttributes="Bold"
+                                                       FontSize="20"
+                                                       TextColor="#FF9A49"
+                                                       HorizontalTextAlignment="End" />
+                                            </VerticalStackLayout>
+                                        </Grid>
+                                    </VerticalStackLayout>
+                                </Border>
+                            </Border>
+
                             <Border HeightRequest="72"
                                     Margin="5,7,5,0"
                                     Padding="5"

@@ -39,6 +39,7 @@ public partial class GameNetworkServer
 
         string? playerId = null;
         string? roomId = null;
+        string? connectionId = null;
 
         try
         {
@@ -54,6 +55,11 @@ public partial class GameNetworkServer
 
                 if (type == TcpMessageType.Join)
                 {
+                    if (playerId is not null)
+                    {
+                        throw new InvalidDataException("하나의 TCP 연결에서는 한 번만 게임에 입장할 수 있습니다.");
+                    }
+
                     var joinRequest = JsonSerializer.Deserialize<GameJoinRequest>(json);
                     if (joinRequest == null ||
                         !AuthController.ValidateSession(joinRequest.SessionToken, out var authenticatedUserId) ||
@@ -70,8 +76,9 @@ public partial class GameNetworkServer
                     }
 
                     playerId = authenticatedUserId;
+                    connectionId = Guid.NewGuid().ToString("N");
 
-                    var joinCommand = new JoinRoomCommand(player, client, writer);
+                    var joinCommand = new JoinRoomCommand(player, client, writer, connectionId);
                     var gameSession = GetOrCreateGameSession(roomId, stoppingToken);
                     if (!TryWriteRoomCommand(gameSession, joinCommand))
                     {
@@ -97,16 +104,17 @@ public partial class GameNetworkServer
         }
         finally
         {
-            if (playerId != null && roomId != null && _gameSessions.TryGetValue(roomId, out var gameSession))
+            if (playerId != null && roomId != null && connectionId != null &&
+                _gameSessions.TryGetValue(roomId, out var gameSession))
             {
-                if (!TryWriteRoomCommand(gameSession, new LeaveRoomCommand(playerId)))
+                if (!TryWriteRoomCommand(gameSession, new LeaveRoomCommand(playerId, connectionId)))
                 {
-                    _playerRooms.TryRemove(playerId, out _);
+                    RemovePlayerRoomRegistration(playerId, connectionId);
                 }
             }
-            else if (playerId != null)
+            else if (playerId != null && connectionId != null)
             {
-                _playerRooms.TryRemove(playerId, out _);
+                RemovePlayerRoomRegistration(playerId, connectionId);
             }
 
             Interlocked.Decrement(ref _currentTcpConnections);
@@ -314,13 +322,13 @@ public partial class GameNetworkServer
                 Interlocked.Add(ref _udpBytesReceivedThisSecond, result.Buffer.Length);
                 var movement = JsonSerializer.Deserialize<PlayerMovementInput>(result.Buffer);
 
-                if (movement == null || !_playerRooms.TryGetValue(movement.Id, out var roomId))
+                if (movement == null || !_playerRooms.TryGetValue(movement.Id, out var registration))
                 {
                     Interlocked.Increment(ref _udpPacketsInvalidThisSecond);
                     continue;
                 }
 
-                if (!_gameSessions.TryGetValue(roomId, out var gameSession))
+                if (!_gameSessions.TryGetValue(registration.RoomId, out var gameSession))
                 {
                     continue;
                 }

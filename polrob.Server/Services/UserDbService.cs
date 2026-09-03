@@ -3,36 +3,34 @@ using System.Net;
 using System.Security.Cryptography;
 using System.Text.Json.Serialization;
 using Microsoft.Azure.Cosmos;
+using Microsoft.Extensions.Options;
 
 public class UserDbService
 {
     private readonly CosmosClient _cosmosClient;
     private readonly ConcurrentDictionary<string, User> _usersById = new();
+    private readonly string _databaseId;
+    private readonly string _containerId;
     private Database _database = null!;
     private Container _container = null!;
 
-    private const string DatabaseId = "PolRobDB";
-    private const string ContainerId = "Users";
     private const string PartitionKeyPath = "/id";
 
-    public UserDbService(string connectionString)
+    public UserDbService(CosmosClient cosmosClient, IOptions<CosmosDbOptions> options)
     {
-        var options = new CosmosClientOptions
-        {
-            SerializerOptions = new CosmosSerializationOptions
-            {
-                PropertyNamingPolicy = CosmosPropertyNamingPolicy.CamelCase
-            },
-            ConnectionMode = ConnectionMode.Direct
-        };
-
-        _cosmosClient = new CosmosClient(connectionString, options);
+        _cosmosClient = cosmosClient;
+        _databaseId = string.IsNullOrWhiteSpace(options.Value.DatabaseId)
+            ? "PolRobDB"
+            : options.Value.DatabaseId;
+        _containerId = string.IsNullOrWhiteSpace(options.Value.UsersContainerId)
+            ? "Users"
+            : options.Value.UsersContainerId;
     }
 
     public async Task InitializeAsync()
     {
-        _database = await _cosmosClient.CreateDatabaseIfNotExistsAsync(DatabaseId);
-        var containerProperties = new ContainerProperties(ContainerId, PartitionKeyPath);
+        _database = await _cosmosClient.CreateDatabaseIfNotExistsAsync(_databaseId);
+        var containerProperties = new ContainerProperties(_containerId, PartitionKeyPath);
         containerProperties.UniqueKeyPolicy.UniqueKeys.Add(new UniqueKey
         {
             Paths = { "/name" }
