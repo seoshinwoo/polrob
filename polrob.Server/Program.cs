@@ -44,6 +44,7 @@ builder.Services.AddSingleton<GameRecordDbService>();
 builder.Services.AddSingleton<GameRecordWriter>();
 builder.Services.AddSingleton<IGameRecordQueue>(sp => sp.GetRequiredService<GameRecordWriter>());
 builder.Services.AddSingleton<IHostedService>(sp => sp.GetRequiredService<GameRecordWriter>());
+builder.Services.AddHostedService<GameRecordReconciler>();
 
 if (builder.Configuration.GetValue<bool>("EnableGameServer", true))
 {

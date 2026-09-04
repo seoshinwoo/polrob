@@ -102,7 +102,8 @@ public sealed class GameRecordDbService
             DurationSeconds = gameRecord.DurationSeconds,
             StartedAtUtc = startedAtUtc,
             EndedAtUtc = endedAtUtc,
-            SchemaVersion = 1
+            SchemaVersion = 1,
+            PlayerRecordsIndexed = false
         };
 
         try
@@ -117,6 +118,77 @@ public sealed class GameRecordDbService
             _logger.LogDebug(
                 "Game record {GameRecordId} already exists; treating the write as idempotently completed.",
                 document.Id);
+
+            var existing = await _gameRecordsContainer.ReadItemAsync<GameRecordDocument>(
+                document.Id,
+                new PartitionKey(document.Id),
+                cancellationToken: cancellationToken);
+            document = existing.Resource;
+        }
+
+        await EnsurePlayerRecordsIndexedAsync(document, cancellationToken);
+    }
+
+    public async Task RepairIncompletePlayerIndexesAsync(
+        CancellationToken cancellationToken = default)
+    {
+        var query = new QueryDefinition(
+            "SELECT * FROM c " +
+            "WHERE NOT IS_DEFINED(c.playerRecordsIndexed) " +
+            "OR c.playerRecordsIndexed = false");
+
+        using var iterator = _gameRecordsContainer
+            .GetItemQueryIterator<GameRecordDocument>(query);
+
+        while (iterator.HasMoreResults)
+        {
+            var response = await iterator.ReadNextAsync(cancellationToken);
+            foreach (var document in response)
+            {
+                try
+                {
+                    await EnsurePlayerRecordsIndexedAsync(document, cancellationToken);
+                }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                {
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(
+                        ex,
+                        "Failed to repair player indexes for game record {GameRecordId}.",
+                        document.Id);
+                }
+            }
+        }
+    }
+
+    private async Task EnsurePlayerRecordsIndexedAsync(
+        GameRecordDocument document,
+        CancellationToken cancellationToken)
+    {
+        if (document.PlayerRecordsIndexed)
+        {
+            return;
+        }
+
+        ValidateIdentifier(document.Id, nameof(document.Id));
+        ValidateIdentifier(document.RoomId, nameof(document.RoomId));
+        if (!TryParsePlayerRole(document.WinnerRole, out _))
+        {
+            throw new InvalidDataException(
+                $"Game record {document.Id} has an invalid winner role.");
+        }
+
+        var policePlayerIds = NormalizePlayerIds(
+            document.PolicePlayerIds ?? Array.Empty<string>());
+        var robberPlayerIds = NormalizePlayerIds(
+            document.RobberPlayerIds ?? Array.Empty<string>());
+        if (policePlayerIds.Intersect(robberPlayerIds, StringComparer.Ordinal).Any())
+        {
+            throw new InvalidDataException(
+                $"Game record {document.Id} contains a player in both roles.");
         }
 
         var playerDocuments = policePlayerIds
@@ -126,6 +198,12 @@ public sealed class GameRecordDbService
 
         await Task.WhenAll(playerDocuments.Select(
             playerDocument => SavePlayerGameRecordAsync(playerDocument, cancellationToken)));
+
+        await _gameRecordsContainer.PatchItemAsync<GameRecordDocument>(
+            document.Id,
+            new PartitionKey(document.Id),
+            new[] { PatchOperation.Set("/playerRecordsIndexed", true) },
+            cancellationToken: cancellationToken);
     }
 
     public async Task<PlayerGameStats> GetPlayerStatsAsync(
@@ -201,7 +279,7 @@ public sealed class GameRecordDbService
         PlayerId = playerId,
         RoomId = gameRecord.RoomId,
         PlayerRole = playerRole.ToString(),
-        WinnerRole = gameRecord.WinnerRole,
+        WinnerRole = gameRecord.WinnerRole ?? string.Empty,
         DurationSeconds = gameRecord.DurationSeconds,
         StartedAtUtc = gameRecord.StartedAtUtc,
         EndedAtUtc = gameRecord.EndedAtUtc,
@@ -251,13 +329,14 @@ public sealed class GameRecordDbService
     {
         public string Id { get; init; } = string.Empty;
         public string RoomId { get; init; } = string.Empty;
-        public string WinnerRole { get; init; } = string.Empty;
-        public string[] PolicePlayerIds { get; init; } = Array.Empty<string>();
-        public string[] RobberPlayerIds { get; init; } = Array.Empty<string>();
+        public string? WinnerRole { get; init; }
+        public string[]? PolicePlayerIds { get; init; }
+        public string[]? RobberPlayerIds { get; init; }
         public int DurationSeconds { get; init; }
         public DateTime StartedAtUtc { get; init; }
         public DateTime EndedAtUtc { get; init; }
         public int SchemaVersion { get; init; }
+        public bool PlayerRecordsIndexed { get; init; }
     }
 
     private sealed class PlayerGameRecordDocument

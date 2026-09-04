@@ -172,6 +172,7 @@ public partial class GamePlay : ContentPage
     private string _gameType = string.Empty;
     private string _roomCode = string.Empty;
     private bool _isHost;
+    private string? _rematchHostUserId;
     private PlayerRole _selectedRole = PlayerRole.Robber;
 
     public string RoomId
@@ -456,6 +457,10 @@ public partial class GamePlay : ContentPage
                 _gamePhase = syncData.Phase;
                 _remainingTime = syncData.GameTime;
                 _winnerRole = syncData.WinnerRole;
+                if (!string.IsNullOrWhiteSpace(syncData.HostUserId))
+                {
+                    _rematchHostUserId = syncData.HostUserId;
+                }
                 _totalRobberCount = Math.Max(0, syncData.TotalRobbers);
                 _jailedRobberCount = Math.Clamp(
                     syncData.JailedRobbers,
@@ -594,6 +599,18 @@ public partial class GamePlay : ContentPage
     private string BuildRematchingRoute()
     {
         var role = Uri.EscapeDataString(_selectedRole.ToString());
+        if (string.Equals(_gameType, "custom", StringComparison.OrdinalIgnoreCase))
+        {
+            var roomId = Uri.EscapeDataString(_roomId);
+            var roomCode = Uri.EscapeDataString(_roomCode);
+            var currentUserId = AuthSession.UserId ?? Preferences.Get("userId", null);
+            var isHost = string.Equals(
+                currentUserId,
+                _rematchHostUserId,
+                StringComparison.Ordinal).ToString().ToLowerInvariant();
+            return $"GameLobby?roomId={roomId}&roomCode={roomCode}&role={role}&isHost={isHost}";
+        }
+
         return $"GameMatching?role={role}";
     }
 

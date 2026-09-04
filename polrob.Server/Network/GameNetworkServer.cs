@@ -229,7 +229,7 @@ public partial class GameNetworkServer : BackgroundService
         RemovePlayerRoomRegistration(command.PlayerId, command.ConnectionId);
         Console.WriteLine($"Player Disconnected: {command.PlayerId} / room {roomId}");
 
-        if (TryAbortRandomGameStart(roomId, gameSession, command.PlayerId))
+        if (TryAbortGameStart(roomId, gameSession, command.PlayerId))
         {
             return;
         }
@@ -264,7 +264,7 @@ public partial class GameNetworkServer : BackgroundService
             .Remove(new KeyValuePair<string, PlayerRoomRegistration>(playerId, registration));
     }
 
-    private bool TryAbortRandomGameStart(string roomId, GameSession gameSession, string leavingPlayerId)
+    private bool TryAbortGameStart(string roomId, GameSession gameSession, string leavingPlayerId)
     {
         if (gameSession.GamePhase is not (GamePhase.Waiting or GamePhase.Countdown) ||
             string.Equals(roomId, DefaultRoomId, StringComparison.Ordinal))
@@ -273,12 +273,17 @@ public partial class GameNetworkServer : BackgroundService
         }
 
         var roomStatus = _gameRoomService.GetRoomStatus(roomId);
-        if (!roomStatus.Success || roomStatus.IsPrivate || !roomStatus.Matched)
+        if (!roomStatus.Success || !roomStatus.Matched)
         {
             return false;
         }
 
-        var resetStatus = _gameRoomService.AbortRandomGameStart(roomId, leavingPlayerId);
+        var resetStatus = _gameRoomService.AbortGameStart(roomId, leavingPlayerId);
+        if (!resetStatus.Success)
+        {
+            return false;
+        }
+
         gameSession.GamePhase = GamePhase.Rematching;
         gameSession.CountdownTime = 0;
         gameSession.GameStartedAtUtc = null;
@@ -287,6 +292,7 @@ public partial class GameNetworkServer : BackgroundService
         var syncData = new GameStateSync
         {
             RoomId = roomId,
+            HostUserId = resetStatus.HostUserId,
             Phase = GamePhase.Rematching,
             CountdownTime = 0,
             GameTime = gameSession.GameTime,
@@ -300,7 +306,7 @@ public partial class GameNetworkServer : BackgroundService
 
         BroadcastTcp(gameSession, TcpMessageType.GameState, SerializeForMetrics(syncData), null);
         Console.WriteLine(
-            $"Random game start aborted: {roomId}, leaving player {leavingPlayerId}, remaining lobby players {resetStatus.CurrentCount}");
+            $"Game start aborted: {roomId}, leaving player {leavingPlayerId}, remaining lobby players {resetStatus.CurrentCount}");
         return true;
     }
 

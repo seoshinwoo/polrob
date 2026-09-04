@@ -300,8 +300,8 @@ public class GameRoomService
         }
     }
 
-    // 랜덤 매칭 방이 게임을 시작하기 직전(대기/카운트다운)에 누군가 나가면, 시작을 취소하고 남은 사람들을 다시 매칭 대기 상태로 돌리는 메소드..
-    public ServerResponse AbortRandomGameStart(string roomId, string leavingUserId)
+    // 게임 시작 직전 누군가 나가면 서버의 로비 명단과 시작 상태도 함께 되돌립니다.
+    public ServerResponse AbortGameStart(string roomId, string leavingUserId)
     {
         lock (_roomLock)
         {
@@ -318,11 +318,6 @@ public class GameRoomService
                 };
             }
 
-            if (game.IsPrivate || !string.Equals(game.Type, "random", StringComparison.OrdinalIgnoreCase))
-            {
-                return CreateRoomStatusResponse(game);
-            }
-
             var leavingPlayer = game.Players.FirstOrDefault(p => p.Id == leavingUserId);
             if (leavingPlayer != null)
             {
@@ -336,8 +331,16 @@ public class GameRoomService
             {
                 Games.Remove(game);
             }
+            else if (string.Equals(game.HostUserId, leavingUserId, StringComparison.Ordinal))
+            {
+                game.HostUserId = game.Players[0].Id;
+            }
 
-            return CreateRoomStatusResponse(game, message: "플레이어가 나가서 랜덤 매칭으로 돌아갑니다.");
+            return CreateRoomStatusResponse(
+                game,
+                message: game.IsPrivate
+                    ? "플레이어가 나가서 커스텀 로비로 돌아갑니다."
+                    : "플레이어가 나가서 랜덤 매칭으로 돌아갑니다.");
         }
     }
 
@@ -602,6 +605,7 @@ public class GameRoomService
             Message = message,
             RoomId = game.Id,
             RoomCode = game.RoomCode,
+            HostUserId = game.HostUserId,
             Role = role,
             CurrentCount = game.Players.Count,
             MaxCount = 6,
@@ -624,6 +628,7 @@ public class GameRoomService
             Message = message,
             RoomId = game.Id,
             RoomCode = game.RoomCode,
+            HostUserId = game.HostUserId,
             Role = role,
             CurrentCount = game.Players.Count,
             MaxCount = 6,
