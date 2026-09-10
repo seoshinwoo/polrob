@@ -1,0 +1,710 @@
+{
+  "police_station.png": {
+    "Image": {
+      "Width": 764,
+      "Height": 700,
+      "VisibleLeft": 2,
+      "VisibleTop": 2,
+      "VisibleRight": 762,
+      "VisibleBottom": 698
+    },
+    "Shape": "Rect",
+    "RectangleHeight": 565,
+    "CircleCenter": {
+      "IsEmpty": true,
+      "X": 0,
+      "Y": 0
+    },
+    "Radius": 0,
+    "Outline": null
+  },
+  "donut.png": {
+    "Image": {
+      "Width": 880,
+      "Height": 850,
+      "VisibleLeft": 0,
+      "VisibleTop": 0,
+      "VisibleRight": 880,
+      "VisibleBottom": 850
+    },
+    "Shape": "Rect",
+    "RectangleHeight": 700,
+    "CircleCenter": {
+      "IsEmpty": true,
+      "X": 0,
+      "Y": 0
+    },
+    "Radius": 0,
+    "Outline": null
+  },
+  "cafe.png": {
+    "Image": {
+      "Width": 926,
+      "Height": 969,
+      "VisibleLeft": 1,
+      "VisibleTop": 0,
+      "VisibleRight": 925,
+      "VisibleBottom": 967
+    },
+    "Shape": "Rect",
+    "RectangleHeight": 875,
+    "CircleCenter": {
+      "IsEmpty": true,
+      "X": 0,
+      "Y": 0
+    },
+    "Radius": 0,
+    "Outline": null
+  },
+  "house-orange.png": {
+    "Image": {
+      "Width": 975,
+      "Height": 960,
+      "VisibleLeft": 2,
+      "VisibleTop": 3,
+      "VisibleRight": 975,
+      "VisibleBottom": 959
+    },
+    "Shape": "Rect",
+    "RectangleHeight": 825,
+    "CircleCenter": {
+      "IsEmpty": true,
+      "X": 0,
+      "Y": 0
+    },
+    "Radius": 0,
+    "Outline": null
+  },
+  "burger.png": {
+    "Image": {
+      "Width": 1053,
+      "Height": 1058,
+      "VisibleLeft": 0,
+      "VisibleTop": 0,
+      "VisibleRight": 1053,
+      "VisibleBottom": 1055
+    },
+    "Shape": "Rect",
+    "RectangleHeight": 885,
+    "CircleCenter": {
+      "IsEmpty": true,
+      "X": 0,
+      "Y": 0
+    },
+    "Radius": 0,
+    "Outline": null
+  },
+  "jail.png": {
+    "Image": {
+      "Width": 979,
+      "Height": 858,
+      "VisibleLeft": 0,
+      "VisibleTop": 0,
+      "VisibleRight": 979,
+      "VisibleBottom": 856
+    },
+    "Shape": "Rect",
+    "RectangleHeight": 600,
+    "CircleCenter": {
+      "IsEmpty": true,
+      "X": 0,
+      "Y": 0
+    },
+    "Radius": 0,
+    "Outline": null
+  },
+  "warehouse.png": {
+    "Image": {
+      "Width": 951,
+      "Height": 1000,
+      "VisibleLeft": 4,
+      "VisibleTop": 4,
+      "VisibleRight": 948,
+      "VisibleBottom": 992
+    },
+    "Shape": "Rect",
+    "RectangleHeight": 900,
+    "CircleCenter": {
+      "IsEmpty": true,
+      "X": 0,
+      "Y": 0
+    },
+    "Radius": 0,
+    "Outline": null
+  },
+  "box.png": {
+    "Image": {
+      "Width": 1044,
+      "Height": 1199,
+      "VisibleLeft": 7,
+      "VisibleTop": 8,
+      "VisibleRight": 1037,
+      "VisibleBottom": 1190
+    },
+    "Shape": "Rect",
+    "RectangleHeight": 1199,
+    "CircleCenter": {
+      "IsEmpty": true,
+      "X": 0,
+      "Y": 0
+    },
+    "Radius": 0,
+    "Outline": null
+  },
+  "tree.png": {
+    "Image": {
+      "Width": 1009,
+      "Height": 1080,
+      "VisibleLeft": 10,
+      "VisibleTop": 6,
+      "VisibleRight": 1001,
+      "VisibleBottom": 1073
+    },
+    "Shape": "Circle",
+    "RectangleHeight": 0,
+    "CircleCenter": {
+      "IsEmpty": false,
+      "X": 504.5,
+      "Y": 150
+    },
+    "Radius": 150,
+    "Outline": null
+  },
+  "streetlamp.png": {
+    "Image": {
+      "Width": 606,
+      "Height": 1202,
+      "VisibleLeft": 4,
+      "VisibleTop": 3,
+      "VisibleRight": 601,
+      "VisibleBottom": 1192
+    },
+    "Shape": "Circle",
+    "RectangleHeight": 0,
+    "CircleCenter": {
+      "IsEmpty": false,
+      "X": 303,
+      "Y": 131
+    },
+    "Radius": 131,
+    "Outline": null
+  },
+  "rock.png": {
+    "Image": {
+      "Width": 1251,
+      "Height": 1121,
+      "VisibleLeft": 8,
+      "VisibleTop": 8,
+      "VisibleRight": 1245,
+      "VisibleBottom": 1113
+    },
+    "Shape": "Circle",
+    "RectangleHeight": 0,
+    "CircleCenter": {
+      "IsEmpty": false,
+      "X": 625.5,
+      "Y": 560.5
+    },
+    "Radius": 560,
+    "Outline": null
+  },
+  "bush.png": {
+    "Image": {
+      "Width": 791,
+      "Height": 777,
+      "VisibleLeft": 2,
+      "VisibleTop": 0,
+      "VisibleRight": 791,
+      "VisibleBottom": 777
+    },
+    "Shape": "Circle",
+    "RectangleHeight": 0,
+    "CircleCenter": {
+      "IsEmpty": false,
+      "X": 395.5,
+      "Y": 388.5
+    },
+    "Radius": 390,
+    "Outline": null
+  },
+  "boxes.png": {
+    "Image": {
+      "Width": 1039,
+      "Height": 1094,
+      "VisibleLeft": 8,
+      "VisibleTop": 9,
+      "VisibleRight": 1029,
+      "VisibleBottom": 1082
+    },
+    "Shape": "Polygon",
+    "RectangleHeight": 0,
+    "CircleCenter": {
+      "IsEmpty": true,
+      "X": 0,
+      "Y": 0
+    },
+    "Radius": 0,
+    "Outline": [
+      {
+        "IsEmpty": false,
+        "X": 39,
+        "Y": 1081
+      },
+      {
+        "IsEmpty": false,
+        "X": 32,
+        "Y": 1070
+      },
+      {
+        "IsEmpty": false,
+        "X": 9,
+        "Y": 741
+      },
+      {
+        "IsEmpty": false,
+        "X": 20,
+        "Y": 22
+      },
+      {
+        "IsEmpty": false,
+        "X": 36,
+        "Y": 13
+      },
+      {
+        "IsEmpty": false,
+        "X": 1015,
+        "Y": 18
+      },
+      {
+        "IsEmpty": false,
+        "X": 1022,
+        "Y": 41
+      },
+      {
+        "IsEmpty": false,
+        "X": 1027,
+        "Y": 346
+      },
+      {
+        "IsEmpty": false,
+        "X": 1009,
+        "Y": 609
+      },
+      {
+        "IsEmpty": false,
+        "X": 998,
+        "Y": 615
+      },
+      {
+        "IsEmpty": false,
+        "X": 538,
+        "Y": 614
+      },
+      {
+        "IsEmpty": false,
+        "X": 538,
+        "Y": 731
+      },
+      {
+        "IsEmpty": false,
+        "X": 519,
+        "Y": 1055
+      },
+      {
+        "IsEmpty": false,
+        "X": 509,
+        "Y": 1082
+      }
+    ]
+  },
+  "pond.png": {
+    "Image": {
+      "Width": 1389,
+      "Height": 842,
+      "VisibleLeft": 2,
+      "VisibleTop": 0,
+      "VisibleRight": 1385,
+      "VisibleBottom": 842
+    },
+    "Shape": "Polygon",
+    "RectangleHeight": 0,
+    "CircleCenter": {
+      "IsEmpty": true,
+      "X": 0,
+      "Y": 0
+    },
+    "Radius": 0,
+    "Outline": [
+      {
+        "IsEmpty": false,
+        "X": 5,
+        "Y": 478
+      },
+      {
+        "IsEmpty": false,
+        "X": 6,
+        "Y": 349
+      },
+      {
+        "IsEmpty": false,
+        "X": 31,
+        "Y": 313
+      },
+      {
+        "IsEmpty": false,
+        "X": 35,
+        "Y": 288
+      },
+      {
+        "IsEmpty": false,
+        "X": 66,
+        "Y": 235
+      },
+      {
+        "IsEmpty": false,
+        "X": 110,
+        "Y": 198
+      },
+      {
+        "IsEmpty": false,
+        "X": 116,
+        "Y": 178
+      },
+      {
+        "IsEmpty": false,
+        "X": 137,
+        "Y": 157
+      },
+      {
+        "IsEmpty": false,
+        "X": 202,
+        "Y": 116
+      },
+      {
+        "IsEmpty": false,
+        "X": 235,
+        "Y": 114
+      },
+      {
+        "IsEmpty": false,
+        "X": 251,
+        "Y": 95
+      },
+      {
+        "IsEmpty": false,
+        "X": 353,
+        "Y": 62
+      },
+      {
+        "IsEmpty": false,
+        "X": 380,
+        "Y": 68
+      },
+      {
+        "IsEmpty": false,
+        "X": 394,
+        "Y": 57
+      },
+      {
+        "IsEmpty": false,
+        "X": 488,
+        "Y": 37
+      },
+      {
+        "IsEmpty": false,
+        "X": 525,
+        "Y": 38
+      },
+      {
+        "IsEmpty": false,
+        "X": 543,
+        "Y": 22
+      },
+      {
+        "IsEmpty": false,
+        "X": 593,
+        "Y": 5
+      },
+      {
+        "IsEmpty": false,
+        "X": 639,
+        "Y": 4
+      },
+      {
+        "IsEmpty": false,
+        "X": 646,
+        "Y": 12
+      },
+      {
+        "IsEmpty": false,
+        "X": 673,
+        "Y": 1
+      },
+      {
+        "IsEmpty": false,
+        "X": 787,
+        "Y": 3
+      },
+      {
+        "IsEmpty": false,
+        "X": 812,
+        "Y": 19
+      },
+      {
+        "IsEmpty": false,
+        "X": 843,
+        "Y": 12
+      },
+      {
+        "IsEmpty": false,
+        "X": 940,
+        "Y": 28
+      },
+      {
+        "IsEmpty": false,
+        "X": 959,
+        "Y": 41
+      },
+      {
+        "IsEmpty": false,
+        "X": 973,
+        "Y": 34
+      },
+      {
+        "IsEmpty": false,
+        "X": 1070,
+        "Y": 55
+      },
+      {
+        "IsEmpty": false,
+        "X": 1087,
+        "Y": 69
+      },
+      {
+        "IsEmpty": false,
+        "X": 1108,
+        "Y": 67
+      },
+      {
+        "IsEmpty": false,
+        "X": 1200,
+        "Y": 113
+      },
+      {
+        "IsEmpty": false,
+        "X": 1216,
+        "Y": 135
+      },
+      {
+        "IsEmpty": false,
+        "X": 1241,
+        "Y": 143
+      },
+      {
+        "IsEmpty": false,
+        "X": 1289,
+        "Y": 185
+      },
+      {
+        "IsEmpty": false,
+        "X": 1314,
+        "Y": 216
+      },
+      {
+        "IsEmpty": false,
+        "X": 1321,
+        "Y": 240
+      },
+      {
+        "IsEmpty": false,
+        "X": 1338,
+        "Y": 249
+      },
+      {
+        "IsEmpty": false,
+        "X": 1359,
+        "Y": 284
+      },
+      {
+        "IsEmpty": false,
+        "X": 1380,
+        "Y": 345
+      },
+      {
+        "IsEmpty": false,
+        "X": 1381,
+        "Y": 469
+      },
+      {
+        "IsEmpty": false,
+        "X": 1371,
+        "Y": 524
+      },
+      {
+        "IsEmpty": false,
+        "X": 1349,
+        "Y": 556
+      },
+      {
+        "IsEmpty": false,
+        "X": 1343,
+        "Y": 587
+      },
+      {
+        "IsEmpty": false,
+        "X": 1314,
+        "Y": 624
+      },
+      {
+        "IsEmpty": false,
+        "X": 1224,
+        "Y": 707
+      },
+      {
+        "IsEmpty": false,
+        "X": 1190,
+        "Y": 723
+      },
+      {
+        "IsEmpty": false,
+        "X": 1169,
+        "Y": 748
+      },
+      {
+        "IsEmpty": false,
+        "X": 1077,
+        "Y": 781
+      },
+      {
+        "IsEmpty": false,
+        "X": 1046,
+        "Y": 787
+      },
+      {
+        "IsEmpty": false,
+        "X": 1026,
+        "Y": 780
+      },
+      {
+        "IsEmpty": false,
+        "X": 1007,
+        "Y": 791
+      },
+      {
+        "IsEmpty": false,
+        "X": 876,
+        "Y": 783
+      },
+      {
+        "IsEmpty": false,
+        "X": 852,
+        "Y": 772
+      },
+      {
+        "IsEmpty": false,
+        "X": 819,
+        "Y": 791
+      },
+      {
+        "IsEmpty": false,
+        "X": 777,
+        "Y": 796
+      },
+      {
+        "IsEmpty": false,
+        "X": 754,
+        "Y": 816
+      },
+      {
+        "IsEmpty": false,
+        "X": 677,
+        "Y": 830
+      },
+      {
+        "IsEmpty": false,
+        "X": 655,
+        "Y": 822
+      },
+      {
+        "IsEmpty": false,
+        "X": 634,
+        "Y": 831
+      },
+      {
+        "IsEmpty": false,
+        "X": 521,
+        "Y": 821
+      },
+      {
+        "IsEmpty": false,
+        "X": 509,
+        "Y": 809
+      },
+      {
+        "IsEmpty": false,
+        "X": 481,
+        "Y": 815
+      },
+      {
+        "IsEmpty": false,
+        "X": 416,
+        "Y": 805
+      },
+      {
+        "IsEmpty": false,
+        "X": 331,
+        "Y": 791
+      },
+      {
+        "IsEmpty": false,
+        "X": 294,
+        "Y": 794
+      },
+      {
+        "IsEmpty": false,
+        "X": 289,
+        "Y": 783
+      },
+      {
+        "IsEmpty": false,
+        "X": 201,
+        "Y": 754
+      },
+      {
+        "IsEmpty": false,
+        "X": 183,
+        "Y": 733
+      },
+      {
+        "IsEmpty": false,
+        "X": 142,
+        "Y": 716
+      },
+      {
+        "IsEmpty": false,
+        "X": 84,
+        "Y": 658
+      },
+      {
+        "IsEmpty": false,
+        "X": 74,
+        "Y": 625
+      },
+      {
+        "IsEmpty": false,
+        "X": 57,
+        "Y": 612
+      },
+      {
+        "IsEmpty": false,
+        "X": 21,
+        "Y": 549
+      },
+      {
+        "IsEmpty": false,
+        "X": 18,
+        "Y": 503
+      }
+    ]
+  }
+}

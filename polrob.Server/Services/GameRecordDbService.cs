@@ -6,15 +6,12 @@ using polrob.Shared;
 public sealed class GameRecordDbService
 {
     private const string GameRecordPartitionKeyPath = "/id";
-    private const string PlayerGameRecordPartitionKeyPath = "/playerId";
 
     private readonly CosmosClient _cosmosClient;
     private readonly ILogger<GameRecordDbService> _logger;
     private readonly string _databaseId;
     private readonly string _gameRecordsContainerId;
-    private readonly string _playerGameRecordsContainerId;
     private Container _gameRecordsContainer = null!;
-    private Container _playerGameRecordsContainer = null!;
 
     public GameRecordDbService(
         CosmosClient cosmosClient,
@@ -29,9 +26,6 @@ public sealed class GameRecordDbService
         _gameRecordsContainerId = GetConfiguredName(
             cosmosOptions.GameRecordsContainerId,
             "GameRecords");
-        _playerGameRecordsContainerId = GetConfiguredName(
-            cosmosOptions.PlayerGameRecordsContainerId,
-            "PlayerGameRecords");
     }
 
     public async Task InitializeAsync(CancellationToken cancellationToken = default)
@@ -39,18 +33,10 @@ public sealed class GameRecordDbService
         var database = await _cosmosClient.CreateDatabaseIfNotExistsAsync(
             _databaseId,
             cancellationToken: cancellationToken);
-        var gameRecordsContainerTask = database.Database.CreateContainerIfNotExistsAsync(
+        var containerResponse = await database.Database.CreateContainerIfNotExistsAsync(
             new ContainerProperties(_gameRecordsContainerId, GameRecordPartitionKeyPath),
             cancellationToken: cancellationToken);
-        var playerGameRecordsContainerTask = database.Database.CreateContainerIfNotExistsAsync(
-            new ContainerProperties(
-                _playerGameRecordsContainerId,
-                PlayerGameRecordPartitionKeyPath),
-            cancellationToken: cancellationToken);
-
-        await Task.WhenAll(gameRecordsContainerTask, playerGameRecordsContainerTask);
-        _gameRecordsContainer = gameRecordsContainerTask.Result.Container;
-        _playerGameRecordsContainer = playerGameRecordsContainerTask.Result.Container;
+        _gameRecordsContainer = containerResponse.Container;
     }
 
     public async Task SaveGameRecordAsync(
@@ -134,8 +120,9 @@ public sealed class GameRecordDbService
     {
         var query = new QueryDefinition(
             "SELECT * FROM c " +
-            "WHERE NOT IS_DEFINED(c.playerRecordsIndexed) " +
-            "OR c.playerRecordsIndexed = false");
+            "WHERE NOT IS_DEFINED(c.playerId) " +
+            "AND (NOT IS_DEFINED(c.playerRecordsIndexed) " +
+            "OR c.playerRecordsIndexed = false)");
 
         using var iterator = _gameRecordsContainer
             .GetItemQueryIterator<GameRecordDocument>(query);
@@ -214,18 +201,14 @@ public sealed class GameRecordDbService
 
         var query = new QueryDefinition(
                 "SELECT c.playerRole, c.winnerRole " +
-                "FROM c WHERE c.playerId = @userId")
+                "FROM c WHERE IS_DEFINED(c.playerId) " +
+                "AND c.playerId = @userId")
             .WithParameter("@userId", userId);
 
-        var requestOptions = new QueryRequestOptions
-        {
-            PartitionKey = new PartitionKey(userId)
-        };
         var accumulator = new GameRecordStatsAccumulator();
-        using var iterator = _playerGameRecordsContainer
+        using var iterator = _gameRecordsContainer
             .GetItemQueryIterator<PlayerGameRecordStatsProjection>(
-                query,
-                requestOptions: requestOptions);
+                query);
 
         while (iterator.HasMoreResults)
         {
@@ -256,9 +239,9 @@ public sealed class GameRecordDbService
     {
         try
         {
-            await _playerGameRecordsContainer.CreateItemAsync(
+            await _gameRecordsContainer.CreateItemAsync(
                 document,
-                new PartitionKey(document.PlayerId),
+                new PartitionKey(document.Id),
                 cancellationToken: cancellationToken);
         }
         catch (CosmosException ex) when (ex.StatusCode == HttpStatusCode.Conflict)
@@ -275,7 +258,7 @@ public sealed class GameRecordDbService
         string playerId,
         PlayerRole playerRole) => new()
     {
-        Id = gameRecord.Id,
+        Id = $"player:{gameRecord.Id}:{playerId}",
         PlayerId = playerId,
         RoomId = gameRecord.RoomId,
         PlayerRole = playerRole.ToString(),

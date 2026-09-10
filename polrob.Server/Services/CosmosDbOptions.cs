@@ -5,5 +5,4 @@ public sealed class CosmosDbOptions
     public string DatabaseId { get; set; } = "PolRobDB";
     public string UsersContainerId { get; set; } = "Users";
     public string GameRecordsContainerId { get; set; } = "GameRecords";
-    public string PlayerGameRecordsContainerId { get; set; } = "PlayerGameRecords";
 }

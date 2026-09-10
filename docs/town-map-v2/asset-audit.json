@@ -1,0 +1,230 @@
+[
+  {
+    "Name": "TownMapV2/props/police_station.png",
+    "Width": 768,
+    "Height": 512,
+    "TransparentPixels": 145993,
+    "VisibleBounds": [
+      99,
+      15,
+      669,
+      479
+    ]
+  },
+  {
+    "Name": "TownMapV2/props/jail.png",
+    "Width": 512,
+    "Height": 491,
+    "TransparentPixels": 48572,
+    "VisibleBounds": [
+      27,
+      10,
+      485,
+      469
+    ]
+  },
+  {
+    "Name": "TownMapV2/props/bank.png",
+    "Width": 768,
+    "Height": 512,
+    "TransparentPixels": 96870,
+    "VisibleBounds": [
+      64,
+      4,
+      704,
+      490
+    ]
+  },
+  {
+    "Name": "TownMapV2/props/townhouse.png",
+    "Width": 768,
+    "Height": 723,
+    "TransparentPixels": 102086,
+    "VisibleBounds": [
+      16,
+      11,
+      752,
+      695
+    ]
+  },
+  {
+    "Name": "TownMapV2/props/cafe.png",
+    "Width": 768,
+    "Height": 768,
+    "TransparentPixels": 210107,
+    "VisibleBounds": [
+      62,
+      60,
+      706,
+      699
+    ]
+  },
+  {
+    "Name": "TownMapV2/props/market.png",
+    "Width": 768,
+    "Height": 512,
+    "TransparentPixels": 158195,
+    "VisibleBounds": [
+      31,
+      60,
+      736,
+      433
+    ]
+  },
+  {
+    "Name": "TownMapV2/props/workshop.png",
+    "Width": 768,
+    "Height": 768,
+    "TransparentPixels": 237041,
+    "VisibleBounds": [
+      46,
+      99,
+      722,
+      648
+    ]
+  },
+  {
+    "Name": "TownMapV2/props/warehouse.png",
+    "Width": 768,
+    "Height": 768,
+    "TransparentPixels": 209920,
+    "VisibleBounds": [
+      38,
+      89,
+      729,
+      668
+    ]
+  },
+  {
+    "Name": "TownMapV2/props/fountain.png",
+    "Width": 512,
+    "Height": 341,
+    "TransparentPixels": 62176,
+    "VisibleBounds": [
+      12,
+      23,
+      498,
+      317
+    ]
+  },
+  {
+    "Name": "TownMapV2/props/crates.png",
+    "Width": 512,
+    "Height": 468,
+    "TransparentPixels": 110901,
+    "VisibleBounds": [
+      66,
+      11,
+      447,
+      443
+    ]
+  },
+  {
+    "Name": "TownMapV2/props/lamp.png",
+    "Width": 192,
+    "Height": 256,
+    "TransparentPixels": 24961,
+    "VisibleBounds": [
+      18,
+      3,
+      174,
+      247
+    ]
+  },
+  {
+    "Name": "TownMapV2/props/bush.png",
+    "Width": 512,
+    "Height": 341,
+    "TransparentPixels": 90337,
+    "VisibleBounds": [
+      20,
+      36,
+      491,
+      287
+    ]
+  },
+  {
+    "Name": "TownMapV2/props/oak.png",
+    "Width": 512,
+    "Height": 499,
+    "TransparentPixels": 95050,
+    "VisibleBounds": [
+      9,
+      6,
+      506,
+      476
+    ]
+  },
+  {
+    "Name": "TownMapV2/props/birch.png",
+    "Width": 394,
+    "Height": 512,
+    "TransparentPixels": 89972,
+    "VisibleBounds": [
+      37,
+      4,
+      365,
+      488
+    ]
+  },
+  {
+    "Name": "TownMapV2/props/rocks.png",
+    "Width": 512,
+    "Height": 341,
+    "TransparentPixels": 67836,
+    "VisibleBounds": [
+      27,
+      5,
+      486,
+      332
+    ]
+  },
+  {
+    "Name": "TownMapV2/tiles/grass.png",
+    "Width": 256,
+    "Height": 256,
+    "TransparentPixels": 0,
+    "VisibleBounds": [
+      0,
+      0,
+      256,
+      256
+    ]
+  },
+  {
+    "Name": "TownMapV2/tiles/asphalt.png",
+    "Width": 256,
+    "Height": 256,
+    "TransparentPixels": 0,
+    "VisibleBounds": [
+      0,
+      0,
+      256,
+      256
+    ]
+  },
+  {
+    "Name": "TownMapV2/tiles/paving.png",
+    "Width": 256,
+    "Height": 256,
+    "TransparentPixels": 0,
+    "VisibleBounds": [
+      0,
+      0,
+      256,
+      256
+    ]
+  },
+  {
+    "Name": "TownMapV2/tiles/dirt.png",
+    "Width": 256,
+    "Height": 256,
+    "TransparentPixels": 0,
+    "VisibleBounds": [
+      0,
+      0,
+      256,
+      256
+    ]
+  }
+]

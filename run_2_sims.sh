@@ -1,5 +1,12 @@
 #!/bin/bash
 
+XCODE_DEVELOPER_DIR="/Applications/Xcode_26.6.app/Contents/Developer"
+if [ ! -d "$XCODE_DEVELOPER_DIR" ]; then
+    echo "❌ Xcode 26.6을 찾을 수 없습니다: $XCODE_DEVELOPER_DIR" >&2
+    exit 1
+fi
+export DEVELOPER_DIR="$XCODE_DEVELOPER_DIR"
+
 echo "🚀🚀🚀 Starting 2 iOS Simulators Launch Script 🚀🚀🚀"
 
 # 1. 기기 식별자(UDID) 설정
@@ -17,7 +24,7 @@ echo "🍎 2. 2개의 시뮬레이터 부팅"
 for SIM_UDID in $SIM1 $SIM2; do
     xcrun simctl boot "$SIM_UDID" || true
 done
-open -a Simulator
+open "$(xcode-select -p)/Applications/Simulator.app"
 
 # 시뮬레이터가 완전히 부팅될 때까지 대기
 for SIM_UDID in $SIM1 $SIM2; do

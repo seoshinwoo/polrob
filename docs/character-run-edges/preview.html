@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="ko">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>달리기 에셋 외곽 확인</title>
+<style>
+  :root { color-scheme: dark; font-family: system-ui, sans-serif; }
+  body { margin: 24px auto; max-width: 1040px; padding: 0 20px; background: #141b24; color: #edf3fa; }
+  h1 { font-size: 24px; margin-bottom: 8px; }
+  p { color: #b7c4d3; line-height: 1.6; }
+  .controls { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; margin: 20px 0; }
+  button, select { padding: 8px 12px; border: 1px solid #526278; border-radius: 6px; background: #243246; color: white; }
+  canvas { width: 100%; border-radius: 10px; display: block; }
+  #status { font-size: 14px; }
+  a { color: #9dc8ff; }
+</style>
+<h1>달리기 에셋 · 외곽 정리</h1>
+<p>실제 게임의 프레임 순서·100ms 간격·중심점·너비 보정을 적용한 미리보기입니다.<br>작은 캐릭터는 플레이어 지름 50px 기준이며, 큰 캐릭터는 테두리 확인용 확대입니다.</p>
+<div class="controls">
+  <button id="play">일시 정지</button>
+  <label>배경 <select id="background"><option value="checker">체크무늬</option><option value="light">밝게</option><option value="dark">어둡게</option></select></label>
+  <label>프레임 <input id="frame" type="range" min="1" max="8" value="1"> <output id="number">1 / 8</output></label>
+  <span id="status">에셋을 불러오는 중…</span>
+</div>
+<canvas id="preview" width="2080" height="1120" aria-label="경찰과 도둑 달리기 애니메이션"></canvas>
+<p><a href="before-after.png">수정 전·후 비교</a> · <a href="README.md">검증 및 제작 기록</a></p>
+<script>
+const roles = ['police', 'robber'];
+const widths = { police: [475,470,466,464,466,470,475,470], robber: [418,409,402,411,402,409,418,409] };
+const pivots = { police: [313.5,297], robber: [313.5,270] };
+const canvas = document.querySelector('canvas');
+const context = canvas.getContext('2d');
+const slider = document.querySelector('#frame');
+const number = document.querySelector('#number');
+const background = document.querySelector('#background');
+const playButton = document.querySelector('#play');
+let playing = true, frame = 0, previous = 0;
+const sprites = {};
+Promise.all(roles.flatMap(role => Array.from({length: 8}, (_, i) => new Promise((resolve, reject) => {
+  const image = new Image();
+  image.onload = () => { (sprites[role] ??= [])[i] = image; resolve(); };
+  image.onerror = () => reject(new Error(`로드 실패: ${role} ${i + 1}`));
+  image.src = `../../polrob.Client/Resources/Raw/char_${role}_run_${i + 1}.png`;
+})))).then(() => {
+  document.querySelector('#status').textContent = '16 / 16 에셋 로드 완료';
+  requestAnimationFrame(tick);
+}).catch(error => { document.querySelector('#status').textContent = error.message; });
+playButton.onclick = () => { playing = !playing; playButton.textContent = playing ? '일시 정지' : '재생'; };
+slider.oninput = () => { playing = false; playButton.textContent = '재생'; frame = Number(slider.value) - 1; };
+function drawSprite(role, index, x, y, diameter) {
+  const scale = diameter * .86 / widths[role][index];
+  const [px, py] = pivots[role];
+  context.drawImage(sprites[role][index], x - px * scale, y - py * scale, 627 * scale, 627 * scale);
+}
+function tick(time) {
+  if (time - previous >= 100) { if (playing) frame = (frame + 1) % 8; previous = time; }
+  slider.value = frame + 1; number.textContent = `${frame + 1} / 8`;
+  context.setTransform(2,0,0,2,0,0);
+  const light = background.value === 'light';
+  context.fillStyle = light ? '#faf7ef' : '#101b29';
+  context.fillRect(0,0,1040,560);
+  if (background.value === 'checker') {
+    context.fillStyle = '#213e51';
+    for (let y = 0; y < 560; y += 12) for (let x = 0; x < 1040; x += 12)
+      if ((x / 12 + y / 12) % 2 === 0) context.fillRect(x,y,12,12);
+  }
+  roles.forEach((role, column) => {
+    const center = 260 + column * 520;
+    context.fillStyle = light ? '#233143' : '#eaf3ff';
+    context.font = '18px system-ui'; context.textAlign = 'center';
+    context.fillText(role === 'police' ? '경찰' : '도둑', center, 35);
+    drawSprite(role,frame,center,202,280);
+    drawSprite(role,frame,center,379,50);
+    context.font = '12px system-ui'; context.fillText('50px 기준', center, 427);
+    for (let i = 0; i < 8; i++) {
+      const x = column * 520 + 35 + i * 64;
+      drawSprite(role,i,x,488,48);
+      context.fillStyle = i === frame ? '#29acff' : light ? '#485568' : '#ccd6e2';
+      context.fillText(i + 1,x,542);
+    }
+  });
+  requestAnimationFrame(tick);
+}
+</script>
+</html>

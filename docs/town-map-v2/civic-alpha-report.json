@@ -1,0 +1,102 @@
+{
+  "police_station": {
+    "path": "polrob.Client/Resources/Raw/TownMapV2/props/police_station.png",
+    "mode": "RGBA",
+    "size": [
+      768,
+      512
+    ],
+    "alpha_range": [
+      0,
+      255
+    ],
+    "alpha_bbox": [
+      98,
+      11,
+      726,
+      483
+    ],
+    "alpha16_bbox": [
+      99,
+      15,
+      669,
+      479
+    ],
+    "visible_aspect": 1.2284
+  },
+  "bank": {
+    "path": "polrob.Client/Resources/Raw/TownMapV2/props/bank.png",
+    "mode": "RGBA",
+    "size": [
+      768,
+      512
+    ],
+    "alpha_range": [
+      0,
+      255
+    ],
+    "alpha_bbox": [
+      0,
+      0,
+      705,
+      496
+    ],
+    "alpha16_bbox": [
+      64,
+      4,
+      704,
+      490
+    ],
+    "visible_aspect": 1.3169
+  },
+  "townhouse": {
+    "path": "polrob.Client/Resources/Raw/TownMapV2/props/townhouse.png",
+    "mode": "RGBA",
+    "size": [
+      768,
+      723
+    ],
+    "alpha_range": [
+      0,
+      255
+    ],
+    "alpha_bbox": [
+      15,
+      9,
+      753,
+      696
+    ],
+    "alpha16_bbox": [
+      16,
+      11,
+      752,
+      695
+    ],
+    "visible_aspect": 1.076
+  },
+  "jail": {
+    "path": "polrob.Client/Resources/Raw/TownMapV2/props/jail.png",
+    "mode": "RGBA",
+    "size": [
+      512,
+      491
+    ],
+    "alpha_range": [
+      0,
+      255
+    ],
+    "alpha_bbox": [
+      27,
+      9,
+      486,
+      472
+    ],
+    "alpha16_bbox": [
+      27,
+      10,
+      485,
+      469
+    ],
+    "visible_aspect": 0.9978
+  }
+}

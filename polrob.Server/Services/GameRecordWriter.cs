@@ -18,6 +18,7 @@ public sealed class GameRecordWriter : BackgroundService, IGameRecordQueue
     private readonly GameRecordDbService _gameRecordDbService;
     private readonly ILogger<GameRecordWriter> _logger;
     private readonly CancellationTokenSource _abortWrites = new();
+    private int _disposed;
 
     public GameRecordWriter(
         GameRecordDbService gameRecordDbService,
@@ -79,6 +80,11 @@ public sealed class GameRecordWriter : BackgroundService, IGameRecordQueue
 
     public override void Dispose()
     {
+        if (Interlocked.Exchange(ref _disposed, 1) != 0)
+        {
+            return;
+        }
+
         _records.Writer.TryComplete();
         _abortWrites.Cancel();
         _abortWrites.Dispose();

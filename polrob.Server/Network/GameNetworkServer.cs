@@ -435,26 +435,27 @@ public partial class GameNetworkServer : BackgroundService
         }
     }
 
-    // 방에 입장한 플레이어를 역할별 시작 위치에 배치합니다.
+    // 공유 맵에서 충돌 없는 시작점을 찾고 현재 접속자의 자리는 피합니다.
     private void PositionPlayerForRoom(Player player, GameSession gameSession)
     {
-        var policeCount = gameSession.Sessions.Values.Count(s => s.PlayerState.Role == PlayerRole.Police);
-        var robberCount = gameSession.Sessions.Values.Count(s => s.PlayerState.Role == PlayerRole.Robber);
-        const float gap = 150f;
-
-        if (player.Role == PlayerRole.Police)
+        var otherPlayers = gameSession.Sessions.Values
+            .Select(session => session.PlayerState)
+            .Where(other => other.Id != player.Id)
+            .ToArray();
+        for (var slot = 0; ; slot++)
         {
-            var startX = _map.PoliceStation.Center.X - (gap / 2f);
-            player.X = startX + policeCount * gap;
-            // Keep the role spawn on the front road, below the canonical
-            // police-car collider copied from the concept map.
-            player.Y = _map.PoliceStation.RightBottom.Y + 350f;
-        }
-        else
-        {
-            var startX = _map.Width / 2f - gap * 1.5f;
-            player.X = startX + robberCount * gap;
-            player.Y = _map.Height / 2f;
+            var spawn = _map.GetSpawnPosition(player.Role, slot, player.Radius);
+            var occupied = otherPlayers.Any(other =>
+            {
+                var dx = spawn.X - other.X;
+                var dy = spawn.Y - other.Y;
+                var distance = player.Radius + other.Radius;
+                return dx * dx + dy * dy < distance * distance;
+            });
+            if (occupied) continue;
+            player.X = spawn.X;
+            player.Y = spawn.Y;
+            return;
         }
     }
 

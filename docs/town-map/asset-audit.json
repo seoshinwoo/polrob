@@ -1,0 +1,206 @@
+[
+  {
+    "Name": "MapAssets/police_station.png",
+    "Width": 764,
+    "Height": 700,
+    "TransparentPixels": 39393,
+    "VisibleBounds": [
+      2,
+      2,
+      762,
+      698
+    ]
+  },
+  {
+    "Name": "MapAssets/jail.png",
+    "Width": 979,
+    "Height": 858,
+    "TransparentPixels": 372681,
+    "VisibleBounds": [
+      0,
+      0,
+      979,
+      856
+    ]
+  },
+  {
+    "Name": "MapAssets/warehouse.png",
+    "Width": 951,
+    "Height": 1000,
+    "TransparentPixels": 48914,
+    "VisibleBounds": [
+      4,
+      4,
+      948,
+      992
+    ]
+  },
+  {
+    "Name": "MapAssets/donut.png",
+    "Width": 880,
+    "Height": 850,
+    "TransparentPixels": 59122,
+    "VisibleBounds": [
+      0,
+      0,
+      880,
+      850
+    ]
+  },
+  {
+    "Name": "MapAssets/burger.png",
+    "Width": 1053,
+    "Height": 1058,
+    "TransparentPixels": 89965,
+    "VisibleBounds": [
+      0,
+      0,
+      1053,
+      1055
+    ]
+  },
+  {
+    "Name": "MapAssets/cafe.png",
+    "Width": 926,
+    "Height": 969,
+    "TransparentPixels": 56543,
+    "VisibleBounds": [
+      1,
+      0,
+      925,
+      967
+    ]
+  },
+  {
+    "Name": "MapAssets/house-orange.png",
+    "Width": 975,
+    "Height": 960,
+    "TransparentPixels": 65450,
+    "VisibleBounds": [
+      2,
+      3,
+      975,
+      959
+    ]
+  },
+  {
+    "Name": "MapAssets/pond.png",
+    "Width": 1389,
+    "Height": 842,
+    "TransparentPixels": 243115,
+    "VisibleBounds": [
+      2,
+      0,
+      1385,
+      842
+    ]
+  },
+  {
+    "Name": "MapAssets/boxes.png",
+    "Width": 1039,
+    "Height": 1094,
+    "TransparentPixels": 278195,
+    "VisibleBounds": [
+      8,
+      9,
+      1029,
+      1082
+    ]
+  },
+  {
+    "Name": "MapAssets/streetlamp.png",
+    "Width": 606,
+    "Height": 1202,
+    "TransparentPixels": 364372,
+    "VisibleBounds": [
+      4,
+      3,
+      601,
+      1192
+    ]
+  },
+  {
+    "Name": "MapAssets/tree.png",
+    "Width": 1009,
+    "Height": 1080,
+    "TransparentPixels": 353392,
+    "VisibleBounds": [
+      10,
+      6,
+      1001,
+      1073
+    ]
+  },
+  {
+    "Name": "MapAssets/bush.png",
+    "Width": 791,
+    "Height": 777,
+    "TransparentPixels": 153935,
+    "VisibleBounds": [
+      2,
+      0,
+      791,
+      777
+    ]
+  },
+  {
+    "Name": "MapAssets/rock.png",
+    "Width": 1251,
+    "Height": 1121,
+    "TransparentPixels": 347195,
+    "VisibleBounds": [
+      8,
+      8,
+      1245,
+      1113
+    ]
+  },
+  {
+    "Name": "MapAssets/box.png",
+    "Width": 1044,
+    "Height": 1199,
+    "TransparentPixels": 68677,
+    "VisibleBounds": [
+      7,
+      8,
+      1037,
+      1190
+    ]
+  },
+  {
+    "Name": "TownMap/tiles/grass.png",
+    "Width": 256,
+    "Height": 256,
+    "TransparentPixels": 0,
+    "VisibleBounds": [
+      0,
+      0,
+      256,
+      256
+    ]
+  },
+  {
+    "Name": "TownMap/tiles/asphalt.png",
+    "Width": 256,
+    "Height": 256,
+    "TransparentPixels": 0,
+    "VisibleBounds": [
+      0,
+      0,
+      256,
+      256
+    ]
+  },
+  {
+    "Name": "TownMap/tiles/paving.png",
+    "Width": 256,
+    "Height": 256,
+    "TransparentPixels": 0,
+    "VisibleBounds": [
+      0,
+      0,
+      256,
+      256
+    ]
+  }
+]

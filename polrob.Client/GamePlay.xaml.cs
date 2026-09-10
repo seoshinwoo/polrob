@@ -55,7 +55,6 @@ public partial class GamePlay : ContentPage
     private const float PlayerBodyVisualWidthRatio = 0.86f;
     private const float TerrainTileWorldSize = 256f;
     private const float ForestGroundTop = 12f * TerrainTileWorldSize;
-    private const int StreetTileCount = 7;
     private static readonly SKColor MapOutsideColor = SKColor.Parse("#4C4F4A");
     private static readonly SKColor MissingTerrainColor = SKColor.Parse("#7F865F");
     private static readonly SKRect VillageTerrainBounds = new(256f, 1280f, 4352f, 4352f);
@@ -76,81 +75,12 @@ public partial class GamePlay : ContentPage
     private SKBitmap?[] _robberRunBitmaps = new SKBitmap?[8];
     private SKBitmap? _robberSurrendBitmap;
     private SKBitmap? _robberPrisonBreakBitmap;
-    private SKBitmap? _cityGroundBitmap;
-    private SKBitmap? _forestGroundBitmap;
-    private readonly SKBitmap?[] _streetBitmaps = new SKBitmap?[StreetTileCount];
+    private TownMapRenderer? _townMapRenderer;
     private readonly SKBitmap?[,] _terrainTiles = new SKBitmap?[4, 4];
     private readonly Dictionary<SKBitmap, SKRect> _spriteVisibleBounds = new();
     private readonly Dictionary<string, SKBitmap?> _mapPropBitmaps = new(StringComparer.Ordinal);
     private static readonly float[] PoliceRunBodyWidths = [475f, 470f, 466f, 464f, 466f, 470f, 475f, 470f];
     private static readonly float[] RobberRunBodyWidths = [418f, 409f, 402f, 411f, 402f, 409f, 418f, 409f];
-
-    // The Canva reference is a 10 x 15 grid of 256 px cells. Rotations are
-    // clockwise in the screen coordinate system used by SkiaSharp.
-    private static readonly RoadTilePlacement[] RoadTilePlacements =
-    [
-        new(2, 1, 1, 0),
-        new(2, 2, 3, 0),
-        new(2, 3, 1, 90),
-        new(2, 4, 1, 90),
-        new(2, 5, 4, 0),
-        new(2, 6, 1, 90),
-        new(2, 7, 1, 90),
-        new(2, 8, 3, 90),
-
-        new(3, 1, 3, 270),
-        new(3, 2, 5, 0),
-        new(3, 5, 1, 0),
-        new(3, 8, 1, 0),
-
-        new(4, 2, 1, 0),
-        new(4, 5, 1, 0),
-        new(4, 8, 1, 0),
-
-        new(5, 0, 3, 0),
-        new(5, 1, 1, 90),
-        new(5, 2, 2, 90),
-        new(5, 5, 1, 0),
-        new(5, 8, 1, 0),
-
-        new(6, 0, 1, 0),
-        new(6, 5, 1, 0),
-        new(6, 8, 1, 0),
-
-        new(7, 0, 4, 270),
-        new(7, 1, 1, 90),
-        new(7, 2, 1, 90),
-        new(7, 3, 1, 90),
-        new(7, 4, 1, 90),
-        new(7, 5, 7, 0),
-        new(7, 6, 1, 90),
-        new(7, 7, 1, 90),
-        new(7, 8, 4, 90),
-
-        new(8, 0, 1, 0),
-        new(8, 5, 1, 0),
-        new(8, 8, 1, 0),
-        new(9, 0, 1, 0),
-        new(9, 5, 1, 0),
-        new(9, 8, 1, 0),
-        new(10, 0, 1, 0),
-        new(10, 5, 1, 0),
-        new(10, 8, 1, 0),
-
-        new(11, 0, 3, 270),
-        new(11, 1, 1, 90),
-        new(11, 2, 1, 90),
-        new(11, 3, 1, 90),
-        new(11, 4, 1, 90),
-        new(11, 5, 7, 0),
-        new(11, 6, 1, 90),
-        new(11, 7, 1, 90),
-        new(11, 8, 2, 90),
-
-        new(12, 5, 1, 0),
-        new(13, 5, 1, 0),
-        new(14, 5, 1, 0)
-    ];
 
     private static readonly MapPropLayout[] MapPropPlacements = GameMap.PropLayouts;
 
@@ -536,6 +466,16 @@ public partial class GamePlay : ContentPage
     {
         base.OnDisappearing();
         StopGameClient();
+        await _assetLoadLock.WaitAsync();
+        try
+        {
+            _townMapRenderer?.Dispose();
+            _townMapRenderer = null;
+        }
+        finally
+        {
+            _assetLoadLock.Release();
+        }
         await StopTeamVoiceAsync();
     }
 
@@ -624,16 +564,14 @@ public partial class GamePlay : ContentPage
 
     private async Task LoadAssetsAsync()
     {
-        if (_assetsLoaded)
-        {
-            return;
-        }
-
         await _assetLoadLock.WaitAsync();
         try
         {
             if (_assetsLoaded)
             {
+                // The page retains decoded bitmaps between appearances, while
+                // each active renderer owns and releases its native paints/paths.
+                _townMapRenderer ??= new TownMapRenderer(_mapPropBitmaps);
                 return;
             }
 
@@ -642,20 +580,15 @@ public partial class GamePlay : ContentPage
             _policeArrestBitmap = await LoadBitmapAsync("char_police_arrest.png");
             _robberSurrendBitmap = await LoadBitmapAsync("char_robber_surrend.png");
             _robberPrisonBreakBitmap = await LoadBitmapAsync("char_robber_prison-break.png");
-            _cityGroundBitmap = await LoadBitmapAsync("FloorTiles/city_ground.png");
-            _forestGroundBitmap = await LoadBitmapAsync("FloorTiles/forest_ground.png");
-
-            for (var index = 0; index < _streetBitmaps.Length; index++)
-            {
-                _streetBitmaps[index] = await LoadBitmapAsync($"FloorTiles/street-{index + 1}.png");
-            }
-
             foreach (var assetPath in MapPropPlacements
                 .Select(placement => placement.AssetPath)
+                .Where(path => !string.IsNullOrEmpty(path))
+                .Concat(TownMapRenderer.TileAssets)
                 .Distinct(StringComparer.Ordinal))
             {
                 _mapPropBitmaps[assetPath] = await LoadBitmapAsync(assetPath);
             }
+            _townMapRenderer = new TownMapRenderer(_mapPropBitmaps);
 
             for (int i = 0; i < 8; i++)
             {
@@ -994,12 +927,15 @@ public partial class GamePlay : ContentPage
 
         DrawMapBackground(canvas, visibleWorldBounds);
 
-        DrawMapProps(canvas, visibleWorldBounds);
-
-        // 시야 암전은 캐릭터 아래에 유지한다.
+        // 시야 암전은 캐릭터와 오브젝트 아래에 유지한다.
         DrawVisionOverlay(canvas);
 
         DrawPlayers(canvas);
+
+        // 맵 배경 -> 캐릭터 -> 오브젝트 순서로 그려서 캐릭터가
+        // 건물이나 장애물 뒤에 들어가면 해당 오브젝트에 가려지게 한다.
+        DrawMapProps(canvas, visibleWorldBounds);
+
         DrawJailBreakProgressBar(canvas);
 
         canvas.Restore();
@@ -1078,106 +1014,12 @@ public partial class GamePlay : ContentPage
 
     private void DrawMapBackground(SKCanvas canvas, SKRect visibleWorldBounds)
     {
-        var mapBounds = new SKRect(0, 0, _gameMap.Width, _gameMap.Height);
-
-        canvas.Save();
-        canvas.ClipRect(mapBounds);
-        var cityGroundBounds = new SKRect(0f, 0f, _gameMap.Width, ForestGroundTop);
-        DrawTiledRect(
-            canvas,
-            cityGroundBounds,
-            visibleWorldBounds,
-            _cityGroundBitmap,
-            MissingTerrainColor);
-
-        var forestGroundBounds = new SKRect(0f, ForestGroundTop, _gameMap.Width, _gameMap.Height);
-        DrawTiledRect(
-            canvas,
-            forestGroundBounds,
-            visibleWorldBounds,
-            _forestGroundBitmap,
-            MissingTerrainColor);
-
-        foreach (var placement in RoadTilePlacements)
-        {
-            DrawRoadTile(canvas, visibleWorldBounds, placement);
-        }
-
-        canvas.Restore();
-    }
-
-    private void DrawRoadTile(
-        SKCanvas canvas,
-        SKRect visibleWorldBounds,
-        RoadTilePlacement placement)
-    {
-        var bitmapIndex = placement.AssetNumber - 1;
-        if (bitmapIndex < 0 || bitmapIndex >= _streetBitmaps.Length)
-        {
-            return;
-        }
-
-        var bitmap = _streetBitmaps[bitmapIndex];
-        if (bitmap == null)
-        {
-            return;
-        }
-
-        var left = placement.Column * TerrainTileWorldSize;
-        var top = placement.Row * TerrainTileWorldSize;
-        var destination = new SKRect(
-            left,
-            top,
-            left + TerrainTileWorldSize,
-            top + TerrainTileWorldSize);
-        if (!RectsIntersect(destination, visibleWorldBounds))
-        {
-            return;
-        }
-
-        var halfTile = TerrainTileWorldSize / 2f;
-        var localDestination = new SKRect(-halfTile, -halfTile, halfTile, halfTile);
-
-        canvas.Save();
-        canvas.Translate(destination.MidX, destination.MidY);
-        canvas.RotateDegrees(placement.RotationDegrees);
-
-        if (placement.AssetNumber is 2 or 3)
-        {
-            // The supplied corner PNGs are opaque asphalt squares. The Canva
-            // layout uses a quarter-disc footprint, so clip away the single
-            // convex outer corner while retaining the source artwork.
-            var clipCenterX = placement.AssetNumber == 2 ? -halfTile : halfTile;
-            using var cornerClip = new SKPath();
-            cornerClip.AddCircle(clipCenterX, halfTile, TerrainTileWorldSize);
-            canvas.ClipPath(cornerClip, SKClipOperation.Intersect, antialias: true);
-        }
-
-        canvas.DrawBitmap(bitmap, localDestination);
-        canvas.Restore();
+        _townMapRenderer?.DrawBackground(canvas, visibleWorldBounds);
     }
 
     private void DrawMapProps(SKCanvas canvas, SKRect visibleWorldBounds)
     {
-        foreach (var placement in MapPropPlacements)
-        {
-            if (!_mapPropBitmaps.TryGetValue(placement.AssetPath, out var bitmap) || bitmap == null)
-            {
-                continue;
-            }
-
-            var destination = new SKRect(
-                placement.CenterX - placement.Width / 2f,
-                placement.CenterY - placement.Height / 2f,
-                placement.CenterX + placement.Width / 2f,
-                placement.CenterY + placement.Height / 2f);
-            if (!RectsIntersect(destination, visibleWorldBounds))
-            {
-                continue;
-            }
-
-            canvas.DrawBitmap(bitmap, destination);
-        }
+        _townMapRenderer?.DrawProps(canvas, visibleWorldBounds);
     }
 
     private void DrawOuterTerrain(SKCanvas canvas, SKRect visibleWorldBounds)
@@ -1924,12 +1766,6 @@ public partial class GamePlay : ContentPage
     {
         public List<RemoteMovementSnapshot> Snapshots { get; } = new();
     }
-
-    private readonly record struct RoadTilePlacement(
-        int Row,
-        int Column,
-        int AssetNumber,
-        float RotationDegrees);
 
     private readonly record struct PlayerSpriteProfile(
         float BodyWidthPixels,

@@ -1,0 +1,118 @@
+[
+  {
+    "name": "cafe",
+    "runtime_path": "polrob.Client/Resources/Raw/TownMapV2/props/cafe.png",
+    "size": [
+      768,
+      768
+    ],
+    "canvas_aspect": 1.0,
+    "mode": "RGBA",
+    "alpha_range": [
+      0,
+      255
+    ],
+    "transparent_fraction": 0.35622,
+    "alpha_gt0_bbox": [
+      60,
+      33,
+      730,
+      752
+    ],
+    "alpha_ge16_bbox": [
+      62,
+      60,
+      706,
+      699
+    ],
+    "silhouette_aspect": 1.007825,
+    "bytes": 620822
+  },
+  {
+    "name": "market",
+    "runtime_path": "polrob.Client/Resources/Raw/TownMapV2/props/market.png",
+    "size": [
+      768,
+      512
+    ],
+    "canvas_aspect": 1.5,
+    "mode": "RGBA",
+    "alpha_range": [
+      0,
+      255
+    ],
+    "transparent_fraction": 0.402311,
+    "alpha_gt0_bbox": [
+      31,
+      9,
+      737,
+      480
+    ],
+    "alpha_ge16_bbox": [
+      31,
+      60,
+      736,
+      433
+    ],
+    "silhouette_aspect": 1.89008,
+    "bytes": 377486
+  },
+  {
+    "name": "warehouse",
+    "runtime_path": "polrob.Client/Resources/Raw/TownMapV2/props/warehouse.png",
+    "size": [
+      768,
+      768
+    ],
+    "canvas_aspect": 1.0,
+    "mode": "RGBA",
+    "alpha_range": [
+      0,
+      255
+    ],
+    "transparent_fraction": 0.355903,
+    "alpha_gt0_bbox": [
+      36,
+      0,
+      742,
+      768
+    ],
+    "alpha_ge16_bbox": [
+      38,
+      89,
+      729,
+      668
+    ],
+    "silhouette_aspect": 1.193437,
+    "bytes": 568703
+  },
+  {
+    "name": "workshop",
+    "runtime_path": "polrob.Client/Resources/Raw/TownMapV2/props/workshop.png",
+    "size": [
+      768,
+      768
+    ],
+    "canvas_aspect": 1.0,
+    "mode": "RGBA",
+    "alpha_range": [
+      0,
+      255
+    ],
+    "transparent_fraction": 0.401884,
+    "alpha_gt0_bbox": [
+      40,
+      12,
+      724,
+      734
+    ],
+    "alpha_ge16_bbox": [
+      46,
+      99,
+      722,
+      648
+    ],
+    "silhouette_aspect": 1.23133,
+    "bytes": 522325
+  }
+]

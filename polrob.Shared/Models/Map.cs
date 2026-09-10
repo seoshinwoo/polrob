@@ -4,49 +4,10 @@ namespace polrob.Shared;
 
 public class GameMap
 {
-    // This is the single source of truth for the 2D prop layout. The client
-    // renders these exact rectangles and both client/server use them for
-    // movement collision, so prediction cannot disagree with the server.
-    public static readonly MapPropLayout[] PropLayouts =
-    [
-        new("2D/heli.png", 896f, 250f, 366.6f, 424f),
+    // The renderer and shared physics use the same authored prop placements.
+    public static readonly MapPropLayout[] PropLayouts = CanvaMapLayout.Props;
 
-        new("2D/bank.png", 1024f, 1040f, 379.5f, 391.5f),
-        new("2D/pond.png", 1024f, 1560f, 400f, 242.4f),
-        new("2D/bush.png", 390f, 1560f, 145f, 142.4f),
-        new("2D/bush.png", 610f, 1560f, 145f, 142.4f),
-        new("2D/donut.png", 1792f, 1015f, 353.4f, 395.3f),
-        new("2D/cafe.png", 1792f, 1515f, 356.5f, 369.1f),
-
-        new("2D/house.png", 768f, 2280f, 305.3f, 304.9f),
-        new("2D/house.png", 480f, 2605f, 305.3f, 304.9f),
-        new("2D/house.png", 1056f, 2605f, 305.3f, 304.9f),
-
-        new("2D/tree-round.png", 1660f, 2220f, 170f, 183.7f),
-        new("2D/tree-round.png", 1910f, 2220f, 170f, 183.7f),
-        new("2D/tree-round.png", 1660f, 2470f, 170f, 183.7f),
-        new("2D/tree-round.png", 1910f, 2470f, 170f, 183.7f),
-        new("2D/tree-round.png", 1660f, 2710f, 170f, 183.7f),
-        new("2D/tree-round.png", 1910f, 2710f, 170f, 183.7f),
-
-        new("2D/tree-sharp.png", 160f, 3260f, 110f, 194.3f, IsTriangular: true),
-        new("2D/tree-sharp.png", 480f, 3300f, 110f, 194.3f, IsTriangular: true),
-        new("2D/tree-sharp.png", 800f, 3260f, 110f, 194.3f, IsTriangular: true),
-        new("2D/tree-sharp.png", 1100f, 3320f, 110f, 194.3f, IsTriangular: true),
-        new("2D/tree-sharp.png", 240f, 3560f, 110f, 194.3f, IsTriangular: true),
-        new("2D/tree-sharp.png", 600f, 3600f, 110f, 194.3f, IsTriangular: true),
-        new("2D/tree-sharp.png", 1000f, 3560f, 110f, 194.3f, IsTriangular: true),
-        new("2D/tree-sharp.png", 1660f, 3260f, 110f, 194.3f, IsTriangular: true),
-        new("2D/tree-sharp.png", 1980f, 3300f, 110f, 194.3f, IsTriangular: true),
-        new("2D/tree-sharp.png", 2300f, 3260f, 110f, 194.3f, IsTriangular: true),
-        new("2D/tree-sharp.png", 2440f, 3480f, 110f, 194.3f, IsTriangular: true),
-        new("2D/tree-sharp.png", 1740f, 3580f, 110f, 194.3f, IsTriangular: true),
-        new("2D/tree-sharp.png", 2100f, 3540f, 110f, 194.3f, IsTriangular: true),
-        new("2D/tree-sharp.png", 2400f, 3620f, 110f, 194.3f, IsTriangular: true)
-    ];
-    // The new tile map is 2560x3840. Legacy geometry helpers remain at the
-    // matching half scale as migration references, but the road-only stage
-    // activates only the logical gameplay regions created in the constructor.
+    // Legacy geometry helpers remain only as migration references.
     private const float CanonicalCoordinateScale = 2560f / 5000f;
     private const float LegacyMapScale = 0.5f;
     private const float SpatialCellSize = 250f;
@@ -223,99 +184,150 @@ public class GameMap
 
     public GameMap()
     {
-        AddStagedGameplayReferences();
         AddMapPropColliders();
-        BuildSpatialIndex();
-    }
+        if (PoliceStation == null || Jail == null)
+        {
+            throw new InvalidOperationException("The town map requires a police station and jail.");
+        }
 
-    private void AddStagedGameplayReferences()
-    {
-        // Buildings and their final collision geometry are intentionally deferred
-        // during the 2D rebuild. Keep non-blocking logical regions so spawning,
-        // arrests and jail-break rules remain operational without invisible walls.
-        PoliceStation = AddGameplayReference(
-            "PoliceStation",
-            left: 192f,
-            top: 32f,
-            right: 576f,
-            bottom: 448f);
-        Jail = AddGameplayReference(
-            "Jail",
-            left: 1536f,
-            top: 2048f,
-            right: 2048f,
-            bottom: 2560f);
+        BuildSpatialIndex();
     }
 
     private void AddMapPropColliders()
     {
         foreach (var layout in PropLayouts)
         {
-            var halfWidth = layout.Width / 2f;
-            var halfHeight = layout.Height / 2f;
-            var left = layout.CenterX - halfWidth;
-            var top = layout.CenterY - halfHeight;
-            var right = layout.CenterX + halfWidth;
-            var bottom = layout.CenterY + halfHeight;
+            var collisionWidth = layout.CollisionWidth > 0f ? layout.CollisionWidth : layout.Width;
+            var collisionHeight = layout.CollisionHeight > 0f ? layout.CollisionHeight : layout.Height;
+            var centerX = layout.CenterX + layout.CollisionOffsetX;
+            var centerY = layout.CenterY + layout.CollisionOffsetY;
+            var left = centerX - collisionWidth / 2f;
+            var top = centerY - collisionHeight / 2f;
+            var right = centerX + collisionWidth / 2f;
+            var bottom = centerY + collisionHeight / 2f;
+
+            if (layout.BuildingType != null)
+            {
+                var building = new MapBuilding
+                {
+                    Type = layout.BuildingType,
+                    ImageFileName = layout.AssetPath,
+                    LeftTop = new PointF(layout.CenterX - layout.Width / 2f, layout.CenterY - layout.Height / 2f),
+                    RightBottom = new PointF(layout.CenterX + layout.Width / 2f, layout.CenterY + layout.Height / 2f),
+                    CollisionWidth = collisionWidth,
+                    CollisionHeight = collisionHeight,
+                    CollisionOffsetX = layout.CollisionOffsetX,
+                    CollisionOffsetY = layout.CollisionOffsetY,
+                    CollisionPolygon = layout.CollisionPolygon ?? [],
+                    IsVisible = false,
+                    BlocksMovement = layout.BlocksMovement,
+                    BlocksVision = false
+                };
+                Buildings.Add(building);
+                if (building.Type == "PoliceStation") PoliceStation = building;
+                if (building.Type == "Jail") Jail = building;
+                continue;
+            }
+
+            // Visual-only placements must not leave invisible movement blockers.
+            if (!layout.BlocksMovement) continue;
 
             var obstacle = new Obstacle
             {
                 ImageFileName = layout.AssetPath,
                 IsVisible = false,
                 BlocksMovement = true,
-                // This pass adds physical obstacles only. Vision behavior can
-                // be tuned independently when stealth props are introduced.
-                BlocksVision = false
+                BlocksVision = false,
+                Type = layout.CollisionShape,
+                PolygonPoints = layout.CollisionPolygon ?? [],
+                LeftTop = new PointF(left, top),
+                LeftBottom = new PointF(left, bottom),
+                RightTop = new PointF(right, top),
+                RightBottom = new PointF(right, bottom),
+                CenterX = new PointF(centerX, centerY),
+                Radius = layout.CollisionRadius > 0f
+                    ? layout.CollisionRadius
+                    : MathF.Min(collisionWidth, collisionHeight) / 2f,
+                RadiusY = layout.CollisionRadiusY,
+                RenderWidth = layout.Width,
+                RenderHeight = layout.Height,
+                RenderOffsetX = -layout.CollisionOffsetX,
+                RenderOffsetY = -layout.CollisionOffsetY
             };
 
             if (layout.IsTriangular)
             {
-                // The conifer sprite fills a rectangular bitmap, but its
-                // visible silhouette is a triangle: narrow at the crown and
-                // broad at the bottom.
                 obstacle.Type = "Polygon";
                 obstacle.PolygonPoints =
                 [
-                    new PointF(layout.CenterX, top),
+                    new PointF(centerX, top),
                     new PointF(right, bottom),
                     new PointF(left, bottom)
                 ];
             }
-            else
-            {
-                obstacle.Type = "Rect";
-            }
 
-            obstacle.LeftTop = new PointF(left, top);
-            obstacle.LeftBottom = new PointF(left, bottom);
-            obstacle.RightTop = new PointF(right, top);
-            obstacle.RightBottom = new PointF(right, bottom);
             Obstacles.Add(obstacle);
         }
     }
 
-    private MapBuilding AddGameplayReference(
-        string type,
-        float left,
-        float top,
-        float right,
-        float bottom)
+    /// <summary>
+    /// Returns stable, collision-free role spawn slots, first near the station's
+    /// front apron or the central road, then in outward rings if props occupy a slot.
+    /// </summary>
+    public PointF GetSpawnPosition(PlayerRole role, int slot, float radius)
     {
-        var building = new MapBuilding
-        {
-            Type = type,
-            ImageFileName = string.Empty,
-            LeftTop = new PointF(left, top),
-            RightBottom = new PointF(right, bottom),
-            CollisionWidth = right - left,
-            CollisionHeight = bottom - top,
-            IsVisible = false,
-            BlocksMovement = false,
-            BlocksVision = false
-        };
+        if (role is not (PlayerRole.Police or PlayerRole.Robber))
+            throw new ArgumentOutOfRangeException(nameof(role));
+        if (slot < 0) throw new ArgumentOutOfRangeException(nameof(slot));
+        if (!float.IsFinite(radius) || radius <= 0f || radius * 2f > MathF.Min(Width, Height))
+            throw new ArgumentOutOfRangeException(nameof(radius));
 
-        Buildings.Add(building);
-        return building;
+        var stationBounds = GetBuildingCollisionBounds(PoliceStation);
+        var anchor = role == PlayerRole.Police
+            ? new PointF(PoliceStation.CollisionCenter.X, stationBounds.Bottom + MathF.Max(100f, radius + 20f))
+            : new PointF(Width / 2f, Height / 2f);
+        var gap = MathF.Max(150f, radius * 2f + 20f);
+        var maxRing = (int)MathF.Ceiling(MathF.Max(Width, Height) / gap) + 1;
+        var nearby = new List<Obstacle>();
+        var availableSlot = 0;
+
+        for (var ring = 0; ring <= maxRing; ring++)
+        {
+            foreach (var offset in EnumerateSpawnRing(ring))
+            {
+                var x = anchor.X + offset.X * gap;
+                var y = anchor.Y + offset.Y * gap;
+                if (IsMovementPositionBlocked(x, y, radius, nearby)) continue;
+                if (availableSlot++ == slot) return new PointF(x, y);
+            }
+        }
+
+        throw new InvalidOperationException($"The map has no free spawn slot {slot} for {role}.");
+    }
+
+    private static IEnumerable<(int X, int Y)> EnumerateSpawnRing(int ring)
+    {
+        if (ring == 0)
+        {
+            yield return (0, 0);
+            yield break;
+        }
+
+        // Prefer the station frontage before searching above or below it.
+        yield return (-ring, 0);
+        yield return (ring, 0);
+        for (var y = 1; y < ring; y++)
+        {
+            yield return (-ring, y);
+            yield return (ring, y);
+            yield return (-ring, -y);
+            yield return (ring, -y);
+        }
+        for (var x = -ring; x <= ring; x++)
+        {
+            yield return (x, ring);
+            yield return (x, -ring);
+        }
     }
 
     private void AddLabelMeCentralColliders()
@@ -497,6 +509,8 @@ public class GameMap
 
         if (obstacle.Type == "Circle")
         {
+            if (obstacle.EffectiveRadiusY != obstacle.Radius)
+                return GetDistanceSquaredToEllipse(x, y, obstacle.CenterX, obstacle.Radius, obstacle.EffectiveRadiusY) < radius * radius;
             var distanceX = x - obstacle.CenterX.X;
             var distanceY = y - obstacle.CenterX.Y;
             var combinedRadius = radius + obstacle.Radius;
@@ -504,6 +518,28 @@ public class GameMap
         }
 
         return false;
+    }
+
+    // A source circle may be scaled slightly differently in X/Y by the authored sprite rectangle.
+    // Use its exact affine ellipse instead of changing the requested source radius or expanding its AABB.
+    public static float GetDistanceSquaredToEllipse(float x, float y, PointF center, float radiusX, float radiusY)
+    {
+        if (radiusX <= 0 || radiusY <= 0) return float.PositiveInfinity;
+        var px = Math.Abs((double)x - center.X); var py = Math.Abs((double)y - center.Y);
+        var a2 = (double)radiusX * radiusX; var b2 = (double)radiusY * radiusY;
+        if (px * px / a2 + py * py / b2 <= 1) return 0;
+        // The closest exterior point solves a monotone Lagrange-multiplier equation.
+        var low = 0d; var high = 2 * Math.Max(radiusX * px, radiusY * py);
+        for (var i = 0; i < 40; i++)
+        {
+            var t = (low + high) / 2;
+            var nx = radiusX * px / (t + a2); var ny = radiusY * py / (t + b2);
+            if (nx * nx + ny * ny > 1) low = t;
+            else high = t;
+        }
+        var lambda = (low + high) / 2;
+        var dx = px - a2 * px / (lambda + a2); var dy = py - b2 * py / (lambda + b2);
+        return (float)(dx * dx + dy * dy);
     }
 
     public Obstacle? FindBushContainingPoint(float x, float y)
@@ -541,7 +577,8 @@ public class GameMap
         {
             var dx = x - obstacle.CenterX.X;
             var dy = y - obstacle.CenterX.Y;
-            return (dx * dx) + (dy * dy) <= obstacle.Radius * obstacle.Radius;
+            return dx * dx / (obstacle.Radius * obstacle.Radius) +
+                dy * dy / (obstacle.EffectiveRadiusY * obstacle.EffectiveRadiusY) <= 1;
         }
 
         return false;
@@ -1384,9 +1421,9 @@ public class GameMap
         {
             return (
                 obstacle.CenterX.X - obstacle.Radius,
-                obstacle.CenterX.Y - obstacle.Radius,
+                obstacle.CenterX.Y - obstacle.EffectiveRadiusY,
                 obstacle.CenterX.X + obstacle.Radius,
-                obstacle.CenterX.Y + obstacle.Radius);
+                obstacle.CenterX.Y + obstacle.EffectiveRadiusY);
         }
 
         return (
@@ -1531,7 +1568,17 @@ public readonly record struct MapPropLayout(
     float CenterY,
     float Width,
     float Height,
-    bool IsTriangular = false);
+    bool IsTriangular = false,
+    string CollisionShape = "Rect",
+    float CollisionWidth = 0f,
+    float CollisionHeight = 0f,
+    float CollisionOffsetX = 0f,
+    float CollisionOffsetY = 0f,
+    float CollisionRadius = 0f,
+    string? BuildingType = null,
+    bool BlocksMovement = true,
+    float CollisionRadiusY = 0f,
+    PointF[]? CollisionPolygon = null);
 
 public class MapBuilding
 {
@@ -1592,6 +1639,8 @@ public class Obstacle
     public PointF CenterY { get; set; }
     public PointF[] PolygonPoints { get; set; } = [];
     public float Radius { get; set; }
+    public float RadiusY { get; set; }
+    public float EffectiveRadiusY => RadiusY > 0f ? RadiusY : Radius;
     public float RenderWidth { get; set; }
     public float RenderHeight { get; set; }
     public float RenderOffsetX { get; set; }
