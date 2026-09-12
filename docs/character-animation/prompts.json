@@ -1,0 +1,18 @@
+{
+  "mode": "built-in image_gen (edit)",
+  "prompts": [
+    {
+      "key": "fixed-police-prompt",
+      "prompt": "Use case: precise-object-edit. Asset type: fixed torso-and-head layer for 2D top-down game animation. Input image: edit target, supplied police running sprite. Remove BOTH entire arms and BOTH hands completely, leaving only the exact original HEAD and TORSO together as a single armless rounded body, ready to attach independently animated arms. Preserve the existing hat/head/face/band and blue uniform, gold badge and black belt with gold buckle. Reconstruct smooth clean side contours where the arms were attached, naturally following the torso's round shape. Same top-down camera, drawing style, black/dark outlines, original proportions, colors and details. NO arms, NO hands, NO legs, NO arm stumps. This is a layered animation base, not a new pose. Center one body in same square framing. Genuinely transparent background; no checkerboard, no glow, no shadow, no floor, no text. Fine clean antialiased edges. "
+    },
+    {
+      "key": "fixed-robber-prompt",
+      "prompt": "Use case: precise-object-edit. Asset type: fixed torso-and-head layer for 2D top-down game animation. Input image: edit target, supplied robber running sprite. Remove BOTH entire arms and BOTH hands completely, leaving only the exact original HEAD and TORSO together as a single armless rounded body, ready to attach independently animated arms. Preserve the existing hat/head/face/band and black mask, grey head band and grey chest stripe. Reconstruct smooth clean side contours where the arms were attached, naturally following the torso's round shape. Same top-down camera, drawing style, black/dark outlines, original proportions, colors and details. NO arms, NO hands, NO legs, NO arm stumps. This is a layered animation base, not a new pose. Center one body in same square framing. Genuinely transparent background; no checkerboard, no glow, no shadow, no floor, no text. Fine clean antialiased edges. Preserve the two eye openings as transparent holes."
+    },
+    {
+      "key": "robber-jailbreak-arms-prompt",
+      "prompt": "Use case: precise-object-edit. Input image is the EDIT TARGET. Create a clean isolated animation OVERLAY LAYER containing ONLY both black-sleeved arms, both hands, the gold key and the dark padlock from this source. Remove the entire head, hat, face and torso, leaving true transparency where they were. Keep the arms, hands and props in their original relative positions and exact same scale on the original square canvas; do not crop, recenter, rearrange or enlarge them. Keep their original outlines, cartoon top-down perspective, shapes and shading. Complete any arm ends that were hidden under the head/torso only by a small rounded sleeve joint suitable for hiding under a body layer. No extra arm, no body, no head, no face, no band, no chest stripe. Remove all glow, halos, cast shadows, floor and background. True transparent background, crisp smooth antialiasing. This is a detachable limb-and-prop layer for the existing character animation, not a whole character."
+    }
+  ]
+}
+

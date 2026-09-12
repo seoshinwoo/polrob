@@ -1,5 +1,9 @@
 # 달리기 캐릭터 외곽 정리
 
+> 이 문서는 627px 달리기 에셋의 이전 외곽 정리 기록이다. 현재 기본·달리기·특수 동작은
+> [공통 몸체를 사용하는 1024px 규격](../character-animation/README.md)으로 교체됐다.
+> `preview.html`도 현재 규격의 전체 동작을 확인하도록 갱신했다.
+
 2026-09-11. `Resources/Raw/char_police_run_1.png`–`8.png` 및
 `char_robber_run_1.png`–`8.png` 총 16개를 교체했다.
 

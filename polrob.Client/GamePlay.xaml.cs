@@ -79,8 +79,9 @@ public partial class GamePlay : ContentPage
     private readonly SKBitmap?[,] _terrainTiles = new SKBitmap?[4, 4];
     private readonly Dictionary<SKBitmap, SKRect> _spriteVisibleBounds = new();
     private readonly Dictionary<string, SKBitmap?> _mapPropBitmaps = new(StringComparer.Ordinal);
-    private static readonly float[] PoliceRunBodyWidths = [475f, 470f, 466f, 464f, 466f, 470f, 475f, 470f];
-    private static readonly float[] RobberRunBodyWidths = [418f, 409f, 402f, 411f, 402f, 409f, 418f, 409f];
+    // Every character frame has a 1024px canvas, a 512px body width and
+    // the same body pivot. Arm poses never change the body's scale or anchor.
+    private static readonly PlayerSpriteProfile NormalizedPlayerSpriteProfile = new(512f, 512f, 512f);
 
     private static readonly MapPropLayout[] MapPropPlacements = GameMap.PropLayouts;
 
@@ -579,7 +580,7 @@ public partial class GamePlay : ContentPage
             _robberIdleBitmap = await LoadBitmapAsync("char_robber.png");
             _policeArrestBitmap = await LoadBitmapAsync("char_police_arrest.png");
             _robberSurrendBitmap = await LoadBitmapAsync("char_robber_surrend.png");
-            _robberPrisonBreakBitmap = await LoadBitmapAsync("char_robber_prison-break.png");
+            _robberPrisonBreakBitmap = await LoadBitmapAsync("char_robber_prison_break.png");
             foreach (var assetPath in MapPropPlacements
                 .Select(placement => placement.AssetPath)
                 .Where(path => !string.IsNullOrEmpty(path))
@@ -1372,7 +1373,6 @@ public partial class GamePlay : ContentPage
 
             // 플레이어 렌더링
             SKBitmap? currentBitmap = null;
-            var spriteProfile = default(PlayerSpriteProfile);
             bool isArrested = _arrestVisualTimers.TryGetValue(player.Id, out var arrestEnd) && DateTime.Now < arrestEnd;
             bool isJailBreaking = _jailBreakVisualTimers.TryGetValue(player.Id, out var jailBreakEnd) && DateTime.Now < jailBreakEnd;
 
@@ -1384,14 +1384,10 @@ public partial class GamePlay : ContentPage
             if (isArrested)
             {
                 currentBitmap = player.Role == PlayerRole.Police ? _policeArrestBitmap : _robberSurrendBitmap;
-                spriteProfile = player.Role == PlayerRole.Police
-                    ? new PlayerSpriteProfile(521f, 512f, 450f)
-                    : new PlayerSpriteProfile(510f, 512f, 505f);
             }
             else if (isJailBreaking && player.Role == PlayerRole.Robber)
             {
                 currentBitmap = _robberPrisonBreakBitmap;
-                spriteProfile = new PlayerSpriteProfile(460f, 512f, 440f);
             }
             else if (player.Role == PlayerRole.Police)
             {
@@ -1399,15 +1395,10 @@ public partial class GamePlay : ContentPage
                 {
                     var frameIndex = _runFramePattern[_currentRunFrameIndex];
                     currentBitmap = _policeRunBitmaps[frameIndex];
-                    spriteProfile = new PlayerSpriteProfile(
-                        PoliceRunBodyWidths[frameIndex],
-                        313.5f,
-                        297f);
                 }
                 else
                 {
                     currentBitmap = _policeIdleBitmap;
-                    spriteProfile = new PlayerSpriteProfile(562f, 512f, 500f);
                 }
             }
             else if (player.Role == PlayerRole.Robber)
@@ -1416,15 +1407,10 @@ public partial class GamePlay : ContentPage
                 {
                     var frameIndex = _runFramePattern[_currentRunFrameIndex];
                     currentBitmap = _robberRunBitmaps[frameIndex];
-                    spriteProfile = new PlayerSpriteProfile(
-                        RobberRunBodyWidths[frameIndex],
-                        313.5f,
-                        270f);
                 }
                 else
                 {
                     currentBitmap = _robberIdleBitmap;
-                    spriteProfile = new PlayerSpriteProfile(527f, 512f, 510f);
                 }
             }
 
@@ -1434,13 +1420,13 @@ public partial class GamePlay : ContentPage
                 canvas.Translate(player.X, player.Y);
                 canvas.RotateDegrees(player.Angle);
 
-                // Props and outstretched arms must not make the character body shrink.
-                // Every state uses the same on-screen body width and a stable body pivot;
-                // pose-specific artwork is allowed to extend beyond the collision circle.
+                // The normalized body keeps its size and pivot in every state.
+                // Visible-bound cropping only skips transparent pixels; outstretched
+                // arms can extend beyond the collision circle without affecting scale.
                 var sourceRect = GetVisibleSpriteBounds(currentBitmap);
                 var destRect = CreatePlayerDestinationRect(
                     sourceRect,
-                    spriteProfile,
+                    NormalizedPlayerSpriteProfile,
                     player.Radius * 2f);
                 if (isInsideBush)
                 {

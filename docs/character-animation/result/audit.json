@@ -1,0 +1,401 @@
+[
+  {
+    "name": "char_police.png",
+    "width": 1024,
+    "height": 1024,
+    "bodyWidth": 512,
+    "pivot": [
+      512,
+      512
+    ],
+    "comparisonRegion": "opaque shared body",
+    "changedProtectedPixels": 0,
+    "connectedComponentsAtAlpha32": 1,
+    "bounds": [
+      208,
+      222,
+      816,
+      802
+    ]
+  },
+  {
+    "name": "char_police_run_1.png",
+    "width": 1024,
+    "height": 1024,
+    "bodyWidth": 512,
+    "pivot": [
+      512,
+      512
+    ],
+    "comparisonRegion": "opaque shared body",
+    "changedProtectedPixels": 0,
+    "connectedComponentsAtAlpha32": 1,
+    "bounds": [
+      208,
+      222,
+      816,
+      802
+    ]
+  },
+  {
+    "name": "char_police_run_2.png",
+    "width": 1024,
+    "height": 1024,
+    "bodyWidth": 512,
+    "pivot": [
+      512,
+      512
+    ],
+    "comparisonRegion": "opaque shared body",
+    "changedProtectedPixels": 0,
+    "connectedComponentsAtAlpha32": 1,
+    "bounds": [
+      196,
+      222,
+      802,
+      802
+    ]
+  },
+  {
+    "name": "char_police_run_3.png",
+    "width": 1024,
+    "height": 1024,
+    "bodyWidth": 512,
+    "pivot": [
+      512,
+      512
+    ],
+    "comparisonRegion": "opaque shared body",
+    "changedProtectedPixels": 0,
+    "connectedComponentsAtAlpha32": 1,
+    "bounds": [
+      191,
+      222,
+      796,
+      802
+    ]
+  },
+  {
+    "name": "char_police_run_4.png",
+    "width": 1024,
+    "height": 1024,
+    "bodyWidth": 512,
+    "pivot": [
+      512,
+      512
+    ],
+    "comparisonRegion": "opaque shared body",
+    "changedProtectedPixels": 0,
+    "connectedComponentsAtAlpha32": 1,
+    "bounds": [
+      196,
+      222,
+      802,
+      802
+    ]
+  },
+  {
+    "name": "char_police_run_5.png",
+    "width": 1024,
+    "height": 1024,
+    "bodyWidth": 512,
+    "pivot": [
+      512,
+      512
+    ],
+    "comparisonRegion": "opaque shared body",
+    "changedProtectedPixels": 0,
+    "connectedComponentsAtAlpha32": 1,
+    "bounds": [
+      208,
+      222,
+      816,
+      802
+    ]
+  },
+  {
+    "name": "char_police_run_6.png",
+    "width": 1024,
+    "height": 1024,
+    "bodyWidth": 512,
+    "pivot": [
+      512,
+      512
+    ],
+    "comparisonRegion": "opaque shared body",
+    "changedProtectedPixels": 0,
+    "connectedComponentsAtAlpha32": 1,
+    "bounds": [
+      222,
+      222,
+      828,
+      802
+    ]
+  },
+  {
+    "name": "char_police_run_7.png",
+    "width": 1024,
+    "height": 1024,
+    "bodyWidth": 512,
+    "pivot": [
+      512,
+      512
+    ],
+    "comparisonRegion": "opaque shared body",
+    "changedProtectedPixels": 0,
+    "connectedComponentsAtAlpha32": 1,
+    "bounds": [
+      228,
+      222,
+      833,
+      802
+    ]
+  },
+  {
+    "name": "char_police_run_8.png",
+    "width": 1024,
+    "height": 1024,
+    "bodyWidth": 512,
+    "pivot": [
+      512,
+      512
+    ],
+    "comparisonRegion": "opaque shared body",
+    "changedProtectedPixels": 0,
+    "connectedComponentsAtAlpha32": 1,
+    "bounds": [
+      222,
+      222,
+      828,
+      802
+    ]
+  },
+  {
+    "name": "char_police_arrest.png",
+    "width": 1024,
+    "height": 1024,
+    "bodyWidth": 512,
+    "pivot": [
+      512,
+      512
+    ],
+    "comparisonRegion": "central head, excluding foreground arms",
+    "changedProtectedPixels": 0,
+    "connectedComponentsAtAlpha32": 1,
+    "bounds": [
+      242,
+      222,
+      782,
+      953
+    ]
+  },
+  {
+    "name": "char_robber.png",
+    "width": 1024,
+    "height": 1024,
+    "bodyWidth": 512,
+    "pivot": [
+      512,
+      512
+    ],
+    "comparisonRegion": "opaque shared body",
+    "changedProtectedPixels": 0,
+    "connectedComponentsAtAlpha32": 1,
+    "bounds": [
+      207,
+      232,
+      817,
+      792
+    ]
+  },
+  {
+    "name": "char_robber_run_1.png",
+    "width": 1024,
+    "height": 1024,
+    "bodyWidth": 512,
+    "pivot": [
+      512,
+      512
+    ],
+    "comparisonRegion": "opaque shared body",
+    "changedProtectedPixels": 0,
+    "connectedComponentsAtAlpha32": 1,
+    "bounds": [
+      207,
+      232,
+      817,
+      792
+    ]
+  },
+  {
+    "name": "char_robber_run_2.png",
+    "width": 1024,
+    "height": 1024,
+    "bodyWidth": 512,
+    "pivot": [
+      512,
+      512
+    ],
+    "comparisonRegion": "opaque shared body",
+    "changedProtectedPixels": 0,
+    "connectedComponentsAtAlpha32": 1,
+    "bounds": [
+      196,
+      232,
+      806,
+      792
+    ]
+  },
+  {
+    "name": "char_robber_run_3.png",
+    "width": 1024,
+    "height": 1024,
+    "bodyWidth": 512,
+    "pivot": [
+      512,
+      512
+    ],
+    "comparisonRegion": "opaque shared body",
+    "changedProtectedPixels": 0,
+    "connectedComponentsAtAlpha32": 1,
+    "bounds": [
+      193,
+      232,
+      802,
+      792
+    ]
+  },
+  {
+    "name": "char_robber_run_4.png",
+    "width": 1024,
+    "height": 1024,
+    "bodyWidth": 512,
+    "pivot": [
+      512,
+      512
+    ],
+    "comparisonRegion": "opaque shared body",
+    "changedProtectedPixels": 0,
+    "connectedComponentsAtAlpha32": 1,
+    "bounds": [
+      196,
+      232,
+      806,
+      792
+    ]
+  },
+  {
+    "name": "char_robber_run_5.png",
+    "width": 1024,
+    "height": 1024,
+    "bodyWidth": 512,
+    "pivot": [
+      512,
+      512
+    ],
+    "comparisonRegion": "opaque shared body",
+    "changedProtectedPixels": 0,
+    "connectedComponentsAtAlpha32": 1,
+    "bounds": [
+      207,
+      232,
+      817,
+      792
+    ]
+  },
+  {
+    "name": "char_robber_run_6.png",
+    "width": 1024,
+    "height": 1024,
+    "bodyWidth": 512,
+    "pivot": [
+      512,
+      512
+    ],
+    "comparisonRegion": "opaque shared body",
+    "changedProtectedPixels": 0,
+    "connectedComponentsAtAlpha32": 1,
+    "bounds": [
+      218,
+      232,
+      828,
+      792
+    ]
+  },
+  {
+    "name": "char_robber_run_7.png",
+    "width": 1024,
+    "height": 1024,
+    "bodyWidth": 512,
+    "pivot": [
+      512,
+      512
+    ],
+    "comparisonRegion": "opaque shared body",
+    "changedProtectedPixels": 0,
+    "connectedComponentsAtAlpha32": 1,
+    "bounds": [
+      222,
+      232,
+      831,
+      792
+    ]
+  },
+  {
+    "name": "char_robber_run_8.png",
+    "width": 1024,
+    "height": 1024,
+    "bodyWidth": 512,
+    "pivot": [
+      512,
+      512
+    ],
+    "comparisonRegion": "opaque shared body",
+    "changedProtectedPixels": 0,
+    "connectedComponentsAtAlpha32": 1,
+    "bounds": [
+      218,
+      232,
+      828,
+      792
+    ]
+  },
+  {
+    "name": "char_robber_surrend.png",
+    "width": 1024,
+    "height": 1024,
+    "bodyWidth": 512,
+    "pivot": [
+      512,
+      512
+    ],
+    "comparisonRegion": "opaque shared body",
+    "changedProtectedPixels": 0,
+    "connectedComponentsAtAlpha32": 1,
+    "bounds": [
+      104,
+      232,
+      910,
+      792
+    ]
+  },
+  {
+    "name": "char_robber_prison_break.png",
+    "width": 1024,
+    "height": 1024,
+    "bodyWidth": 512,
+    "pivot": [
+      512,
+      512
+    ],
+    "comparisonRegion": "central head, excluding foreground arms",
+    "changedProtectedPixels": 0,
+    "connectedComponentsAtAlpha32": 1,
+    "bounds": [
+      235,
+      232,
+      790,
+      935
+    ]
+  }
+]
