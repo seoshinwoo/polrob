@@ -79,9 +79,9 @@ public partial class GamePlay : ContentPage
     private readonly SKBitmap?[,] _terrainTiles = new SKBitmap?[4, 4];
     private readonly Dictionary<SKBitmap, SKRect> _spriteVisibleBounds = new();
     private readonly Dictionary<string, SKBitmap?> _mapPropBitmaps = new(StringComparer.Ordinal);
-    // Every character frame has a 1024px canvas, a 512px body width and
+    // Every character frame has a 1088px canvas, a 512px body width and
     // the same body pivot. Arm poses never change the body's scale or anchor.
-    private static readonly PlayerSpriteProfile NormalizedPlayerSpriteProfile = new(512f, 512f, 512f);
+    private static readonly PlayerSpriteProfile NormalizedPlayerSpriteProfile = new(512f, 544f, 544f);
 
     private static readonly MapPropLayout[] MapPropPlacements = GameMap.PropLayouts;
 
@@ -92,8 +92,8 @@ public partial class GamePlay : ContentPage
     // 화면 중앙 체포 텍스트 표시 목표 시간
     private DateTime _showArrestedTextUntil = DateTime.MinValue;
 
-    // Four arm-swing poses play forward and then backward, keeping the
-    // top-down body fixed while motion is communicated only by the arms.
+    // Eight samples of a continuous arm-swing cycle keep the original
+    // top-down head and torso fixed while only the arms communicate motion.
     private int[] _runFramePattern = { 0, 1, 2, 3, 4, 5, 6, 7 };
     private int _currentRunFrameIndex = 0;
     private float _animationTimer = 0f;
@@ -170,7 +170,7 @@ public partial class GamePlay : ContentPage
             X = _gameMap.Width / 2f,
             Y = _gameMap.Height / 2f,
             Speed = 7f,
-            Radius = 50f,
+            Radius = 25f,
             Role = _selectedRole,
             Angle = 0f,
             IsMoving = false

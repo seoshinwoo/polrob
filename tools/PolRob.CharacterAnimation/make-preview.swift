@@ -28,9 +28,9 @@ if arguments.count > 2 {
 let input = URL(fileURLWithPath: arguments.first ?? "docs/character-animation/result", isDirectory: true)
 let output = URL(fileURLWithPath: arguments.dropFirst().first ?? "docs/character-animation/animation.gif")
 let width = 900, height = 600
-let canvasSize: CGFloat = 1024
+let canvasSize: CGFloat = 1088
 let bodyWidth: CGFloat = 512
-let pivot: CGFloat = 512
+let pivot: CGFloat = 544
 
 let run = (1...8).map { index in
     Pose(police: "char_police_run_\(index).png", robber: "char_robber_run_\(index).png",
@@ -93,7 +93,7 @@ for file in Set(poses.flatMap { [$0.police, $0.robber] }) {
         throw PreviewError("Cannot decode \(url.path)")
     }
     guard image.width == Int(canvasSize), image.height == Int(canvasSize) else {
-        throw PreviewError("Expected 1024×1024: \(file) is \(image.width)×\(image.height)")
+        throw PreviewError("Expected 1088×1088: \(file) is \(image.width)×\(image.height)")
     }
     sprites[file] = image
 }
@@ -131,9 +131,9 @@ for pose in poses {
         guard let sprite = sprites[file] else { throw PreviewError("Missing cached sprite: \(file)") }
         text("\(role) · \(label)", at: center, baseline: 28, in: context, heading: true)
         draw(sprite, centerX: center, centerY: 214, diameter: 190, in: context)
-        text("확대 보기 · 고정된 머리와 몸통", at: center, baseline: 393, in: context)
-        draw(sprite, centerX: center, centerY: 489, diameter: 100, in: context)
-        text("게임 기준 · 지름 100 / 몸통 너비 86", at: center, baseline: 593, in: context)
+        text("확대 보기 · 원본 몸체 고정, 팔만 동작", at: center, baseline: 393, in: context)
+        draw(sprite, centerX: center, centerY: 489, diameter: 50, in: context)
+        text("게임 기준 · 지름 50 / 몸통 너비 43", at: center, baseline: 593, in: context)
     }
     guard let frame = context.makeImage() else { throw PreviewError("Cannot render GIF frame") }
     let properties: [CFString: Any] = [

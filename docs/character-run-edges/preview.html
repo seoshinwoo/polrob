@@ -7,6 +7,7 @@
   :root { color-scheme: dark; font-family: system-ui, sans-serif; }
   body { margin: 24px auto; max-width: 1040px; padding: 0 20px; background: #141b24; color: #edf3fa; }
   h1 { font-size: 24px; margin-bottom: 8px; }
+  h2 { font-size: 19px; margin: 26px 0 8px; }
   p { color: #b7c4d3; line-height: 1.6; }
   .controls { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; margin: 20px 0; }
   button, select { padding: 8px 12px; border: 1px solid #526278; border-radius: 6px; background: #243246; color: white; }
@@ -16,8 +17,9 @@
 </style>
 <h1>캐릭터 전체 동작 · 크기 확인</h1>
 <p>기본·달리기·체포·항복·탈옥 동작을 같은 크기와 중심점으로 이어서 보여줍니다.<br>
-  모든 PNG는 1024×1024, 몸통 기준 너비는 512px, 중심점은 (512, 512)입니다.
-  게임 기준 보기는 플레이어 지름 100 월드 단위, 몸통 너비 86 월드 단위로 그립니다.</p>
+  모든 PNG는 1088×1088, 몸통 기준 너비는 512px, 중심점은 (544, 544)입니다.
+  원본 몸체를 고정하고 팔만 동작하도록 구성했습니다.<br>
+  게임 기준 보기는 플레이어 지름 50 월드 단위, 몸통 너비 43 월드 단위로 그립니다.</p>
 <div class="controls">
   <button id="play">일시 정지</button>
   <label>동작 <select id="sequence"><option value="all">전체 동작</option><option value="run">달리기 반복</option></select></label>
@@ -31,9 +33,13 @@
   경찰의 탈옥 순서에는 기본 동작을 표시합니다.<br>
   아래 작은 이미지는 전체 프레임 목록입니다. <a href="../character-animation/README.md">현재 에셋 규격과 검증 기록</a> ·
   <a href="../character-animation/animation.gif">전체 동작 GIF</a></p>
+<h2>첨부 원본과 새 기본 동작 비교</h2>
+<p>첨부 원본을 새 에셋과 같은 1088×1088 좌표계에 배치해 같은 배율로 비교합니다.
+  머리·몸통의 형태와 색, 목·어깨 부분을 확인할 수 있습니다.</p>
+<canvas id="comparison" width="2080" height="720" aria-label="경찰과 도둑의 첨부 원본과 새 기본 동작 비교"></canvas>
 <script>
 const roles = ['police', 'robber'];
-const bodyWidth = 512, pivot = 512, canvasSize = 1024;
+const bodyWidth = 512, pivot = 544, canvasSize = 1088;
 const runFrames = Array.from({ length: 8 }, (_, i) => ({
   label: `달리기 ${i + 1}`, short: `${i + 1}`, duration: 100,
   police: `char_police_run_${i + 1}.png`, robber: `char_robber_run_${i + 1}.png`
@@ -44,8 +50,10 @@ const allFrames = [
   { label: '체포 / 항복', short: '체포·항복', duration: 700, police: 'char_police_arrest.png', robber: 'char_robber_surrend.png' },
   { label: '탈옥', short: '탈옥', duration: 700, police: 'char_police.png', robber: 'char_robber_prison_break.png' }
 ];
-const canvas = document.querySelector('canvas');
+const canvas = document.querySelector('#preview');
 const context = canvas.getContext('2d');
+const comparison = document.querySelector('#comparison');
+const comparisonContext = comparison.getContext('2d');
 const slider = document.querySelector('#frame');
 const number = document.querySelector('#number');
 const background = document.querySelector('#background');
@@ -56,7 +64,8 @@ const assets = [...new Set(allFrames.flatMap(frame => roles.map(role => frame[ro
 const sprites = {};
 let playing = true, frame = 0, previous = null;
 let frames = allFrames;
-Promise.all(assets.map(file => new Promise((resolve, reject) => {
+function loadSprite(file, url) {
+  return new Promise((resolve, reject) => {
   const image = new Image();
   image.onload = () => {
     if (image.naturalWidth !== canvasSize || image.naturalHeight !== canvasSize) {
@@ -67,9 +76,14 @@ Promise.all(assets.map(file => new Promise((resolve, reject) => {
     resolve();
   };
   image.onerror = () => reject(new Error(`로드 실패: ${file}`));
-  image.src = `../../polrob.Client/Resources/Raw/${file}`;
-}))).then(() => {
-  document.querySelector('#status').textContent = `${assets.length} / ${assets.length} 에셋 로드 완료`;
+  image.src = url;
+  });
+}
+Promise.all([
+  ...assets.map(file => loadSprite(file, `../../polrob.Client/Resources/Raw/${file}`)),
+  ...roles.map(role => loadSprite(`${role}-reference.png`, `../character-animation/result/${role}-reference.png`))
+]).then(() => {
+  document.querySelector('#status').textContent = `${assets.length}개 동작 에셋 · 원본 비교 2개 로드 완료`;
   requestAnimationFrame(tick);
 }).catch(error => { document.querySelector('#status').textContent = error.message; });
 playButton.onclick = () => {
@@ -89,9 +103,13 @@ sequence.onchange = () => {
   slider.max = frames.length;
   previous = null;
 };
+function drawImageAt(image, x, y, diameter, targetContext = context) {
+  const scale = diameter * .86 / bodyWidth;
+  targetContext.drawImage(image, x - pivot * scale, y - pivot * scale, canvasSize * scale, canvasSize * scale);
+}
 function drawSprite(role, pose, x, y, diameter, showGuides = false) {
   const scale = diameter * .86 / bodyWidth;
-  context.drawImage(sprites[pose[role]], x - pivot * scale, y - pivot * scale, canvasSize * scale, canvasSize * scale);
+  drawImageAt(sprites[pose[role]], x, y, diameter);
   if (!showGuides) return;
   const halfWidth = bodyWidth * scale / 2;
   context.save();
@@ -110,6 +128,34 @@ function drawSprite(role, pose, x, y, diameter, showGuides = false) {
   context.stroke();
   context.restore();
 }
+function paintBackground(targetContext, height) {
+  targetContext.setTransform(2, 0, 0, 2, 0, 0);
+  targetContext.imageSmoothingEnabled = true;
+  targetContext.imageSmoothingQuality = 'high';
+  targetContext.fillStyle = background.value === 'light' ? '#faf7ef' : '#101b29';
+  targetContext.fillRect(0, 0, 1040, height);
+  if (background.value === 'checker') {
+    targetContext.fillStyle = '#213e51';
+    for (let y = 0; y < height; y += 12) for (let x = 0; x < 1040; x += 12)
+      if ((x / 12 + y / 12) % 2 === 0) targetContext.fillRect(x, y, 12, 12);
+  }
+}
+function drawComparison() {
+  paintBackground(comparisonContext, 360);
+  comparisonContext.fillStyle = background.value === 'light' ? '#233143' : '#eaf3ff';
+  comparisonContext.textAlign = 'center';
+  roles.forEach((role, column) => {
+    const start = column * 520;
+    comparisonContext.font = '18px system-ui';
+    comparisonContext.fillText(role === 'police' ? '경찰' : '도둑', start + 260, 28);
+    comparisonContext.font = '13px system-ui';
+    comparisonContext.fillText('첨부 원본', start + 130, 60);
+    comparisonContext.fillText('새 기본 동작', start + 390, 60);
+    drawImageAt(sprites[`${role}-reference.png`], start + 130, 205, 200, comparisonContext);
+    drawImageAt(sprites[`char_${role}.png`], start + 390, 205, 200, comparisonContext);
+    comparisonContext.fillText('같은 배율 · 같은 몸체 중심점', start + 260, 342);
+  });
+}
 function tick(time) {
   if (previous === null) previous = time;
   if (playing && time - previous >= frames[frame].duration) {
@@ -118,26 +164,17 @@ function tick(time) {
   }
   slider.value = frame + 1;
   number.textContent = `${frame + 1} / ${frames.length} · ${frames[frame].label}`;
-  context.setTransform(2, 0, 0, 2, 0, 0);
-  context.imageSmoothingEnabled = true;
-  context.imageSmoothingQuality = 'high';
+  paintBackground(context, 760);
   const light = background.value === 'light';
-  context.fillStyle = light ? '#faf7ef' : '#101b29';
-  context.fillRect(0, 0, 1040, 760);
-  if (background.value === 'checker') {
-    context.fillStyle = '#213e51';
-    for (let y = 0; y < 760; y += 12) for (let x = 0; x < 1040; x += 12)
-      if ((x / 12 + y / 12) % 2 === 0) context.fillRect(x, y, 12, 12);
-  }
   roles.forEach((role, column) => {
     const center = 260 + column * 520;
     context.fillStyle = light ? '#233143' : '#eaf3ff';
     context.font = '18px system-ui'; context.textAlign = 'center';
     context.fillText(role === 'police' ? '경찰' : '도둑', center, 30);
     drawSprite(role, frames[frame], center, 235, 220, guides.checked);
-    drawSprite(role, frames[frame], center, 505, 100, guides.checked);
+    drawSprite(role, frames[frame], center, 505, 50, guides.checked);
     context.font = '13px system-ui';
-    context.fillText('게임 기준 · 지름 100 / 몸통 너비 86', center, 620);
+    context.fillText('게임 기준 · 지름 50 / 몸통 너비 43', center, 620);
     for (let i = 0; i < frames.length; i++) {
       const cellWidth = 500 / frames.length;
       const x = column * 520 + 10 + cellWidth * (i + .5);
@@ -147,6 +184,7 @@ function tick(time) {
       context.fillText(frames[i].short, x, 735);
     }
   });
+  drawComparison();
   requestAnimationFrame(tick);
 }
 </script>

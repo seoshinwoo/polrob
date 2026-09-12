@@ -1,0 +1,21 @@
+{
+  "mode": "built-in image_gen (edit)",
+  "purpose": "Segmentation guides only. Every visible color, line, and prop in the final sprites comes from the user's supplied PNG references; generated pixels are never used as character artwork.",
+  "prompts": [
+    {
+      "reference": "pose-reference/police_arrest.png",
+      "output": "pose-reference-masks/police_arrest_body.png",
+      "prompt": "Use case: background-extraction. Asset type: exact registered segmentation mask for a 2D game sprite. Input Image 1 is the edit target. Preserve its 1024×1024 canvas and exact pixel registration. Output ONLY a binary-looking mask: solid pure WHITE for the police HEAD + NECK + TORSO including the complete rounded side/waist silhouette, and pure BLACK for both arms, both hands, the gun, glow, and background. Follow the visible seam where the forward arms meet the torso. Fill all internal face, hat, badge, and belt details white. No character rendering, no colors, no checkerboard, no shadow, no glow, no text. Smooth antialiased boundary. Do not change scale, position, anatomy, or silhouette."
+    },
+    {
+      "reference": "pose-reference/robber_surrend.png",
+      "output": "pose-reference-masks/robber_surrend_body.png",
+      "prompt": "Use case: background-extraction. Asset type: exact registered segmentation mask for a 2D game sprite. Input Image 1 is the edit target. Preserve its 1024×1024 canvas and exact pixel registration. Output ONLY a binary-looking mask: solid pure WHITE for the robber HEAD + NECK + TORSO including the complete rounded side/waist silhouette, and pure BLACK for both raised arms, both hands, glow, and background. Follow the visible shoulder seams where the raised arms meet the torso. Fill internal face, eye openings, beanie, head band, mask and chest band white. No character rendering, no colors, no checkerboard, no shadow, no glow, no text. Smooth antialiased boundary. Do not change scale, position, anatomy, or silhouette."
+    },
+    {
+      "reference": "pose-reference/robber_prison_break.png",
+      "output": "pose-reference-masks/robber_prison_break_arms.png",
+      "prompt": "Use case: background-extraction. Asset type: exact registered segmentation mask for a 2D game sprite overlay. Input Image 1 is the edit target. Preserve its 1024×1024 canvas and exact pixel registration. Output ONLY a binary-looking mask: solid pure WHITE for both robber sleeves/arms, both hands, the gold key, and the dark padlock; pure BLACK for the entire head, face, beanie, head band, neck/chest/torso, glow, and background. Follow the two natural diagonal shoulder seams beneath the face exactly so the arms begin at their original shoulder locations. No character rendering, no colors, no checkerboard, no shadow, no glow, no text. Smooth antialiased boundary. Do not move, resize, redraw, or change the arm anatomy."
+    }
+  ]
+}

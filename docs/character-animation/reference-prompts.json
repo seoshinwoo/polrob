@@ -1,0 +1,18 @@
+{
+  "mode": "built-in image_gen (edit)",
+  "purpose": "Segmentation guides only; final torso RGB comes from the unchanged attached originals. Generated masks were fitted to the source seams, not directly applied.",
+  "prompts": [
+    {
+      "role": "police",
+      "reference": "reference/police.png",
+      "output": "reference-masks/police.png",
+      "prompt": "Use case: background-extraction. Produce only a precise black-and-white SEGMENTATION MASK for the supplied existing police character sprite, not a redesigned character. Exactly preserve full square canvas, registration, scale and all original geometry. Paint the existing HEAD + NECK + TORSO silhouette solid pure WHITE. Paint BOTH ARMS, BOTH HANDS and ALL BACKGROUND pure BLACK. Follow the visible curved boundary separating each sleeve from the central body/shoulder; retain the existing body's full width and curvature. Include hat/face/headband/chest/belt inside white body. Fill interior face/eye details white too. No drawn anatomy, no new neck or collar, no outlines inside mask, no colors, no checkerboard, no shadows, no glow. Mask should have smoothly antialiased outer boundary and preserve source-relative pixels as closely as possible. It will select ORIGINAL RGB pixels so body identity must never change."
+    },
+    {
+      "role": "robber",
+      "reference": "reference/robber.png",
+      "output": "reference-masks/robber.png",
+      "prompt": "Use case: background-extraction. Produce only a precise black-and-white SEGMENTATION MASK for the supplied existing robber character sprite, not a redesigned character. Exactly preserve full square canvas, registration, scale and all original geometry. Paint the existing HEAD + NECK + TORSO silhouette solid pure WHITE. Paint BOTH ARMS, BOTH HANDS and ALL BACKGROUND pure BLACK. Follow the visible curved boundary separating each sleeve from the central body/shoulder; retain the existing body's full width and curvature. Include hat/face/headband/chest/belt inside white body. Fill interior face/eye details white too. No drawn anatomy, no new neck or collar, no outlines inside mask, no colors, no checkerboard, no shadows, no glow. Mask should have smoothly antialiased outer boundary and preserve source-relative pixels as closely as possible. It will select ORIGINAL RGB pixels so body identity must never change."
+    }
+  ]
+}
