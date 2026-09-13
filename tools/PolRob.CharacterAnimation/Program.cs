@@ -31,6 +31,8 @@ foreach (var role in new[] { "police", "robber" })
     var target = SKRect.Create(pivot - bodyWidth / 2, pivot - bounds.Height * scale / 2, bodyWidth, bounds.Height * scale);
     using var cutBody = NewBitmap();
     using (var canvas = new SKCanvas(cutBody)) DrawRegion(canvas, isolated, bounds, target);
+    if (Environment.GetEnvironmentVariable("POLROB_INSPECTION") == "1")
+        Save(cutBody, Path.Combine(output, $"{role}-cut-body.png"));
     using var body = ExtendBodySides(cutBody, role);
     Save(body, Path.Combine(output, $"{role}-body.png"));
     var registration = SKMatrix.CreateScaleTranslation(scale, scale, pivot - bounds.MidX * scale, pivot - bounds.MidY * scale);
@@ -57,6 +59,22 @@ foreach (var role in new[] { "police", "robber" })
         Draw(canvas, sourceIdentity, new SKRect(0, 0, 660, 660));
     }
     ExcludeReconstructedPixels(identityMask, cutBody, body);
+    using var headbandIdentityMask = NewBitmap();
+    if (role == "robber")
+    {
+        // The beanie band and its two tapered end caps belong exclusively to
+        // the fixed head. Restore that exact source region after side repair
+        // so neither a donor torso nor a moving sleeve can extend it downward.
+        using var headbandPath = ReferenceHeadbandPath();
+        using (var canvas = new SKCanvas(headbandIdentityMask))
+        {
+            canvas.SetMatrix(registration);
+            canvas.ClipPath(headbandPath, antialias: true);
+            Draw(canvas, sourceIdentity, new SKRect(0, 0, 660, 660));
+        }
+        MergeIdentityMask(identityMask, headbandIdentityMask);
+        Save(headbandIdentityMask, Path.Combine(output, "robber-headband-identity-mask.png"));
+    }
     Save(identityMask, Path.Combine(output, $"{role}-identity-mask.png"));
     using var headIdentityMask = NewBitmap();
     for (var y = 0; y < size; y++) for (var x = 0; x < size; x++)
@@ -69,23 +87,34 @@ foreach (var role in new[] { "police", "robber" })
         var name = frame == 0 ? $"char_{role}.png" : $"char_{role}_run_{frame}.png";
         using var result = NewBitmap();
         using var canvas = new SKCanvas(result);
-        // The completed round torso is the back layer. Moving sleeves cover
-        // it naturally; the protected central original is restored below.
-        canvas.DrawBitmap(body, 0, 0);
         var phase = frame == 0 ? 0 : MathF.Sin((frame - 1) * MathF.PI / 4);
-        for (var side = -1; side <= 1; side += 2)
+        if (MathF.Abs(phase) < .0001f)
         {
-            canvas.Save();
-            canvas.SetMatrix(registration);
-            var shoulderX = side < 0 ? 90 : 570;
-            canvas.Translate(shoulderX, 290);
-            canvas.RotateDegrees(phase * 6);
-            canvas.Scale(1, 1 + phase * side * .10f);
-            canvas.Translate(-shoulderX, -290);
-            Draw(canvas, side < 0 ? leftArm : rightArm, new SKRect(0, 0, 660, 660));
-            canvas.Restore();
+            // Idle and the two neutral points of the eight-frame cycle are
+            // the registered source itself.  Re-compositing segmented pieces
+            // here needlessly exposed tiny seams at the hand/waist joins.
+            canvas.DrawBitmap(reference, 0, 0);
         }
-        PreserveIdentity(result, reference, identityMask);
+        else
+        {
+            // The completed round torso is the back layer. Moving sleeves
+            // cover it naturally; the protected central original is restored
+            // below.
+            canvas.DrawBitmap(body, 0, 0);
+            for (var side = -1; side <= 1; side += 2)
+            {
+                canvas.Save();
+                canvas.SetMatrix(registration);
+                var shoulderX = side < 0 ? 90 : 570;
+                canvas.Translate(shoulderX, 290);
+                canvas.RotateDegrees(phase * 6);
+                canvas.Scale(1, 1 + phase * side * .10f);
+                canvas.Translate(-shoulderX, -290);
+                Draw(canvas, side < 0 ? leftArm : rightArm, new SKRect(0, 0, 660, 660));
+                canvas.Restore();
+            }
+            PreserveIdentity(result, reference, identityMask);
+        }
         SaveAndValidate(result, name, false, reference, identityMask, protectedHead);
         names.Add(name);
     }
@@ -143,7 +172,14 @@ foreach (var role in new[] { "police", "robber" })
         }
     }
     var specialName = $"char_{role}_{special}.png";
-    ComposeSpecial(specialLayer, body, specialName, role == "police", reference, identityMask, protectedHead);
+    if (role == "police")
+    {
+        using var arrestProtectedFace = ReferenceFacePath("police");
+        arrestProtectedFace.Transform(registration);
+        SaveMask(arrestProtectedFace, Path.Combine(output, "police-arrest-protected-face-mask.png"));
+        ComposeSpecial(specialLayer, body, specialName, true, reference, identityMask, arrestProtectedFace);
+    }
+    else ComposeSpecial(specialLayer, body, specialName, false, reference, identityMask, protectedHead);
     names.Add(specialName);
     if (role == "robber")
     {
@@ -152,7 +188,15 @@ foreach (var role in new[] { "police", "robber" })
         // The generated guide identifies the parts, while a small expansion
         // lets the supplied source alpha—not the generated contour—define the
         // exact outside edge of the sleeves, cuffs, key, and lock.
-        using var jailArms = ClipByGuide(jailSource, jailGuide, 20);
+        using var jailArms = ClipByGuide(jailSource, jailGuide, 20,
+        [
+            // Generated guide gaps at the two sleeve/hand joins.
+            (323, 637, 333, 659),
+            (674, 651, 695, 683),
+            // Small missing pieces on the key shaft/teeth.
+            (479, 775, 489, 779),
+            (496, 790, 503, 801)
+        ]);
         RemoveSmallComponents(jailArms, 32, 100);
         using var jailLayer = NewBitmap();
         using (var canvas = new SKCanvas(jailLayer))
@@ -168,7 +212,8 @@ foreach (var role in new[] { "police", "robber" })
         jailProtectedFace.Transform(registration);
         SaveMask(jailProtectedFace, Path.Combine(output, "robber-jail-protected-face-mask.png"));
         const string jailName = "char_robber_prison_break.png";
-        ComposeSpecial(jailLayer, body, jailName, true, reference, identityMask, jailProtectedFace);
+        ComposeSpecial(jailLayer, body, jailName, true, reference, identityMask, jailProtectedFace,
+            headbandIdentityMask);
         names.Add(jailName);
     }
     RenderSheet(role, new List<string> { $"{role}-reference.png" }.Concat(names).ToList());
@@ -177,52 +222,46 @@ File.WriteAllText(Path.Combine(output, "audit.json"), JsonSerializer.Serialize(a
 File.WriteAllText(Path.Combine(output, "registration.json"), JsonSerializer.Serialize(registrations, new JsonSerializerOptions { WriteIndented = true }));
 Console.WriteLine($"Built and checked {audit.Count} normalized frames.");
 
-void ComposeSpecial(SKBitmap arms, SKBitmap body, string name, bool armsCanCoverTorso, SKBitmap reference, SKBitmap identityMask, SKPath protectedHead)
+void ComposeSpecial(SKBitmap arms, SKBitmap body, string name, bool armsCanCoverTorso, SKBitmap reference,
+    SKBitmap identityMask, SKPath protectedHead, SKBitmap? exactIdentityOverlay = null)
 {
     using var result = NewBitmap();
     using var canvas = new SKCanvas(result);
-    canvas.DrawBitmap(body, 0, 0);
-    PreserveIdentity(result, reference, identityMask);
-    // Paint limbs once. Reinsert the original body through its coverage
-    // mask wherever limbs must pass behind it, so soft edges do not gain
-    // opacity from drawing the same arm twice.
-    canvas.DrawBitmap(arms, 0, 0);
-    using var occlusion = NewBitmap();
-    using (var maskCanvas = new SKCanvas(occlusion))
+    if (!armsCanCoverTorso)
     {
-        if (armsCanCoverTorso) maskCanvas.ClipPath(protectedHead, antialias: true);
-        maskCanvas.DrawBitmap(body, 0, 0);
+        // Raised surrender arms sit behind the fixed torso. Drawing each
+        // layer only once avoids accumulating alpha on the torso edge.
+        canvas.DrawBitmap(arms, 0, 0);
+        canvas.DrawBitmap(body, 0, 0);
+        PreserveIdentity(result, reference, identityMask);
     }
-    for (var y = 0; y < size; y++) for (var x = 0; x < size; x++)
+    else
     {
-        var cover = occlusion.GetPixel(x, y);
-        if (cover.Alpha == 0) continue;
-        var arm = arms.GetPixel(x, y);
-        // Reference-over-arm premultiplied alpha, independent of the
-        // provisional lower-torso foreground composition above.
-        var a = cover.Alpha / 255f; var b = arm.Alpha / 255f * (1 - a);
-        var total = a + b;
-        spritePixel(x, y, cover, arm, a, b, total);
+        // Arrest/jailbreak limbs sit in front of the torso but behind the
+        // protected face. Source-over the protection onto the already opaque
+        // body+limb result: recomputing cover+arm alpha here used to erase the
+        // underlying body at the antialiased clip boundary and create gaps.
+        canvas.DrawBitmap(body, 0, 0);
+        PreserveIdentity(result, reference, identityMask);
+        canvas.DrawBitmap(arms, 0, 0);
+        canvas.Save();
+        canvas.ClipPath(protectedHead, antialias: true);
+        canvas.DrawBitmap(body, 0, 0);
+        canvas.Restore();
+        PreserveIdentity(result, reference, identityMask, protectedHead);
     }
-    PreserveIdentity(result, reference, identityMask, armsCanCoverTorso ? protectedHead : null);
+    if (exactIdentityOverlay is not null)
+        PreserveIdentity(result, reference, exactIdentityOverlay);
     SaveAndValidate(result, name, armsCanCoverTorso, reference, identityMask, protectedHead);
-
-    void spritePixel(int x, int y, SKColor cover, SKColor arm, float a, float b, float total)
-    {
-        result.SetPixel(x, y, new SKColor(
-            (byte)Math.Clamp(MathF.Round((cover.Red * a + arm.Red * b) / total), 0, 255),
-            (byte)Math.Clamp(MathF.Round((cover.Green * a + arm.Green * b) / total), 0, 255),
-            (byte)Math.Clamp(MathF.Round((cover.Blue * a + arm.Blue * b) / total), 0, 255),
-            (byte)Math.Clamp(MathF.Round(total * 255), 0, 255)));
-    }
 }
 
 SKBitmap ExtendBodySides(SKBitmap cutBody, string role)
 {
     // The idle hands obscure a narrow strip of each waist. The supplied
     // special pose tells us only where the hidden outer silhouette continues.
-    // Stretch pixels from the idle torso itself into that silhouette so no
-    // differently lit donor artwork or interior sleeve outline can appear.
+    // Colors always come from the idle character; the donor never paints the
+    // headband or torso. Continuous subpixel boundaries replace the old
+    // per-row rounded cutoffs that looked jagged on transparent backgrounds.
     var pose = role == "police" ? "police_arrest" : "robber_surrend";
     using var donorSource = Load(Path.Combine(work, "pose-reference", $"{pose}.png"));
     using var donorGuide = Load(Path.Combine(work, "pose-reference-masks", $"{pose}_body.png"));
@@ -248,98 +287,304 @@ SKBitmap ExtendBodySides(SKBitmap cutBody, string role)
     }
     var result = NewBitmap();
     using (var canvas = new SKCanvas(result)) canvas.DrawBitmap(cutBody, 0, 0);
-    const int transitionDepth = 34;
-    const int riseStart = 500;
-    const int riseEnd = 570;
-    const int fallStart = 720;
-    const int fallEnd = 790;
+
+    var riseStart = role == "police" ? 500 : 535;
+    var riseEnd = role == "police" ? 565 : 575;
+    var fallStart = role == "police" ? 685 : 705;
+    // At these rows the original body path is fully exposed again. Ending
+    // here preserves the source's natural lower belt/chest antialiasing.
+    var fallEnd = role == "police" ? 755 : 770;
+
+    var leftEdges = new float[size];
+    var rightEdges = new float[size];
+    var valid = new bool[size];
     for (var y = riseStart; y < fallEnd; y++)
     {
-        var originalRow = RowBounds(cutBody, y, 32);
-        var donorRow = RowBounds(donor, y, 32);
+        var originalRow = RowBounds(cutBody, y, 128);
+        var donorRow = RowBounds(donor, y, 128);
         if (originalRow is null || donorRow is null) continue;
         var (oldLeft, oldRight) = originalRow.Value;
         var (donorLeft, donorRight) = donorRow.Value;
         var reveal = Math.Min(
             SmoothStep(riseStart, riseEnd, y),
             1 - SmoothStep(fallStart, fallEnd, y));
-        var desiredLeft = (int)MathF.Round(oldLeft + (Math.Min(oldLeft, donorLeft) - oldLeft) * reveal);
-        var desiredRight = (int)MathF.Round(oldRight + (Math.Max(oldRight, donorRight) - oldRight) * reveal);
-
-        // Remap a narrow strip instead of simply placing pixels behind the
-        // old edge. This moves the former hand seam to the true outer contour
-        // and blends back into untouched idle artwork without a doubled line.
-        var leftInner = Math.Min(size, oldLeft + transitionDepth);
-        var leftDenominator = Math.Max(1, leftInner - desiredLeft);
-        for (var x = Math.Max(0, desiredLeft); x < leftInner; x++)
-        {
-            var sourceX = oldLeft + (x - desiredLeft) * transitionDepth / (float)leftDenominator;
-            result.SetPixel(x, y, SampleHorizontal(cutBody, sourceX, y));
-        }
-
-        var rightInner = Math.Max(0, oldRight - transitionDepth);
-        var rightDenominator = Math.Max(1, desiredRight - rightInner);
-        for (var x = rightInner; x < Math.Min(size, desiredRight); x++)
-        {
-            var sourceX = rightInner + (x - rightInner) * transitionDepth / (float)rightDenominator;
-            result.SetPixel(x, y, SampleHorizontal(cutBody, sourceX, y));
-        }
+        var oldLeftEdge = oldLeft + .5f;
+        var oldRightEdge = oldRight - .5f;
+        var donorLeftEdge = donorLeft + .5f;
+        var donorRightEdge = donorRight - .5f;
+        const float underlap = 6f;
+        leftEdges[y] = oldLeftEdge + (Math.Min(oldLeftEdge, donorLeftEdge - underlap) - oldLeftEdge) * reveal;
+        rightEdges[y] = oldRightEdge + (Math.Max(oldRightEdge, donorRightEdge + underlap) - oldRightEdge) * reveal;
+        valid[y] = true;
     }
 
-    if (role == "robber")
+    SmoothBoundary(leftEdges, valid, riseStart, fallEnd, 3);
+    SmoothBoundary(rightEdges, valid, riseStart, fallEnd, 3);
+    EnforceRoundBoundary(leftEdges, valid, riseStart, fallEnd, leftSide: true);
+    EnforceRoundBoundary(rightEdges, valid, riseStart, fallEnd, leftSide: false);
+    // Monotonic enforcement can leave a one-row corner.  A final light pass
+    // keeps the overall round direction while removing that last staircase.
+    SmoothBoundary(leftEdges, valid, riseStart, fallEnd, 4);
+    SmoothBoundary(rightEdges, valid, riseStart, fallEnd, 4);
+
+    // Sample the idle artwork first, then smooth the side material vertically
+    // as one profile.  Choosing a fresh six-pixel average independently for
+    // every scanline produced the former fur-like horizontal banding.
+    var leftOutline = new SKColor[size];
+    var leftFill = new SKColor[size];
+    var rightOutline = new SKColor[size];
+    var rightFill = new SKColor[size];
+    for (var y = riseStart; y < fallEnd; y++)
     {
-        // The idle source contains sleeve-colored pixels immediately inside
-        // the hidden shoulder seam. Blend only the RGB from the supplied
-        // surrender torso into the already-completed body. Keeping the
-        // completed body's alpha unchanged prevents donor-mask wisps or
-        // rectangular tabs from altering the clean outer silhouette.
-        const int sideDepth = 78;
-        const int horizontalBlend = 24;
-        const int verticalStart = 470;
-        const int verticalFull = 540;
-        const int verticalFall = 720;
-        const int verticalEnd = 800;
-        for (var y = verticalStart; y < verticalEnd; y++)
+        if (!valid[y]) continue;
+        var originalRow = RowBounds(cutBody, y, 128);
+        if (originalRow is null) continue;
+        var (oldLeft, oldRight) = originalRow.Value;
+        leftOutline[y] = FindSideMaterialColor(cutBody, oldLeft + .5f, y, 1, role, outline: true);
+        leftFill[y] = FindSideMaterialColor(cutBody, oldLeft + .5f, y, 1, role, outline: false);
+        rightOutline[y] = FindSideMaterialColor(cutBody, oldRight - .5f, y, -1, role, outline: true);
+        rightFill[y] = FindSideMaterialColor(cutBody, oldRight - .5f, y, -1, role, outline: false);
+    }
+    SmoothColorProfile(leftOutline, valid, riseStart, fallEnd, 6);
+    SmoothColorProfile(leftFill, valid, riseStart, fallEnd, 6);
+    SmoothColorProfile(rightOutline, valid, riseStart, fallEnd, 6);
+    SmoothColorProfile(rightFill, valid, riseStart, fallEnd, 6);
+
+    for (var y = riseStart; y < fallEnd; y++)
+    {
+        if (!valid[y]) continue;
+        var originalRow = RowBounds(cutBody, y, 128);
+        if (originalRow is null) continue;
+        var (oldLeft, oldRight) = originalRow.Value;
+        if (role == "robber")
         {
-            var originalRow = RowBounds(cutBody, y, 32);
-            if (originalRow is null) continue;
-            var (oldLeft, oldRight) = originalRow.Value;
-            var verticalWeight = Math.Min(
-                SmoothStep(verticalStart, verticalFull, y),
-                1 - SmoothStep(verticalFall, verticalEnd, y));
-
-            var leftInner = Math.Min(size, oldLeft + sideDepth);
-            for (var x = Math.Max(0, oldLeft - transitionDepth); x < leftInner; x++)
-            {
-                var baseColor = result.GetPixel(x, y);
-                var donorColor = donor.GetPixel(x, y);
-                if (baseColor.Alpha == 0 || donorColor.Alpha == 0) continue;
-                var horizontalWeight = 1 - SmoothStep(leftInner - horizontalBlend, leftInner, x);
-                result.SetPixel(x, y, MixRgbKeepingAlpha(baseColor, donorColor, verticalWeight * horizontalWeight));
-            }
-
-            var rightInner = Math.Max(0, oldRight - sideDepth);
-            for (var x = rightInner; x < Math.Min(size, oldRight + transitionDepth); x++)
-            {
-                var baseColor = result.GetPixel(x, y);
-                var donorColor = donor.GetPixel(x, y);
-                if (baseColor.Alpha == 0 || donorColor.Alpha == 0) continue;
-                var horizontalWeight = SmoothStep(rightInner, rightInner + horizontalBlend, x);
-                result.SetPixel(x, y, MixRgbKeepingAlpha(baseColor, donorColor, verticalWeight * horizontalWeight));
-            }
+            CompleteSideWarp(result, cutBody, y, leftEdges[y], oldLeft + .5f, leftSide: true);
+            CompleteSideWarp(result, cutBody, y, rightEdges[y], oldRight - .5f, leftSide: false);
+        }
+        else
+        {
+            CompleteSide(result, y, leftEdges[y], oldLeft + .5f, leftOutline[y], leftFill[y], leftSide: true);
+            CompleteSide(result, y, rightEdges[y], oldRight - .5f, rightOutline[y], rightFill[y], leftSide: false);
         }
     }
     return result;
 }
 
-SKColor MixRgbKeepingAlpha(SKColor original, SKColor replacement, float amount)
+void SmoothBoundary(float[] boundary, bool[] valid, int start, int end, int passes)
+{
+    int[] weights = [1, 4, 6, 4, 1];
+    for (var pass = 0; pass < passes; pass++)
+    {
+        var previous = (float[])boundary.Clone();
+        for (var y = start; y < end; y++)
+        {
+            if (!valid[y]) continue;
+            var sum = 0f;
+            var total = 0;
+            for (var offset = -2; offset <= 2; offset++)
+            {
+                var sampleY = Math.Clamp(y + offset, start, end - 1);
+                if (!valid[sampleY]) continue;
+                var weight = weights[offset + 2];
+                sum += previous[sampleY] * weight;
+                total += weight;
+            }
+            if (total > 0) boundary[y] = sum / total;
+        }
+    }
+}
+
+void EnforceRoundBoundary(float[] boundary, bool[] valid, int start, int end, bool leftSide)
+{
+    var rows = Enumerable.Range(start, end - start).Where(y => valid[y]).ToArray();
+    if (rows.Length == 0) return;
+    var widest = leftSide
+        ? rows.MinBy(y => boundary[y])
+        : rows.MaxBy(y => boundary[y]);
+    for (var y = start + 1; y <= widest; y++) if (valid[y] && valid[y - 1])
+        boundary[y] = leftSide ? Math.Min(boundary[y], boundary[y - 1]) : Math.Max(boundary[y], boundary[y - 1]);
+    for (var y = widest + 1; y < end; y++) if (valid[y] && valid[y - 1])
+        boundary[y] = leftSide ? Math.Max(boundary[y], boundary[y - 1]) : Math.Min(boundary[y], boundary[y - 1]);
+}
+
+void SmoothColorProfile(SKColor[] colors, bool[] valid, int start, int end, int passes)
+{
+    int[] weights = [1, 4, 6, 4, 1];
+    for (var pass = 0; pass < passes; pass++)
+    {
+        var previous = (SKColor[])colors.Clone();
+        for (var y = start; y < end; y++)
+        {
+            if (!valid[y]) continue;
+            var red = 0f; var green = 0f; var blue = 0f; var total = 0;
+            for (var offset = -2; offset <= 2; offset++)
+            {
+                var sampleY = Math.Clamp(y + offset, start, end - 1);
+                if (!valid[sampleY]) continue;
+                var weight = weights[offset + 2];
+                red += previous[sampleY].Red * weight;
+                green += previous[sampleY].Green * weight;
+                blue += previous[sampleY].Blue * weight;
+                total += weight;
+            }
+            if (total > 0)
+                colors[y] = new SKColor((byte)MathF.Round(red / total), (byte)MathF.Round(green / total),
+                    (byte)MathF.Round(blue / total), 255);
+        }
+    }
+}
+
+void CompleteSideWarp(SKBitmap destination, SKBitmap source, int y, float completedEdge,
+    float originalEdge, bool leftSide)
+{
+    if (leftSide && completedEdge >= originalEdge - .05f) return;
+    if (!leftSide && completedEdge <= originalEdge + .05f) return;
+
+    // The robber's dark torso is one continuous material at the arm seam.
+    // Move the source edge to the completed edge and smoothly decay that
+    // displacement over the next 40px.  The old black cut line becomes the
+    // new outer outline, while every inner pixel comes from the original
+    // texture and converges exactly back to its original coordinate.
+    const float depth = 40;
+    var innerEdge = originalEdge + (leftSide ? depth : -depth);
+    var minimum = (int)MathF.Floor(Math.Min(completedEdge, innerEdge)) - 2;
+    var maximum = (int)MathF.Ceiling(Math.Max(completedEdge, innerEdge)) + 2;
+    var displacement = originalEdge - completedEdge;
+    for (var x = Math.Max(0, minimum); x <= Math.Min(size - 1, maximum); x++)
+    {
+        var center = x + .5f;
+        var t = leftSide
+            ? (center - completedEdge) / (innerEdge - completedEdge)
+            : (completedEdge - center) / (completedEdge - innerEdge);
+        if (t < 0 || t > 1) continue;
+        var eased = SmoothStep(0, 1, t);
+        var sampleCenter = center + displacement * (1 - eased);
+        var sampled = SampleHorizontalPremultiplied(source, sampleCenter - .5f, y);
+        if (sampled.Alpha == 0) continue;
+        var outerCoverage = leftSide
+            ? SmoothStep(completedEdge - 1.1f, completedEdge + 1.1f, center)
+            : 1 - SmoothStep(completedEdge - 1.1f, completedEdge + 1.1f, center);
+        sampled = sampled.WithAlpha((byte)Math.Clamp(MathF.Round(sampled.Alpha * outerCoverage), 0, 255));
+        destination.SetPixel(x, y, sampled);
+    }
+}
+
+void CompleteSide(SKBitmap destination, int y, float completedEdge, float originalEdge,
+    SKColor outlineColor, SKColor fillColor, bool leftSide)
+{
+    if (leftSide && completedEdge >= originalEdge - .05f) return;
+    if (!leftSide && completedEdge <= originalEdge + .05f) return;
+
+    // Only synthesize the pixels that were hidden by the idle hand.  The old
+    // implementation also repainted a fixed 34px strip *inside* the original
+    // body.  That strip appeared at full strength even when the extension was
+    // less than one pixel, creating the conspicuous horizontal rectangles at
+    // the beginning and end of the repaired area.
+    const float seamDepth = 10;
+    var innerEdge = originalEdge + (leftSide ? seamDepth : -seamDepth);
+    var minimum = (int)MathF.Floor(Math.Min(completedEdge, innerEdge)) - 2;
+    var maximum = (int)MathF.Ceiling(Math.Max(completedEdge, innerEdge)) + 2;
+    var extension = MathF.Abs(originalEdge - completedEdge);
+    var seamActivation = SmoothStep(.5f, 6, extension);
+    for (var x = Math.Max(0, minimum); x <= Math.Min(size - 1, maximum); x++)
+    {
+        var center = x + .5f;
+        var coverage = leftSide
+            ? SmoothStep(completedEdge - .75f, completedEdge + .75f, center)
+            : 1 - SmoothStep(completedEdge - .75f, completedEdge + .75f, center);
+        var insideCompletedBody = leftSide ? center <= innerEdge : center >= innerEdge;
+        if (!insideCompletedBody) continue;
+        var baseColor = destination.GetPixel(x, y);
+
+        var fillProgress = leftSide
+            ? SmoothStep(completedEdge + 3, completedEdge + 15, center)
+            : 1 - SmoothStep(completedEdge - 15, completedEdge - 3, center);
+        var rebuiltColor = MixRgb(outlineColor, fillColor, fillProgress)
+            .WithAlpha((byte)Math.Clamp(MathF.Round(coverage * 255), 0, 255));
+        if (rebuiltColor.Alpha == 0) continue;
+        var outsideOriginal = leftSide ? center <= originalEdge : center >= originalEdge;
+        if (outsideOriginal)
+        {
+            // Existing source antialiasing stays on top of the new underlay.
+            destination.SetPixel(x, y, SourceOver(baseColor, rebuiltColor));
+            continue;
+        }
+
+        // Remove only the old arm/body cut line.  Blending ten pixels inward
+        // is enough to turn that former outline into continuous torso
+        // material without recreating the broad rectangular repaint that
+        // caused the previous artifact.
+        var baseAmount = leftSide
+            ? SmoothStep(originalEdge, innerEdge, center)
+            : 1 - SmoothStep(innerEdge, originalEdge, center);
+        var repairAmount = seamActivation * (1 - baseAmount);
+        if (repairAmount <= 0 || baseColor.Alpha == 0) continue;
+        destination.SetPixel(x, y,
+            MixRgb(baseColor, fillColor.WithAlpha(baseColor.Alpha), repairAmount));
+    }
+}
+
+SKColor FindSideMaterialColor(SKBitmap image, float edge, int y, int inwardDirection,
+    string role, bool outline)
+{
+    long red = 0, green = 0, blue = 0;
+    var matches = 0;
+    for (var verticalDistance = 0; verticalDistance <= 8 && matches < 6; verticalDistance++)
+    {
+        foreach (var sampleY in verticalDistance == 0
+            ? new[] { y }
+            : new[] { y - verticalDistance, y + verticalDistance })
+        {
+            if (sampleY < 0 || sampleY >= image.Height) continue;
+            for (var distance = outline ? 0 : 5; distance <= 90 && matches < 6; distance++)
+            {
+                var sampleX = Math.Clamp((int)MathF.Round(edge) + distance * inwardDirection, 0, image.Width - 1);
+                var color = image.GetPixel(sampleX, sampleY);
+                if (color.Alpha < 180) continue;
+                var minimum = Math.Min(color.Red, Math.Min(color.Green, color.Blue));
+                var maximum = Math.Max(color.Red, Math.Max(color.Green, color.Blue));
+                var luminance = (color.Red + color.Green + color.Blue) / 3;
+                var matchesMaterial = outline
+                    ? luminance <= 48
+                    : role == "police"
+                        ? color.Blue >= 58 && color.Blue > color.Red * 1.45f && color.Blue > color.Green * 1.12f
+                        : luminance is >= 20 and <= 62 && maximum - minimum <= 24;
+                if (!matchesMaterial) continue;
+                red += color.Red;
+                green += color.Green;
+                blue += color.Blue;
+                matches++;
+            }
+        }
+    }
+    if (matches > 0)
+        return new SKColor((byte)(red / matches), (byte)(green / matches), (byte)(blue / matches), 255);
+    var fallback = SampleHorizontalPremultiplied(image,
+        edge + inwardDirection * (outline ? 2 : 24), y);
+    return fallback.Alpha == 0 ? SKColors.Black : fallback.WithAlpha(255);
+}
+
+SKColor MixRgb(SKColor from, SKColor to, float amount)
 {
     amount = Math.Clamp(amount, 0, 1);
     return new SKColor(
-        (byte)MathF.Round(original.Red + (replacement.Red - original.Red) * amount),
-        (byte)MathF.Round(original.Green + (replacement.Green - original.Green) * amount),
-        (byte)MathF.Round(original.Blue + (replacement.Blue - original.Blue) * amount),
-        original.Alpha);
+        (byte)MathF.Round(from.Red + (to.Red - from.Red) * amount),
+        (byte)MathF.Round(from.Green + (to.Green - from.Green) * amount),
+        (byte)MathF.Round(from.Blue + (to.Blue - from.Blue) * amount),
+        from.Alpha);
+}
+
+SKColor SourceOver(SKColor foreground, SKColor background)
+{
+    var foregroundAlpha = foreground.Alpha / 255f;
+    var backgroundAlpha = background.Alpha / 255f;
+    var alpha = foregroundAlpha + backgroundAlpha * (1 - foregroundAlpha);
+    if (alpha <= 0) return SKColors.Transparent;
+    return new SKColor(
+        (byte)MathF.Round((foreground.Red * foregroundAlpha + background.Red * backgroundAlpha * (1 - foregroundAlpha)) / alpha),
+        (byte)MathF.Round((foreground.Green * foregroundAlpha + background.Green * backgroundAlpha * (1 - foregroundAlpha)) / alpha),
+        (byte)MathF.Round((foreground.Blue * foregroundAlpha + background.Blue * backgroundAlpha * (1 - foregroundAlpha)) / alpha),
+        (byte)MathF.Round(alpha * 255));
 }
 
 void ExcludeReconstructedPixels(SKBitmap identityMask, SKBitmap originalBody, SKBitmap completedBody)
@@ -367,18 +612,22 @@ float SmoothStep(float edge0, float edge1, float value)
     return t * t * (3 - 2 * t);
 }
 
-SKColor SampleHorizontal(SKBitmap image, float x, int y)
+SKColor SampleHorizontalPremultiplied(SKBitmap image, float x, int y)
 {
     var x0 = Math.Clamp((int)MathF.Floor(x), 0, image.Width - 1);
     var x1 = Math.Min(image.Width - 1, x0 + 1);
     var t = x - x0;
     var a = image.GetPixel(x0, y);
     var b = image.GetPixel(x1, y);
+    var alphaA = a.Alpha / 255f;
+    var alphaB = b.Alpha / 255f;
+    var alpha = alphaA + (alphaB - alphaA) * t;
+    if (alpha <= 0) return SKColors.Transparent;
     return new SKColor(
-        (byte)MathF.Round(a.Red + (b.Red - a.Red) * t),
-        (byte)MathF.Round(a.Green + (b.Green - a.Green) * t),
-        (byte)MathF.Round(a.Blue + (b.Blue - a.Blue) * t),
-        (byte)MathF.Round(a.Alpha + (b.Alpha - a.Alpha) * t));
+        (byte)MathF.Round((a.Red * alphaA * (1 - t) + b.Red * alphaB * t) / alpha),
+        (byte)MathF.Round((a.Green * alphaA * (1 - t) + b.Green * alphaB * t) / alpha),
+        (byte)MathF.Round((a.Blue * alphaA * (1 - t) + b.Blue * alphaB * t) / alpha),
+        (byte)MathF.Round(alpha * 255));
 }
 
 (int Left, int Right)? RowBounds(SKBitmap image, int y, byte threshold)
@@ -390,7 +639,8 @@ SKColor SampleHorizontal(SKBitmap image, float x, int y)
     return right < left ? null : (left, right);
 }
 
-SKBitmap ClipByGuide(SKBitmap source, SKBitmap guide, int expandGuidePixels = 0)
+SKBitmap ClipByGuide(SKBitmap source, SKBitmap guide, int expandGuidePixels = 0,
+    IReadOnlyList<(int Left, int Top, int Right, int Bottom)>? filledGuidePatches = null)
 {
     using var registeredGuide = new SKBitmap(source.Width, source.Height, SKColorType.Rgba8888, SKAlphaType.Premul);
     using (var canvas = new SKCanvas(registeredGuide))
@@ -402,6 +652,13 @@ SKBitmap ClipByGuide(SKBitmap source, SKBitmap guide, int expandGuidePixels = 0)
         var g = registeredGuide.GetPixel(x, y);
         var luminance = (g.Red + g.Green + g.Blue) / 3;
         guideMask[y * source.Width + x] = luminance >= 128;
+    }
+    if (filledGuidePatches is not null)
+    {
+        foreach (var patch in filledGuidePatches)
+        for (var y = Math.Max(0, patch.Top); y < Math.Min(source.Height, patch.Bottom); y++)
+        for (var x = Math.Max(0, patch.Left); x < Math.Min(source.Width, patch.Right); x++)
+            guideMask[y * source.Width + x] = true;
     }
     if (expandGuidePixels > 0)
     {
@@ -487,17 +744,22 @@ SKPath ReferenceBodyPath(string role)
     // fitted to the source's visible sleeve seam, because generated masks
     // can drift and must not change the source neck/shoulder geometry.
     var path = new SKPath();
-    path.MoveTo(0, 0); path.LineTo(660, 0); path.LineTo(660, 255);
+    path.MoveTo(0, 0); path.LineTo(660, 0); path.LineTo(660, 220);
     if (role == "police")
     {
-        path.LineTo(585, 255);
+        // Follow the actual hat-to-sleeve seam instead of cutting the source
+        // on a horizontal y=255 line.  That cut became a little scissor-like
+        // tab when the right sleeve rotated away in run frames 6–8.
+        path.LineTo(607, 220);
+        path.CubicTo(602, 234, 594, 247, 585, 255);
         path.CubicTo(614, 329, 595, 407, 561, 468);
         path.CubicTo(551, 484, 552, 492, 552, 500);
         path.CubicTo(552, 512, 547, 524, 544, 536);
     }
     else
     {
-        path.LineTo(578, 255);
+        path.LineTo(600, 220);
+        path.CubicTo(594, 235, 584, 248, 578, 255);
         path.CubicTo(594, 324, 595, 390, 555, 470);
         path.CubicTo(544, 487, 544, 499, 544, 505);
         path.CubicTo(544, 516, 541, 526, 538, 536);
@@ -509,14 +771,16 @@ SKPath ReferenceBodyPath(string role)
         path.CubicTo(113, 524, 108, 512, 108, 500);
         path.CubicTo(108, 492, 109, 484, 99, 468);
         path.CubicTo(65, 407, 46, 329, 75, 255);
+        path.CubicTo(66, 247, 58, 234, 53, 220);
     }
     else
     {
         path.CubicTo(119, 526, 116, 516, 116, 505);
         path.CubicTo(116, 499, 116, 487, 105, 470);
         path.CubicTo(65, 390, 66, 324, 82, 255);
+        path.CubicTo(76, 248, 66, 235, 60, 220);
     }
-    path.LineTo(0, 255); path.Close();
+    path.LineTo(0, 220); path.Close();
     return path;
 }
 
@@ -544,6 +808,30 @@ SKPath ReferenceFacePath(string role)
     return path;
 }
 
+SKPath ReferenceHeadbandPath()
+{
+    // Central beanie + band envelope. Its lower corners taper inward before
+    // the sleeves begin, so it cannot become a vertical bridge to the gray
+    // chest stripe when the side torso is reconstructed.
+    var path = new SKPath();
+    path.MoveTo(60, -20);
+    path.LineTo(600, -20);
+    path.LineTo(600, 220);
+    path.CubicTo(600, 262, 582, 292, 555, 310);
+    path.LineTo(105, 310);
+    path.CubicTo(78, 292, 60, 262, 60, 220);
+    path.Close();
+    return path;
+}
+
+void MergeIdentityMask(SKBitmap destination, SKBitmap source)
+{
+    for (var y = 0; y < destination.Height; y++)
+    for (var x = 0; x < destination.Width; x++)
+        if (source.GetPixel(x, y).Alpha >= 128)
+            destination.SetPixel(x, y, SKColors.White);
+}
+
 void SaveMask(SKPath path, string destination)
 {
     using var mask = NewBitmap();
@@ -557,9 +845,11 @@ SKBitmap ReferenceArm(SKBitmap source, SKPath bodyPath, int side, string role)
 {
     using var region = new SKPath();
     region.AddRect(side < 0 ? new SKRect(0, 255, 330, 550) : new SKRect(330, 255, 660, 550));
-    // Keep enough hidden underlap for the maximum 6-degree arm swing.
+    // Keep a small hidden underlap for the maximum 6-degree arm swing.  A
+    // wider strip pulled the torso's dark outline out from beneath the hand
+    // when the arm rotated, leaving a little hook/spike at the waist join.
     using var insetBody = new SKPath(bodyPath);
-    insetBody.Transform(SKMatrix.CreateTranslation(side < 0 ? 15 : -15, 0));
+    insetBody.Transform(SKMatrix.CreateTranslation(side < 0 ? 6 : -6, 0));
     using var armPath = region.Op(insetBody, SKPathOp.Difference) ?? throw new InvalidOperationException("Arm segmentation failed");
     using var handEnd = new SKPath();
     handEnd.MoveTo(0, 255); handEnd.LineTo(330, 255); handEnd.LineTo(330, 450);
@@ -579,7 +869,30 @@ SKBitmap ReferenceArm(SKBitmap source, SKPath bodyPath, int side, string role)
     using var trimmed = armPath.Op(handEnd, SKPathOp.Intersect) ?? throw new InvalidOperationException("Hand outline failed");
     var arm = Clip(source, trimmed, false);
     if (role == "robber") FeatherArmRoot(arm, 255, 18);
+    TrimArmWaistHook(arm, side, role);
     return arm;
+}
+
+void TrimArmWaistHook(SKBitmap arm, int side, string role)
+{
+    // In the idle source a few near-black waist-outline pixels bridge the
+    // inside tip of each hand to the torso. They are invisible while the
+    // pieces are stationary, but become a downward hook when the arm swings.
+    // Fade only those dark bridge pixels; the warm hand outline and sleeve
+    // artwork remain untouched, and the completed torso is already behind it.
+    var startY = role == "police" ? 504 : 508;
+    var endY = role == "police" ? 517 : 521;
+    var innerStart = role == "police" ? 92 : 101;
+    for (var y = startY; y <= endY; y++)
+    for (var x = 0; x < arm.Width; x++)
+    {
+        var localX = side < 0 ? x : arm.Width - 1 - x;
+        if (localX < innerStart) continue;
+        var color = arm.GetPixel(x, y);
+        if (color.Alpha == 0 || Math.Max(color.Red, Math.Max(color.Green, color.Blue)) >= 110) continue;
+        var keep = 1 - SmoothStep(startY, endY, y);
+        arm.SetPixel(x, y, color.WithAlpha((byte)MathF.Round(color.Alpha * keep)));
+    }
 }
 
 void FeatherArmRoot(SKBitmap arm, int top, int depth)
@@ -656,6 +969,16 @@ void SaveAndValidate(SKBitmap sprite, string name, bool armsCanCoverTorso, SKBit
     if (bounds.Left < 8 || bounds.Top < 8 || bounds.Right > size - 8 || bounds.Bottom > size - 8)
         throw new InvalidOperationException($"Clipped pose: {name} {bounds}");
     Save(sprite, Path.Combine(output, name));
+    if (Environment.GetEnvironmentVariable("POLROB_INSPECTION") == "1")
+    {
+        var inspectionDirectory = Path.Combine(output, "inspection");
+        Directory.CreateDirectory(inspectionDirectory);
+        using var inspection = NewBitmap();
+        using var inspectionCanvas = new SKCanvas(inspection);
+        inspectionCanvas.Clear(SKColor.Parse("#ece8df"));
+        inspectionCanvas.DrawBitmap(sprite, 0, 0);
+        Save(inspection, Path.Combine(inspectionDirectory, name));
+    }
     var topology = CountComponents(sprite);
     if (topology.Count != 1) throw new InvalidOperationException($"Detached artwork in {name}: {string.Join(",", topology)}");
     audit.Add(new { name, width = size, height = size, bodyWidth, pivot = new[] {pivot,pivot},

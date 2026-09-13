@@ -9,14 +9,14 @@
       544
     ],
     "comparisonRegion": "registered original body RGBA, excluding reconstructed side strips",
-    "protectedPixels": 211485,
+    "protectedPixels": 225163,
     "changedProtectedPixels": 0,
     "connectedComponentsAtAlpha32": 1,
     "bounds": [
       248,
       259,
       842,
-      829
+      830
     ]
   },
   {
@@ -29,14 +29,14 @@
       544
     ],
     "comparisonRegion": "registered original body RGBA, excluding reconstructed side strips",
-    "protectedPixels": 211485,
+    "protectedPixels": 225163,
     "changedProtectedPixels": 0,
     "connectedComponentsAtAlpha32": 1,
     "bounds": [
       248,
       259,
       842,
-      829
+      830
     ]
   },
   {
@@ -49,7 +49,7 @@
       544
     ],
     "comparisonRegion": "registered original body RGBA, excluding reconstructed side strips",
-    "protectedPixels": 211485,
+    "protectedPixels": 225163,
     "changedProtectedPixels": 0,
     "connectedComponentsAtAlpha32": 1,
     "bounds": [
@@ -69,7 +69,7 @@
       544
     ],
     "comparisonRegion": "registered original body RGBA, excluding reconstructed side strips",
-    "protectedPixels": 211485,
+    "protectedPixels": 225163,
     "changedProtectedPixels": 0,
     "connectedComponentsAtAlpha32": 1,
     "bounds": [
@@ -89,7 +89,7 @@
       544
     ],
     "comparisonRegion": "registered original body RGBA, excluding reconstructed side strips",
-    "protectedPixels": 211485,
+    "protectedPixels": 225163,
     "changedProtectedPixels": 0,
     "connectedComponentsAtAlpha32": 1,
     "bounds": [
@@ -109,14 +109,14 @@
       544
     ],
     "comparisonRegion": "registered original body RGBA, excluding reconstructed side strips",
-    "protectedPixels": 211485,
+    "protectedPixels": 225163,
     "changedProtectedPixels": 0,
     "connectedComponentsAtAlpha32": 1,
     "bounds": [
       248,
       259,
       842,
-      829
+      830
     ]
   },
   {
@@ -129,7 +129,7 @@
       544
     ],
     "comparisonRegion": "registered original body RGBA, excluding reconstructed side strips",
-    "protectedPixels": 211485,
+    "protectedPixels": 225163,
     "changedProtectedPixels": 0,
     "connectedComponentsAtAlpha32": 1,
     "bounds": [
@@ -149,7 +149,7 @@
       544
     ],
     "comparisonRegion": "registered original body RGBA, excluding reconstructed side strips",
-    "protectedPixels": 211485,
+    "protectedPixels": 225163,
     "changedProtectedPixels": 0,
     "connectedComponentsAtAlpha32": 1,
     "bounds": [
@@ -169,7 +169,7 @@
       544
     ],
     "comparisonRegion": "registered original body RGBA, excluding reconstructed side strips",
-    "protectedPixels": 211485,
+    "protectedPixels": 225163,
     "changedProtectedPixels": 0,
     "connectedComponentsAtAlpha32": 1,
     "bounds": [
@@ -189,7 +189,7 @@
       544
     ],
     "comparisonRegion": "registered original protected head/face RGBA, excluding foreground arms",
-    "protectedPixels": 203937,
+    "protectedPixels": 179193,
     "changedProtectedPixels": 0,
     "connectedComponentsAtAlpha32": 1,
     "bounds": [
@@ -209,7 +209,7 @@
       544
     ],
     "comparisonRegion": "registered original body RGBA, excluding reconstructed side strips",
-    "protectedPixels": 204349,
+    "protectedPixels": 233532,
     "changedProtectedPixels": 0,
     "connectedComponentsAtAlpha32": 1,
     "bounds": [
@@ -229,7 +229,7 @@
       544
     ],
     "comparisonRegion": "registered original body RGBA, excluding reconstructed side strips",
-    "protectedPixels": 204349,
+    "protectedPixels": 233532,
     "changedProtectedPixels": 0,
     "connectedComponentsAtAlpha32": 1,
     "bounds": [
@@ -249,7 +249,7 @@
       544
     ],
     "comparisonRegion": "registered original body RGBA, excluding reconstructed side strips",
-    "protectedPixels": 204349,
+    "protectedPixels": 233532,
     "changedProtectedPixels": 0,
     "connectedComponentsAtAlpha32": 1,
     "bounds": [
@@ -269,7 +269,7 @@
       544
     ],
     "comparisonRegion": "registered original body RGBA, excluding reconstructed side strips",
-    "protectedPixels": 204349,
+    "protectedPixels": 233532,
     "changedProtectedPixels": 0,
     "connectedComponentsAtAlpha32": 1,
     "bounds": [
@@ -289,7 +289,7 @@
       544
     ],
     "comparisonRegion": "registered original body RGBA, excluding reconstructed side strips",
-    "protectedPixels": 204349,
+    "protectedPixels": 233532,
     "changedProtectedPixels": 0,
     "connectedComponentsAtAlpha32": 1,
     "bounds": [
@@ -309,7 +309,7 @@
       544
     ],
     "comparisonRegion": "registered original body RGBA, excluding reconstructed side strips",
-    "protectedPixels": 204349,
+    "protectedPixels": 233532,
     "changedProtectedPixels": 0,
     "connectedComponentsAtAlpha32": 1,
     "bounds": [
@@ -329,7 +329,7 @@
       544
     ],
     "comparisonRegion": "registered original body RGBA, excluding reconstructed side strips",
-    "protectedPixels": 204349,
+    "protectedPixels": 233532,
     "changedProtectedPixels": 0,
     "connectedComponentsAtAlpha32": 1,
     "bounds": [
@@ -349,7 +349,7 @@
       544
     ],
     "comparisonRegion": "registered original body RGBA, excluding reconstructed side strips",
-    "protectedPixels": 204349,
+    "protectedPixels": 233532,
     "changedProtectedPixels": 0,
     "connectedComponentsAtAlpha32": 1,
     "bounds": [
@@ -369,7 +369,7 @@
       544
     ],
     "comparisonRegion": "registered original body RGBA, excluding reconstructed side strips",
-    "protectedPixels": 204349,
+    "protectedPixels": 233532,
     "changedProtectedPixels": 0,
     "connectedComponentsAtAlpha32": 1,
     "bounds": [
@@ -389,7 +389,7 @@
       544
     ],
     "comparisonRegion": "registered original body RGBA, excluding reconstructed side strips",
-    "protectedPixels": 204349,
+    "protectedPixels": 233532,
     "changedProtectedPixels": 0,
     "connectedComponentsAtAlpha32": 1,
     "bounds": [
@@ -409,7 +409,7 @@
       544
     ],
     "comparisonRegion": "registered original protected head/face RGBA, excluding foreground arms",
-    "protectedPixels": 175902,
+    "protectedPixels": 192582,
     "changedProtectedPixels": 0,
     "connectedComponentsAtAlpha32": 1,
     "bounds": [
