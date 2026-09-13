@@ -73,26 +73,19 @@
             </BindableLayout.ItemTemplate>
         </VerticalStackLayout>
 
-        <!-- 남은 시간은 문구 없이 숫자만 보여주는 중앙 HUD입니다. -->
-        <Border BackgroundColor="#D9182029"
-                Stroke="#8094A3B8"
-                StrokeThickness="1"
-                Padding="18,5"
-                Margin="0,18,0,0"
-                MinimumWidthRequest="92"
-                HorizontalOptions="Center"
-                VerticalOptions="Start"
-                InputTransparent="True"
-                StrokeShape="RoundRectangle 14">
-            <Label x:Name="TimerLabel"
-                   Text="300"
-                   TextColor="#FFF7E6"
-                   FontAttributes="Bold"
-                   FontSize="28"
-                   CharacterSpacing="1.4"
-                   HorizontalTextAlignment="Center"
-                   VerticalTextAlignment="Center"/>
-        </Border>
+        <!-- 남은 시간은 배경 없이 숫자만 보여주는 중앙 HUD입니다. -->
+        <Label x:Name="TimerLabel"
+               Text="300"
+               TextColor="#E6FFF7E6"
+               FontAttributes="Bold"
+               FontSize="33.6"
+               CharacterSpacing="1.4"
+               Margin="0,18,0,0"
+               HorizontalOptions="Center"
+               VerticalOptions="Start"
+               HorizontalTextAlignment="Center"
+               VerticalTextAlignment="Center"
+               InputTransparent="True"/>
 
         <!-- 감옥 아이콘과 현재/전체 도둑 수만 보여주는 우측 HUD입니다. -->
         <Border BackgroundColor="#D9182029"

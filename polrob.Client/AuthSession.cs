@@ -13,7 +13,7 @@ public static class AuthSession
     private static bool _isLoaded;
 
     // SecureStorage는 운영체제의 보안 저장 기능을 이용.. iOS에서는 Keychain, Android에서는 Keystore 기반 암호화 저장소를 사용.. 일반 앱 데이터나 단순 파일을 들여다보는 것보다 훨씬 보호받음..
-    // Preferencessms 일반 설정용 key-value 저장소.. 암호화를 보장하는 보안 저장소가 아니므로, 인증·토큰·비밀번호·API 키 같은 민감정보를 저장하면 안됨..
+    // Preferences 일반 설정용 key-value 저장소.. 암호화를 보관하는 보안 저장소가 아니므로, 인증·토큰·비밀번호·API 키 같은 민감정보를 저장하면 안됨..
     public static string? SessionToken { get; private set; }
     public static string? UserId { get; private set; }
     public static string? Name { get; private set; }

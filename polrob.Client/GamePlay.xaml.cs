@@ -52,6 +52,7 @@ public partial class GamePlay : ContentPage
     private const float PlayerNameMaxWidth = 180f;
     private const byte BushPlayerOpacity = 185;
     private const float RenderCullPadding = 100f;
+    private const float CameraZoom = 2f;
     private const float PlayerBodyVisualWidthRatio = 0.86f;
     private const float TerrainTileWorldSize = 256f;
     private const float ForestGroundTop = 12f * TerrainTileWorldSize;
@@ -915,16 +916,21 @@ public partial class GamePlay : ContentPage
 
         canvas.Save();
 
-        // Keep the camera inside the new 10 x 15 tile map.
-        var cameraX = ClampCameraCenter(_player.X, width, _gameMap.Width);
-        var cameraY = ClampCameraCenter(_player.Y, height, _gameMap.Height);
-        canvas.Translate(width / 2f - cameraX, height / 2f - cameraY);
+        // Characters were reduced to half-size, so render the world at 2x zoom
+        // while keeping screen-space UI (joystick, messages) unchanged.
+        var viewportWorldWidth = width / CameraZoom;
+        var viewportWorldHeight = height / CameraZoom;
+        var cameraX = ClampCameraCenter(_player.X, viewportWorldWidth, _gameMap.Width);
+        var cameraY = ClampCameraCenter(_player.Y, viewportWorldHeight, _gameMap.Height);
+        canvas.Translate(width / 2f, height / 2f);
+        canvas.Scale(CameraZoom);
+        canvas.Translate(-cameraX, -cameraY);
 
         var visibleWorldBounds = new SKRect(
-            cameraX - (width / 2f) - RenderCullPadding,
-            cameraY - (height / 2f) - RenderCullPadding,
-            cameraX + (width / 2f) + RenderCullPadding,
-            cameraY + (height / 2f) + RenderCullPadding);
+            cameraX - (viewportWorldWidth / 2f) - RenderCullPadding,
+            cameraY - (viewportWorldHeight / 2f) - RenderCullPadding,
+            cameraX + (viewportWorldWidth / 2f) + RenderCullPadding,
+            cameraY + (viewportWorldHeight / 2f) + RenderCullPadding);
 
         DrawMapBackground(canvas, visibleWorldBounds);
 

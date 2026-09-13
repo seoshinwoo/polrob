@@ -62,9 +62,6 @@
 		           Link="Resources\Images\robber_in_jail2.png"
 		           Resize="True"
 		           BaseSize="48,48" />
-		<!-- World props are decoded directly by the Skia map renderer. -->
-		<MauiAsset Include="Resources\Images\2D\**" LogicalName="2D\%(Filename)%(Extension)" />
-		<MauiImage Update="Resources\Images\dotnet_bot.png" Resize="True" BaseSize="300,185" />
 		<!-- 로비에서는 46dp로 표시하므로 1024px 원본을 그대로 디코딩하지 않습니다. -->
 		<MauiImage Update="Resources\Images\lobby_police_avatar.png" Resize="True" BaseSize="64,64" />
 		<MauiImage Update="Resources\Images\lobby_robber_avatar.png" Resize="True" BaseSize="64,64" />
@@ -76,9 +73,6 @@
 		<!-- Raw Assets (also remove the "Resources\Raw" prefix) -->
 		<MauiAsset Include="Resources\Raw\**" LogicalName="%(RecursiveDir)%(Filename)%(Extension)" />
 		<MauiAsset Remove="Resources\Raw\robber_in_jail2.png" />
-		<!-- The 2D floor renderer replaces both generations of the old 3D map. -->
-		<MauiAsset Remove="Resources\Raw\generated_map_assets\**" />
-		<MauiAsset Remove="Resources\Raw\exact_map\**" />
 	</ItemGroup>
 
 	<ItemGroup>

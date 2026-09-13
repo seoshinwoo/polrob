@@ -37,7 +37,9 @@ builder.Services.AddSingleton(_ => new CosmosClient(
         {
             PropertyNamingPolicy = CosmosPropertyNamingPolicy.CamelCase
         },
-        ConnectionMode = ConnectionMode.Direct
+        // Gateway mode uses HTTPS (port 443), which works on networks where the
+        // dedicated TCP ports required by Direct mode are blocked.
+        ConnectionMode = ConnectionMode.Gateway
     }));
 builder.Services.AddSingleton<UserDbService>();
 builder.Services.AddSingleton<GameRecordDbService>();
