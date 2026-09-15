@@ -52,7 +52,7 @@ public partial class GameNetworkServer : BackgroundService
     private const double JailBreakDurationSeconds = 3d;
     private const float JailBreakReleaseOffset = 20f;
     private const float JailBreakContactTolerance = 90f;
-    private const float ServerPlayerSpeed = 7f;
+    private const float ServerPlayerSpeed = 4f;
     private const float ServerPlayerRadius = 25f;
     private const float MovementUnitsPerSecondMultiplier = 60f;
     private static readonly TimeSpan MovementInputTimeout = TimeSpan.FromMilliseconds(250);

@@ -21,7 +21,9 @@ public sealed class TownMapRenderer : IDisposable
     private readonly SKPathEffect _dash = SKPathEffect.CreateDash([30f, 30f], 0);
     private readonly MapPropLayout[] _props = GameMap.PropLayouts.OrderBy(p => p.CenterY + p.Height / 2).ToArray();
 
-    public TownMapRenderer(IReadOnlyDictionary<string, SKBitmap?> bitmaps)
+    public TownMapRenderer(
+        IReadOnlyDictionary<string, SKBitmap?> bitmaps,
+        Func<string, SKBitmap, SKRect> getSourceBounds)
     {
         _pavedBlocks = CreatePavedBlocks(_roadArea, GameMap.WorldWidth, GameMap.WorldHeight);
         foreach (var name in new[] { "grass", "asphalt", "paving" })
@@ -43,7 +45,7 @@ public sealed class TownMapRenderer : IDisposable
         {
             if (bitmap != null && !TileAssets.Contains(name))
             {
-                _sources[name] = VisibleBounds(bitmap);
+                _sources[name] = getSourceBounds(name, bitmap);
                 _sprites[name] = SKImage.FromBitmap(bitmap);
             }
         }
@@ -201,18 +203,6 @@ public sealed class TownMapRenderer : IDisposable
         _fill.Color = SKColor.Parse("#EEE7CC");
         for (var i = -3; i <= 3; i++) canvas.DrawRoundRect(new SKRect(-27, i * 25 - 7, 27, i * 25 + 7), 2, 2, _fill);
         canvas.Restore();
-    }
-
-    public static SKRect VisibleBounds(SKBitmap bitmap)
-    {
-        var left = bitmap.Width; var top = bitmap.Height; var right = 0; var bottom = 0;
-        for (var y = 0; y < bitmap.Height; y++)
-        for (var x = 0; x < bitmap.Width; x++)
-        {
-            if (bitmap.GetPixel(x, y).Alpha < 16) continue;
-            left = Math.Min(left, x); top = Math.Min(top, y); right = Math.Max(right, x + 1); bottom = Math.Max(bottom, y + 1);
-        }
-        return right > left ? new SKRect(left, top, right, bottom) : new SKRect(0, 0, bitmap.Width, bitmap.Height);
     }
 
     private static bool Intersects(SKRect a, SKRect b) => a.Left <= b.Right && a.Right >= b.Left && a.Top <= b.Bottom && a.Bottom >= b.Top;

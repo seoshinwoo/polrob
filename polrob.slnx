@@ -4,4 +4,5 @@
   <Project Path="polrob.Server.Tests/polrob.Server.Tests.csproj" />
   <Project Path="polrob.Shared/polrob.Shared.csproj" />
   <Project Path="polrob.Test/polrob.Test.csproj" />
+  <Project Path="tools/PolRob.AssetBounds/PolRob.AssetBounds.csproj" />
 </Solution>

@@ -45,6 +45,10 @@
 		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">21.0</SupportedOSPlatformVersion>
 		<ApplicationManifest Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios'">Platforms/iOS/Info.plist</ApplicationManifest>
 		<EnableMauiSplashScreenProcessing Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios'">false</EnableMauiSplashScreenProcessing>
+
+		<!-- Transparent-pixel bounds are generated at build time, never on the game UI thread. -->
+		<AssetBoundsGeneratorProject>$(MSBuildProjectDirectory)/../tools/PolRob.AssetBounds/PolRob.AssetBounds.csproj</AssetBoundsGeneratorProject>
+		<AssetBoundsGeneratedFile>$(MSBuildProjectDirectory)/obj/$(Configuration)/$(TargetFramework)/$(RuntimeIdentifier)/generated/GeneratedAssetBounds.g.cs</AssetBoundsGeneratedFile>
 	</PropertyGroup>
 
 	<ItemGroup>
@@ -89,5 +93,21 @@
 	<ItemGroup>
 	  <ProjectReference Include="..\polrob.Shared\polrob.Shared.csproj" />
 	</ItemGroup>
+
+	<ItemGroup>
+		<AssetBoundsInput Include="$(MSBuildProjectDirectory)/Resources/Raw/MapAssets/**/*.png" />
+		<AssetBoundsInput Include="$(MSBuildProjectDirectory)/Resources/Raw/char_*.png" />
+		<AssetBoundsGeneratorInput Include="$(AssetBoundsGeneratorProject)" />
+		<AssetBoundsGeneratorInput Include="$(MSBuildProjectDirectory)/../tools/PolRob.AssetBounds/Program.cs" />
+		<Compile Include="$(AssetBoundsGeneratedFile)" Visible="false" />
+	</ItemGroup>
+
+	<Target Name="GenerateAssetBounds"
+			BeforeTargets="CoreCompile"
+			Inputs="@(AssetBoundsInput);@(AssetBoundsGeneratorInput)"
+			Outputs="$(AssetBoundsGeneratedFile)">
+		<MakeDir Directories="$([System.IO.Path]::GetDirectoryName('$(AssetBoundsGeneratedFile)'))" />
+		<Exec Command="dotnet run --project &quot;$(AssetBoundsGeneratorProject)&quot; --configuration $(Configuration) --no-launch-profile -- &quot;$(MSBuildProjectDirectory)/Resources/Raw&quot; &quot;$(AssetBoundsGeneratedFile)&quot;" />
+	</Target>
 
 </Project>

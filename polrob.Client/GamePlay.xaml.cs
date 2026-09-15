@@ -170,7 +170,7 @@ public partial class GamePlay : ContentPage
             RoomId = _roomId,
             X = _gameMap.Width / 2f,
             Y = _gameMap.Height / 2f,
-            Speed = 7f,
+            Speed = 4f,
             Radius = 25f,
             Role = _selectedRole,
             Angle = 0f,
@@ -573,15 +573,15 @@ public partial class GamePlay : ContentPage
             {
                 // The page retains decoded bitmaps between appearances, while
                 // each active renderer owns and releases its native paints/paths.
-                _townMapRenderer ??= new TownMapRenderer(_mapPropBitmaps);
+                _townMapRenderer ??= CreateTownMapRenderer();
                 return;
             }
 
-            _policeIdleBitmap = await LoadBitmapAsync("char_police.png");
-            _robberIdleBitmap = await LoadBitmapAsync("char_robber.png");
-            _policeArrestBitmap = await LoadBitmapAsync("char_police_arrest.png");
-            _robberSurrendBitmap = await LoadBitmapAsync("char_robber_surrend.png");
-            _robberPrisonBreakBitmap = await LoadBitmapAsync("char_robber_prison_break.png");
+            _policeIdleBitmap = await LoadCharacterBitmapAsync("char_police.png");
+            _robberIdleBitmap = await LoadCharacterBitmapAsync("char_robber.png");
+            _policeArrestBitmap = await LoadCharacterBitmapAsync("char_police_arrest.png");
+            _robberSurrendBitmap = await LoadCharacterBitmapAsync("char_robber_surrend.png");
+            _robberPrisonBreakBitmap = await LoadCharacterBitmapAsync("char_robber_prison_break.png");
             foreach (var assetPath in MapPropPlacements
                 .Select(placement => placement.AssetPath)
                 .Where(path => !string.IsNullOrEmpty(path))
@@ -590,12 +590,12 @@ public partial class GamePlay : ContentPage
             {
                 _mapPropBitmaps[assetPath] = await LoadBitmapAsync(assetPath);
             }
-            _townMapRenderer = new TownMapRenderer(_mapPropBitmaps);
+            _townMapRenderer = CreateTownMapRenderer();
 
             for (int i = 0; i < 8; i++)
             {
-                _policeRunBitmaps[i] = await LoadBitmapAsync($"char_police_run_{i + 1}.png");
-                _robberRunBitmaps[i] = await LoadBitmapAsync($"char_robber_run_{i + 1}.png");
+                _policeRunBitmaps[i] = await LoadCharacterBitmapAsync($"char_police_run_{i + 1}.png");
+                _robberRunBitmaps[i] = await LoadCharacterBitmapAsync($"char_robber_run_{i + 1}.png");
             }
 
             _assetsLoaded = true;
@@ -604,6 +604,28 @@ public partial class GamePlay : ContentPage
         {
             _assetLoadLock.Release();
         }
+    }
+
+    private TownMapRenderer CreateTownMapRenderer() =>
+        new(
+            _mapPropBitmaps,
+            static (assetPath, bitmap) => GeneratedAssetBounds.GetMap(
+                assetPath,
+                bitmap.Width,
+                bitmap.Height));
+
+    private async Task<SKBitmap?> LoadCharacterBitmapAsync(string fileName)
+    {
+        var bitmap = await LoadBitmapAsync(fileName);
+        if (bitmap != null)
+        {
+            _spriteVisibleBounds[bitmap] = GeneratedAssetBounds.GetCharacter(
+                fileName,
+                bitmap.Width,
+                bitmap.Height);
+        }
+
+        return bitmap;
     }
 
     private async Task LoadTerrainTilesAsync()
@@ -1473,33 +1495,8 @@ public partial class GamePlay : ContentPage
             return bounds;
         }
 
-        const byte minimumVisibleAlpha = 32;
-        var left = bitmap.Width;
-        var top = bitmap.Height;
-        var right = -1;
-        var bottom = -1;
-
-        for (var y = 0; y < bitmap.Height; y++)
-        {
-            for (var x = 0; x < bitmap.Width; x++)
-            {
-                if (bitmap.GetPixel(x, y).Alpha < minimumVisibleAlpha)
-                {
-                    continue;
-                }
-
-                left = Math.Min(left, x);
-                top = Math.Min(top, y);
-                right = Math.Max(right, x);
-                bottom = Math.Max(bottom, y);
-            }
-        }
-
-        bounds = right < left || bottom < top
-            ? new SKRect(0f, 0f, bitmap.Width, bitmap.Height)
-            : new SKRect(left, top, right + 1f, bottom + 1f);
-        _spriteVisibleBounds[bitmap] = bounds;
-        return bounds;
+        throw new InvalidOperationException(
+            "Character sprite bounds were not registered when the asset was loaded.");
     }
 
     private static SKRect CreatePlayerDestinationRect(

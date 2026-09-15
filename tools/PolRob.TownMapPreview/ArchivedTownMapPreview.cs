@@ -83,7 +83,7 @@ internal static class ArchivedTownMapPreview
             foreach (var (name, x, y) in new[] { ("char_police.png", 1770f, 1580f), ("char_robber.png", 1460f, 1660f) })
             {
                 using var sprite = SKBitmap.Decode(Path.Combine(repo, "polrob.Client/Resources/Raw", name));
-                detail.Canvas.DrawBitmap(sprite, TownMapRenderer.VisibleBounds(sprite), new SKRect(x-25, y-25, x+25, y+25));
+                detail.Canvas.DrawBitmap(sprite, PreviewAssetAnalysis.VisibleBounds(sprite), new SKRect(x-25, y-25, x+25, y+25));
             }
             Save(detail, "detail-50px-characters.png");
         }

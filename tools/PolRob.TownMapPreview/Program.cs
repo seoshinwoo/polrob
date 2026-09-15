@@ -25,7 +25,7 @@ foreach (var name in GameMap.PropLayouts.Select(p => p.AssetPath).Where(p => p.L
         if (bitmap.GetPixel(x, y).Alpha == 0) transparent++;
     if (!TownMapRenderer.TileAssets.Contains(name) && transparent == 0)
         throw new InvalidOperationException($"Sprite lacks a genuine transparent background: {name}");
-    var bounds = TownMapRenderer.VisibleBounds(bitmap);
+    var bounds = PreviewAssetAnalysis.VisibleBounds(bitmap);
     if (name.StartsWith(CanvaMapLayout.AssetRoot + "/", StringComparison.Ordinal))
     {
         var source = CanvaMapCollisions.Profiles[Path.GetFileName(name)].Image;
@@ -37,7 +37,9 @@ foreach (var name in GameMap.PropLayouts.Select(p => p.AssetPath).Where(p => p.L
         VisibleBounds = new[] { bounds.Left, bounds.Top, bounds.Right, bounds.Bottom } });
 }
 File.WriteAllText(Path.Combine(output, "asset-audit.json"), JsonSerializer.Serialize(assetAudit, new JsonSerializerOptions { WriteIndented = true }));
-using var renderer = new TownMapRenderer(assets);
+using var renderer = new TownMapRenderer(
+    assets,
+    static (_, bitmap) => PreviewAssetAnalysis.VisibleBounds(bitmap));
 var map = new GameMap();
 var world = new SKRect(0, 0, map.Width, map.Height);
 using var surface = SKSurface.Create(new SKImageInfo((int)map.Width, (int)map.Height));
@@ -81,7 +83,7 @@ using (var detail = SKSurface.Create(new SKImageInfo(1120, 1000)))
     foreach (var (name, x, y) in new[] { ("char_police.png", 1770f, 1580f), ("char_robber.png", 1460f, 1660f) })
     {
         using var sprite = SKBitmap.Decode(Path.Combine(repo, "polrob.Client/Resources/Raw", name));
-        detail.Canvas.DrawBitmap(sprite, TownMapRenderer.VisibleBounds(sprite), new SKRect(x-25, y-25, x+25, y+25));
+        detail.Canvas.DrawBitmap(sprite, PreviewAssetAnalysis.VisibleBounds(sprite), new SKRect(x-25, y-25, x+25, y+25));
     }
     Save(detail, "detail-50px-characters.png");
 }
