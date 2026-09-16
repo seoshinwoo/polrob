@@ -170,7 +170,6 @@ public partial class GamePlay : ContentPage
             RoomId = _roomId,
             X = _gameMap.Width / 2f,
             Y = _gameMap.Height / 2f,
-            Speed = 4f,
             Radius = 25f,
             Role = _selectedRole,
             Angle = 0f,

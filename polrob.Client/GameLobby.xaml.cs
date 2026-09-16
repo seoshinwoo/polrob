@@ -105,7 +105,7 @@ public partial class GameLobby : ContentPage
             return;
         }
 
-        await Shell.Current.GoToAsync("..", false);
+        await Shell.Current.GoToAsync("//MainPage", false);
     }
 
     private async Task<bool> LeaveRoomForHomeAsync()
@@ -129,8 +129,7 @@ public partial class GameLobby : ContentPage
             LobbyStatusLabel.Text = "방에서 나가는 중...";
             var response = await connection.InvokeAsync<ServerResponse?>(
                 "CancelMatchingWithAcknowledgement",
-                _roomId,
-                AuthSession.UserId);
+                _roomId);
 
             if (response == null)
             {

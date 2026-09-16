@@ -13,7 +13,7 @@ public class Player
     public string Name { get; set; } = string.Empty;
     public float X { get; set; }
     public float Y { get; set; }
-    public float Speed { get; set; } = 4f;
+    public float Speed { get; set; }
     public float Radius { get; set; } = 50f;
     public float Angle { get; set; }
     public bool IsMoving { get; set; }
