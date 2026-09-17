@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Sockets;
 using System.Text.Json;
@@ -7,6 +8,10 @@ namespace polrob.Client.Network;
 
 public class GameNetworkClient
 {
+    private static readonly TimeSpan JoinAcknowledgementTimeout = TimeSpan.FromSeconds(10);
+    private static readonly TimeSpan HeartbeatInterval = TimeSpan.FromSeconds(10);
+    private static readonly TimeSpan HeartbeatAcknowledgementTimeout = TimeSpan.FromSeconds(5);
+
     private TcpClient? _tcpClient;
     private UdpClient? _udpClient;
     private BinaryReader? _reader;
@@ -14,6 +19,9 @@ public class GameNetworkClient
     private bool _isDisconnected;
     private ulong _movementInputSequence;
     private string _movementSessionToken = string.Empty;
+    private TaskCompletionSource _joinAcknowledged = CreateJoinAcknowledgementSource();
+    private readonly ConcurrentDictionary<string, TaskCompletionSource> _heartbeatAcknowledgements = new();
+    private CancellationTokenSource? _heartbeatCancellation;
 
     public event Action<List<Player>>? OnInitialStateReceived;
     public event Action<Player>? OnPlayerJoined;
@@ -26,13 +34,18 @@ public class GameNetworkClient
     public event Action<GameStateSync>? OnGameStateReceived;
     public event Action<OpponentProximitySync>? OnOpponentProximityReceived;
 
-    public async Task ConnectAsync(string ipAddress, Player localPlayer, string sessionToken)
+    public async Task ConnectAsync(
+        string ipAddress,
+        Player localPlayer,
+        string sessionToken,
+        CancellationToken cancellationToken = default)
     {
         _isDisconnected = false;
         _movementInputSequence = 0;
         _movementSessionToken = string.Empty;
+        _joinAcknowledged = CreateJoinAcknowledgementSource();
         _tcpClient = new TcpClient();
-        await _tcpClient.ConnectAsync(ipAddress, 7777);
+        await _tcpClient.ConnectAsync(ipAddress, 7777, cancellationToken);
 
         var stream = _tcpClient.GetStream();
         _reader = new BinaryReader(stream);
@@ -49,6 +62,24 @@ public class GameNetworkClient
             SessionToken = sessionToken,
             RoomId = localPlayer.RoomId
         }));
+
+        try
+        {
+            // TCP 연결 완료는 소켓만 열렸다는 뜻입니다. 서버가 Join 명령을 처리해
+            // 참가자 레지스트리에 등록한 뒤 보내는 MovementSession까지 기다려야
+            // 바로 이어지는 팀 보이스 토큰 요청이 간헐적으로 403이 되지 않습니다.
+            await _joinAcknowledged.Task.WaitAsync(
+                JoinAcknowledgementTimeout,
+                cancellationToken);
+            var heartbeatCancellation = new CancellationTokenSource();
+            _heartbeatCancellation = heartbeatCancellation;
+            _ = Task.Run(() => RunHeartbeatLoopAsync(heartbeatCancellation.Token));
+        }
+        catch
+        {
+            Disconnect();
+            throw;
+        }
     }
 
     private void SendTcp(TcpMessageType type, string payload)
@@ -81,6 +112,15 @@ public class GameNetworkClient
     public void Disconnect()
     {
         _isDisconnected = true;
+        _joinAcknowledged.TrySetCanceled();
+        _heartbeatCancellation?.Cancel();
+        _heartbeatCancellation?.Dispose();
+        _heartbeatCancellation = null;
+        foreach (var (_, acknowledgement) in _heartbeatAcknowledgements)
+        {
+            acknowledgement.TrySetCanceled();
+        }
+        _heartbeatAcknowledgements.Clear();
 
         try { _udpClient?.Dispose(); } catch { }
         try { _tcpClient?.Close(); } catch { }
@@ -93,6 +133,35 @@ public class GameNetworkClient
         _writer = null;
     }
 
+    public async Task RefreshServerRegistrationAsync(
+        CancellationToken cancellationToken = default)
+    {
+        if (_isDisconnected || _writer == null)
+        {
+            throw new IOException("게임 서버에 연결되어 있지 않습니다.");
+        }
+
+        var requestId = Guid.NewGuid().ToString("N");
+        var acknowledgement = new TaskCompletionSource(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        if (!_heartbeatAcknowledgements.TryAdd(requestId, acknowledgement))
+        {
+            throw new IOException("게임 서버 연결 확인 요청을 만들지 못했습니다.");
+        }
+
+        try
+        {
+            SendTcp(TcpMessageType.Heartbeat, requestId);
+            await acknowledgement.Task.WaitAsync(
+                HeartbeatAcknowledgementTimeout,
+                cancellationToken);
+        }
+        finally
+        {
+            _heartbeatAcknowledgements.TryRemove(requestId, out _);
+        }
+    }
+
     private void ReceiveTcpLoop()
     {
         if (_reader == null) return;
@@ -103,6 +172,21 @@ public class GameNetworkClient
                 int length = _reader.ReadInt32();
                 var type = (TcpMessageType)_reader.ReadByte();
                 string json = _reader.ReadString();
+
+                if (type == TcpMessageType.MovementSession)
+                {
+                    _movementSessionToken = json;
+                    _joinAcknowledged.TrySetResult();
+                    continue;
+                }
+                if (type == TcpMessageType.HeartbeatAcknowledged)
+                {
+                    if (_heartbeatAcknowledgements.TryRemove(json, out var acknowledgement))
+                    {
+                        acknowledgement.TrySetResult();
+                    }
+                    continue;
+                }
 
                 MainThread.BeginInvokeOnMainThread(() =>
                 {
@@ -148,10 +232,6 @@ public class GameNetworkClient
                         var syncData = JsonSerializer.Deserialize<JailBreakProgressSync>(json);
                         if (syncData != null) OnJailBreakProgressReceived?.Invoke(syncData);
                     }
-                    else if (type == TcpMessageType.MovementSession)
-                    {
-                        _movementSessionToken = json;
-                    }
                     else if (type == TcpMessageType.OpponentProximity)
                     {
                         var proximity = JsonSerializer.Deserialize<OpponentProximitySync>(json);
@@ -168,7 +248,31 @@ public class GameNetworkClient
             if (!_isDisconnected)
             {
                 System.Diagnostics.Debug.WriteLine($"TCP Receive error: {ex.Message}");
+                _joinAcknowledged.TrySetException(
+                    new IOException("게임 서버가 입장을 승인하기 전에 연결이 종료되었습니다.", ex));
             }
+        }
+    }
+
+    private static TaskCompletionSource CreateJoinAcknowledgementSource() =>
+        new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+    private async Task RunHeartbeatLoopAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            while (!cancellationToken.IsCancellationRequested)
+            {
+                await Task.Delay(HeartbeatInterval, cancellationToken);
+                SendTcp(TcpMessageType.Heartbeat, string.Empty);
+            }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+        }
+        catch (Exception exception) when (!_isDisconnected)
+        {
+            System.Diagnostics.Debug.WriteLine($"TCP heartbeat error: {exception.Message}");
         }
     }
 

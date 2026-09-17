@@ -204,6 +204,7 @@ public partial class GamePlay : ContentPage
     {
         base.OnAppearing();
         BeginTeamVoiceLifetime();
+        AttachTeamVoiceWindowLifecycle();
         await AuthSession.LoadAsync();
         if (!string.IsNullOrWhiteSpace(AuthSession.UserId) && _player.Id != AuthSession.UserId)
         {
@@ -217,9 +218,12 @@ public partial class GamePlay : ContentPage
         ScheduleTeamVoiceRosterRefresh();
 
         await LoadAssetsAsync();
-        await InitializeNetworkAsync();
+        if (!await InitializeNetworkAsync())
+        {
+            return;
+        }
         // 보이스 토큰은 서버가 게임방 참가자를 확인한 뒤에만 발급되므로
-        // 게임 네트워크 입장이 끝난 다음 팀 보이스에 연결합니다.
+        // 서버가 TCP 입장을 승인한 다음 팀 보이스에 연결합니다.
         await InitializeTeamVoiceAsync();
     }
 
@@ -228,8 +232,19 @@ public partial class GamePlay : ContentPage
         return AuthSession.GameServerHost;
     }
 
-    private async Task InitializeNetworkAsync()
+    private async Task<bool> InitializeNetworkAsync()
     {
+        CancellationToken networkCancellation;
+        lock (_voiceLifetimeGate)
+        {
+            if (!_isTeamVoicePageActive || _voiceLifetimeCancellation == null)
+            {
+                return false;
+            }
+
+            networkCancellation = _voiceLifetimeCancellation.Token;
+        }
+
         _networkClient = new GameNetworkClient();
 
         _networkClient.OnInitialStateReceived += (players) =>
@@ -455,17 +470,66 @@ public partial class GamePlay : ContentPage
             await _networkClient.ConnectAsync(
                 GetServerIpAddress(),
                 _player,
-                AuthSession.SessionToken ?? string.Empty);
+                AuthSession.SessionToken ?? string.Empty,
+                networkCancellation);
+            return true;
+        }
+        catch (OperationCanceledException)
+        {
+            _networkClient?.Disconnect();
+            _networkClient = null;
+            return false;
         }
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"Network Connection Error: {ex}");
+            _networkClient?.Disconnect();
+            _networkClient = null;
+            SetVoiceStatus("게임 서버 입장 실패 · 팀 보이스를 시작할 수 없습니다.");
+            return false;
         }
+    }
+
+    private async Task<bool> RefreshOrReconnectGameNetworkAsync()
+    {
+        var existingClient = _networkClient;
+        if (existingClient != null)
+        {
+            try
+            {
+                // 백그라운드에서 heartbeat가 멈췄다면 서버의 active lease를
+                // 먼저 갱신한 뒤 보이스 토큰을 요청합니다.
+                await existingClient.RefreshServerRegistrationAsync();
+                return true;
+            }
+            catch (Exception exception)
+            {
+                System.Diagnostics.Debug.WriteLine(
+                    $"Game server registration refresh failed: {exception}");
+                existingClient.Disconnect();
+                if (ReferenceEquals(_networkClient, existingClient))
+                {
+                    _networkClient = null;
+                }
+
+                if (!IsTeamVoiceLifetimeActive())
+                {
+                    return false;
+                }
+            }
+        }
+
+        return await InitializeNetworkAsync();
     }
 
     protected override async void OnDisappearing()
     {
         base.OnDisappearing();
+        _resumeTeamVoiceAfterWindowStop = false;
+        DetachTeamVoiceWindowLifecycle();
+        // 페이지 수명이 끝났다는 표시는 다른 정리 await보다 먼저 남겨야 빠르게
+        // 재등장한 새 보이스 수명을 이전 OnDisappearing이 중단하지 않습니다.
+        var stopTeamVoiceTask = StopTeamVoiceAsync();
         StopGameClient();
         await _assetLoadLock.WaitAsync();
         try
@@ -477,7 +541,7 @@ public partial class GamePlay : ContentPage
         {
             _assetLoadLock.Release();
         }
-        await StopTeamVoiceAsync();
+        await stopTeamVoiceTask;
     }
 
     private void StopGameClient()

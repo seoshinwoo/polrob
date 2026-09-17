@@ -17,11 +17,18 @@ public partial class GamePlay
     ];
 
     private readonly SemaphoreSlim _voiceToggleLock = new(1, 1);
+    private readonly SemaphoreSlim _voiceConnectionLock = new(1, 1);
+    private readonly object _voiceLifetimeGate = new();
     private readonly VoiceWebViewPlatformConfiguration _voiceWebViewPlatformConfiguration = new();
     private VoiceChatService? _voiceChatService;
     private CancellationTokenSource? _voiceLifetimeCancellation;
+    private Window? _voiceLifecycleWindow;
     private bool _isTeamVoicePageActive;
+    private bool _resumeTeamVoiceAfterWindowStop;
     private int _voiceRosterRefreshScheduled;
+    private int _voiceReconnectGeneration;
+    private int _voiceReconnectWorkerRunning;
+    private Task _voiceStopTask = Task.CompletedTask;
 
     public ObservableCollection<TeamVoiceMemberViewModel> VoiceMembers { get; } = new();
 
@@ -39,57 +46,91 @@ public partial class GamePlay
 
     private void BeginTeamVoiceLifetime()
     {
-        _voiceLifetimeCancellation?.Cancel();
-        _voiceLifetimeCancellation?.Dispose();
-        _voiceLifetimeCancellation = new CancellationTokenSource();
-        _isTeamVoicePageActive = true;
-    }
-
-    private async Task InitializeTeamVoiceAsync()
-    {
-        var service = _voiceChatService;
-        var cancellation = _voiceLifetimeCancellation;
-        if (service == null || cancellation == null || string.IsNullOrWhiteSpace(_roomId))
+        lock (_voiceLifetimeGate)
         {
-            SetVoiceStatus("방 정보가 없어 보이스를 시작하지 못했습니다.");
-            return;
-        }
-
-        try
-        {
-            SetVoiceStatus("팀 보이스 연결 중...");
-            await service.JoinTeamVoiceAsync(_roomId, cancellation.Token);
-            if (!_isTeamVoicePageActive || cancellation.IsCancellationRequested)
+            if (_isTeamVoicePageActive && _voiceLifetimeCancellation != null)
             {
                 return;
             }
 
-            SetVoiceStatus(service.IsLocalMicrophoneMuted
-                ? "연결됨 · 내 마이크 꺼짐"
-                : "연결됨 · 내 마이크 켜짐");
-            ScheduleTeamVoiceRosterRefresh();
-        }
-        catch (OperationCanceledException)
-        {
-            // 화면을 떠나며 취소된 정상적인 종료입니다.
-        }
-        catch (Exception exception)
-        {
-            System.Diagnostics.Debug.WriteLine($"Voice connection error: {exception}");
-            SetVoiceStatus($"보이스 연결 실패 · {GetVoiceErrorMessage(exception)}");
+            _voiceLifetimeCancellation = new CancellationTokenSource();
+            _isTeamVoicePageActive = true;
         }
     }
 
-    private async Task StopTeamVoiceAsync()
+    private async Task InitializeTeamVoiceAsync()
     {
-        if (!_isTeamVoicePageActive && !(_voiceChatService?.IsConnected ?? false))
+        await _voiceConnectionLock.WaitAsync();
+        try
         {
-            return;
+            var service = _voiceChatService;
+            CancellationTokenSource? cancellation;
+            lock (_voiceLifetimeGate)
+            {
+                cancellation = _isTeamVoicePageActive
+                    ? _voiceLifetimeCancellation
+                    : null;
+            }
+            if (service == null || cancellation == null || string.IsNullOrWhiteSpace(_roomId))
+            {
+                SetVoiceStatus("방 정보가 없어 보이스를 시작하지 못했습니다.");
+                return;
+            }
+
+            try
+            {
+                SetVoiceStatus("팀 보이스 연결 중...");
+                await service.JoinTeamVoiceAsync(_roomId, cancellation.Token);
+                if (!IsCurrentTeamVoiceLifetime(cancellation))
+                {
+                    return;
+                }
+
+                SetVoiceStatus(service.IsLocalMicrophoneMuted
+                    ? "연결됨 · 내 마이크 꺼짐"
+                    : "연결됨 · 내 마이크 켜짐");
+                ScheduleTeamVoiceRosterRefresh();
+            }
+            catch (OperationCanceledException)
+            {
+                // 화면 이탈 또는 앱 백그라운드 전환으로 취소된 정상적인 종료입니다.
+            }
+            catch (Exception exception)
+            {
+                System.Diagnostics.Debug.WriteLine($"Voice connection error: {exception}");
+                if (IsCurrentTeamVoiceLifetime(cancellation))
+                {
+                    SetVoiceStatus($"보이스 연결 실패 · {GetVoiceErrorMessage(exception)}");
+                }
+            }
         }
+        finally
+        {
+            _voiceConnectionLock.Release();
+        }
+    }
 
-        _isTeamVoicePageActive = false;
-        _voiceLifetimeCancellation?.Cancel();
+    private Task StopTeamVoiceAsync()
+    {
+        lock (_voiceLifetimeGate)
+        {
+            if (!_isTeamVoicePageActive)
+            {
+                return _voiceStopTask;
+            }
 
+            _isTeamVoicePageActive = false;
+            var lifetimeToStop = _voiceLifetimeCancellation;
+            _voiceLifetimeCancellation = null;
+            lifetimeToStop?.Cancel();
+            _voiceStopTask = StopTeamVoiceCoreAsync(lifetimeToStop);
+            return _voiceStopTask;
+        }
+    }
+
+    private async Task StopTeamVoiceCoreAsync(CancellationTokenSource? lifetimeToStop)
+    {
+        await _voiceConnectionLock.WaitAsync();
         try
         {
             if (_voiceChatService != null)
@@ -103,14 +144,96 @@ public partial class GamePlay
         }
         finally
         {
-            SetVoiceStatus("팀 보이스 연결 종료");
-            ScheduleTeamVoiceRosterRefresh();
+            lifetimeToStop?.Dispose();
+            if (!IsTeamVoiceLifetimeActive())
+            {
+                SetVoiceStatus("팀 보이스 연결 종료");
+                ScheduleTeamVoiceRosterRefresh();
+            }
+            _voiceConnectionLock.Release();
         }
+    }
+
+    private bool IsCurrentTeamVoiceLifetime(CancellationTokenSource lifetime)
+    {
+        lock (_voiceLifetimeGate)
+        {
+            return _isTeamVoicePageActive &&
+                   ReferenceEquals(_voiceLifetimeCancellation, lifetime) &&
+                   !lifetime.IsCancellationRequested;
+        }
+    }
+
+    private bool IsTeamVoiceLifetimeActive()
+    {
+        lock (_voiceLifetimeGate)
+        {
+            return _isTeamVoicePageActive;
+        }
+    }
+
+    private void AttachTeamVoiceWindowLifecycle()
+    {
+        var window = Window;
+        if (ReferenceEquals(_voiceLifecycleWindow, window))
+        {
+            return;
+        }
+
+        DetachTeamVoiceWindowLifecycle();
+        if (window == null)
+        {
+            return;
+        }
+
+        _voiceLifecycleWindow = window;
+        window.Stopped += OnVoiceWindowStopped;
+        window.Resumed += OnVoiceWindowResumed;
+    }
+
+    private void DetachTeamVoiceWindowLifecycle()
+    {
+        if (_voiceLifecycleWindow == null)
+        {
+            return;
+        }
+
+        _voiceLifecycleWindow.Stopped -= OnVoiceWindowStopped;
+        _voiceLifecycleWindow.Resumed -= OnVoiceWindowResumed;
+        _voiceLifecycleWindow = null;
+    }
+
+    private async void OnVoiceWindowStopped(object? sender, EventArgs eventArgs)
+    {
+        _resumeTeamVoiceAfterWindowStop = IsTeamVoiceLifetimeActive();
+        if (_resumeTeamVoiceAfterWindowStop)
+        {
+            await StopTeamVoiceAsync();
+        }
+    }
+
+    private async void OnVoiceWindowResumed(object? sender, EventArgs eventArgs)
+    {
+        if (!_resumeTeamVoiceAfterWindowStop || IsTeamVoiceLifetimeActive())
+        {
+            return;
+        }
+
+        _resumeTeamVoiceAfterWindowStop = false;
+        BeginTeamVoiceLifetime();
+        if (!await RefreshOrReconnectGameNetworkAsync())
+        {
+            await StopTeamVoiceAsync();
+            SetVoiceStatus("게임 서버 재연결 실패 · 팀 보이스를 시작할 수 없습니다.");
+            return;
+        }
+
+        await InitializeTeamVoiceAsync();
     }
 
     private void OnVoiceParticipantsChanged(object? sender, EventArgs eventArgs)
     {
-        if (_isTeamVoicePageActive)
+        if (IsTeamVoiceLifetimeActive())
         {
             ScheduleTeamVoiceRosterRefresh();
         }
@@ -120,7 +243,7 @@ public partial class GamePlay
         object? sender,
         VoiceConnectionStateChangedEventArgs eventArgs)
     {
-        if (!_isTeamVoicePageActive && eventArgs.State != VoiceConnectionState.Disconnected)
+        if (!IsTeamVoiceLifetimeActive() && eventArgs.State != VoiceConnectionState.Disconnected)
         {
             return;
         }
@@ -132,6 +255,9 @@ public partial class GamePlay
                 ? "연결됨 · 내 마이크 꺼짐"
                 : "연결됨 · 내 마이크 켜짐",
             VoiceConnectionState.Reconnecting => "팀 보이스 재연결 중...",
+            VoiceConnectionState.Warning => string.IsNullOrWhiteSpace(eventArgs.Message)
+                ? "팀 보이스 경고"
+                : $"보이스 경고 · {eventArgs.Message}",
             VoiceConnectionState.Error => string.IsNullOrWhiteSpace(eventArgs.Message)
                 ? "팀 보이스 오류"
                 : $"보이스 오류 · {eventArgs.Message}",
@@ -139,6 +265,61 @@ public partial class GamePlay
         };
         SetVoiceStatus(status);
         ScheduleTeamVoiceRosterRefresh();
+        if (eventArgs.State == VoiceConnectionState.Disconnected &&
+            IsTeamVoiceLifetimeActive())
+        {
+            ScheduleTeamVoiceReconnect();
+        }
+    }
+
+    private void ScheduleTeamVoiceReconnect()
+    {
+        Interlocked.Increment(ref _voiceReconnectGeneration);
+        if (Interlocked.CompareExchange(ref _voiceReconnectWorkerRunning, 1, 0) != 0)
+        {
+            return;
+        }
+
+        _ = ReconnectTeamVoiceAsync();
+    }
+
+    private async Task ReconnectTeamVoiceAsync()
+    {
+        var handledGeneration = 0;
+        try
+        {
+            while (IsTeamVoiceLifetimeActive())
+            {
+                var requestedGeneration = Volatile.Read(ref _voiceReconnectGeneration);
+                await Task.Delay(TimeSpan.FromSeconds(1));
+                if (!IsTeamVoiceLifetimeActive())
+                {
+                    return;
+                }
+
+                if (!(_voiceChatService?.IsConnected ?? false))
+                {
+                    await InitializeTeamVoiceAsync();
+                }
+
+                handledGeneration = requestedGeneration;
+                if (requestedGeneration == Volatile.Read(ref _voiceReconnectGeneration))
+                {
+                    return;
+                }
+            }
+        }
+        finally
+        {
+            Interlocked.Exchange(ref _voiceReconnectWorkerRunning, 0);
+            if (IsTeamVoiceLifetimeActive() &&
+                !(_voiceChatService?.IsConnected ?? false) &&
+                handledGeneration != Volatile.Read(ref _voiceReconnectGeneration) &&
+                Interlocked.CompareExchange(ref _voiceReconnectWorkerRunning, 1, 0) == 0)
+            {
+                _ = ReconnectTeamVoiceAsync();
+            }
+        }
     }
 
     private void ScheduleTeamVoiceRosterRefresh()
@@ -290,9 +471,31 @@ public partial class GamePlay
 
     private void SetVoiceStatus(string status)
     {
-        // 연결 실패를 포함한 상태는 게임 화면에 노출하지 않습니다.
-        // 개발 빌드의 디버그 출력으로만 남겨 플레이를 방해하지 않습니다.
         System.Diagnostics.Debug.WriteLine($"Team voice: {status}");
+
+        void ApplyStatus()
+        {
+            VoiceStatusLabel.Text = status;
+            VoiceStatusLabel.TextColor = status.Contains("실패", StringComparison.Ordinal) ||
+                                         status.Contains("오류", StringComparison.Ordinal)
+                ? Color.FromArgb("#FCA5A5")
+                : status.StartsWith("연결됨", StringComparison.Ordinal)
+                    ? Color.FromArgb("#86EFAC")
+                    : status.Contains("경고", StringComparison.Ordinal) ||
+                      status.Contains("연결 중", StringComparison.Ordinal) ||
+                      status.Contains("재연결", StringComparison.Ordinal)
+                        ? Color.FromArgb("#FDE68A")
+                        : Color.FromArgb("#CBD5E1");
+        }
+
+        if (MainThread.IsMainThread)
+        {
+            ApplyStatus();
+        }
+        else
+        {
+            MainThread.BeginInvokeOnMainThread(ApplyStatus);
+        }
     }
 
     private static string GetVoiceErrorMessage(Exception exception)

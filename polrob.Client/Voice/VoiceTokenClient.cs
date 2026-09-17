@@ -44,15 +44,22 @@ public sealed class VoiceTokenClient
 
         if (!response.IsSuccessStatusCode)
         {
-            var message = await response.Content.ReadAsStringAsync(cancellationToken);
-            throw new VoiceChatException(
-                string.IsNullOrWhiteSpace(message)
-                    ? "보이스 접속 정보를 가져오지 못했습니다."
-                    : message);
+            var diagnostic = await response.Content.ReadAsStringAsync(cancellationToken);
+            System.Diagnostics.Debug.WriteLine(
+                $"Voice token request failed ({(int)response.StatusCode}): {diagnostic}");
+
+            var message = response.StatusCode switch
+            {
+                HttpStatusCode.ServiceUnavailable => "보이스 서버 설정이 완료되지 않았습니다.",
+                >= HttpStatusCode.InternalServerError => "보이스 서버에 일시적인 문제가 발생했습니다.",
+                HttpStatusCode.BadRequest => "보이스 채널 요청 정보가 올바르지 않습니다.",
+                _ => "보이스 접속 정보를 가져오지 못했습니다."
+            };
+            throw new VoiceChatException(message);
         }
 
         return await response.Content.ReadFromJsonAsync<VoiceConnectionInfo>(
-                   cancellationToken: cancellationToken)
+               cancellationToken: cancellationToken)
                ?? throw new VoiceChatException("보이스 접속 응답을 읽을 수 없습니다.");
     }
 }

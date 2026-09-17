@@ -30,6 +30,11 @@
 	<string>Assets.xcassets/polrobicon_new.appiconset</string>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsArbitraryLoads</key>
+		<true/>
+	</dict>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>멀티플레이 서버에 접속하기 위해 로컬 네트워크 권한이 필요합니다.</string>
 	<key>NSMicrophoneUsageDescription</key>

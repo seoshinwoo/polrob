@@ -1,5 +1,6 @@
 using System.Net.Http.Json;
 using System.Net.Http.Headers;
+using System.Reflection;
 using Microsoft.Maui.Storage;
 
 namespace polrob.Client;
@@ -8,7 +9,7 @@ public static class AuthSession
 {
     // iPhone 개인용 핫스팟에 연결된 현재 MacBook(en0)의 IPv4 주소입니다.
     // iOS 실기기는 이 주소로 MacBook에서 실행 중인 HTTP/TCP/UDP 서버에 접속합니다.
-    private const string LocalNetworkServerHost = "192.0.0.2";
+    private const string FallbackLocalNetworkServerHost = "192.168.0.83";
     private static readonly SemaphoreSlim LoadLock = new(1, 1); // 한 번에 한 작업만 통과시키는 잠금장치.. 
     private static bool _isLoaded;
 
@@ -114,6 +115,12 @@ public static class AuthSession
     {
         get
         {
+            var configuredUrl = GetBuildMetadata("PolRobApiBaseUrl");
+            if (!string.IsNullOrWhiteSpace(configuredUrl))
+            {
+                return $"{configuredUrl.TrimEnd('/')}/";
+            }
+
 #if ANDROID
             return $"http://{AndroidServerHost}:5174";
 #elif IOS
@@ -141,12 +148,26 @@ public static class AuthSession
     private static string AndroidServerHost =>
         DeviceInfo.DeviceType == DeviceType.Virtual
             ? "10.0.2.2"
-            : LocalNetworkServerHost;
+            : PhysicalServerHost;
 
     private static string IosServerHost =>
         DeviceInfo.DeviceType == DeviceType.Virtual
             ? "127.0.0.1"
-            : LocalNetworkServerHost;
+            : PhysicalServerHost;
+
+    private static string PhysicalServerHost =>
+        GetBuildMetadata("PolRobPhysicalServerHost") ?? FallbackLocalNetworkServerHost;
+
+    private static string? GetBuildMetadata(string key)
+    {
+        return typeof(AuthSession).Assembly
+            .GetCustomAttributes<AssemblyMetadataAttribute>()
+            .FirstOrDefault(attribute => string.Equals(
+                attribute.Key,
+                key,
+                StringComparison.Ordinal))
+            ?.Value;
+    }
 
     private sealed record LogoutRequest(string SessionToken);
 }

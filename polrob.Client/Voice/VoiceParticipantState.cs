@@ -29,5 +29,6 @@ public enum VoiceConnectionState
     Connecting,
     Connected,
     Reconnecting,
+    Warning,
     Error
 }

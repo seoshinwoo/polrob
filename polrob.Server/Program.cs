@@ -56,9 +56,20 @@ if (builder.Configuration.GetValue<bool>("EnableGameServer", true))
 }
 
 builder.Services.AddSingleton<BotIdentityService>();
+builder.Services.AddSingleton<ActiveGameParticipantRegistry>();
 builder.Services.AddSingleton<GameRoomService>();
-builder.Services.Configure<LiveKitOptions>(builder.Configuration.GetSection(LiveKitOptions.SectionName));
+builder.Services.AddOptions<LiveKitOptions>()
+    .Bind(builder.Configuration.GetSection(LiveKitOptions.SectionName))
+    .Validate(
+        options => Uri.TryCreate(options.Url, UriKind.Absolute, out var uri) && uri.Scheme == "wss",
+        "LiveKit:Url must be an absolute wss:// URL.")
+    .Validate(
+        options => !string.IsNullOrWhiteSpace(options.ApiKey) &&
+                   !string.IsNullOrWhiteSpace(options.ApiSecret),
+        "LiveKit API key and API secret are required.")
+    .ValidateOnStart();
 builder.Services.AddSingleton<LiveKitTokenService>();
+builder.Services.AddSingleton<LiveKitRoomAdminService>();
 
 var app = builder.Build();
 using (var scope = app.Services.CreateAsyncScope())

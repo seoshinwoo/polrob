@@ -11,5 +11,5 @@ public sealed class LiveKitOptions
     public string ApiSecret { get; set; } = string.Empty;
 
     // 유출된 참가자 토큰이 오래 사용되지 않도록 게임 접속에 충분한 짧은 수명만 부여합니다.
-    public int TokenLifetimeMinutes { get; set; } = 15;
+    public int TokenLifetimeMinutes { get; set; } = 2;
 }

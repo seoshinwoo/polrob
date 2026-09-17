@@ -12,5 +12,7 @@ public enum TcpMessageType : byte
     PlayerState = 8,
     JailBreakProgress = 9,
     MovementSession = 10,
-    OpponentProximity = 11
+    OpponentProximity = 11,
+    Heartbeat = 12,
+    HeartbeatAcknowledged = 13
 }

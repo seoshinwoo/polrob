@@ -17,6 +17,8 @@ public partial class GameNetworkServer : BackgroundService
     private readonly ConcurrentDictionary<string, PlayerRoomRegistration> _playerRooms = new(); // Key : playerId, Value : current room/connection
     private readonly ConcurrentDictionary<string, UdpRateLimitState> _udpRateLimits = new(); // UDP 패킷 제한 상태를 저장하는 딕셔너리.. Key : playerID
     private readonly GameRoomService _gameRoomService;
+    private readonly ActiveGameParticipantRegistry _activeGameParticipants;
+    private readonly LiveKitRoomAdminService _liveKitRoomAdminService;
     private readonly IGameRecordQueue _gameRecordQueue;
     private readonly ILogger<GameNetworkServer> _logger;
     private readonly GameMap _map = new();
@@ -61,11 +63,15 @@ public partial class GameNetworkServer : BackgroundService
     // TCP/UDP 소켓과 방 서비스를 준비합니다.
     public GameNetworkServer(
         GameRoomService gameRoomService,
+        ActiveGameParticipantRegistry activeGameParticipants,
+        LiveKitRoomAdminService liveKitRoomAdminService,
         IGameRecordQueue gameRecordQueue,
         IConfiguration configuration,
         ILogger<GameNetworkServer> logger)
     {
         _gameRoomService = gameRoomService;
+        _activeGameParticipants = activeGameParticipants;
+        _liveKitRoomAdminService = liveKitRoomAdminService;
         _gameRecordQueue = gameRecordQueue;
         _logger = logger;
         _roomCommandQueueCapacity = Math.Max(
@@ -154,6 +160,7 @@ public partial class GameNetworkServer : BackgroundService
         gameSession.HasHadPlayers = true;
         gameSession.EmptySinceUtc = null;
         _playerRooms[playerId] = new PlayerRoomRegistration(roomId, command.ConnectionId);
+        _activeGameParticipants.Register(roomId, playerId, command.ConnectionId);
         _udpRateLimits.TryRemove(playerId, out _);
 
         var visiblePlayers = gameSession.Sessions.Values
@@ -201,6 +208,14 @@ public partial class GameNetworkServer : BackgroundService
 
     private void HandleRoomLeave(string roomId, GameSession gameSession, LeaveRoomCommand command)
     {
+        // LiveKit identity가 TCP 연결 세대별로 다르므로, 교체된 이전 소켓의
+        // 지연된 Leave도 이전 음성 참가자만 정확히 제거할 수 있습니다.
+        RemoveTeamVoiceParticipant(
+            roomId,
+            command.PlayerId,
+            command.ConnectionId,
+            command.Role);
+
         if (!gameSession.Sessions.TryGetValue(command.PlayerId, out var currentSession) ||
             !string.Equals(currentSession.ConnectionId, command.ConnectionId, StringComparison.Ordinal))
         {
@@ -252,6 +267,27 @@ public partial class GameNetworkServer : BackgroundService
         RefreshOpponentProximityAlerts(gameSession);
     }
 
+    private void RemoveTeamVoiceParticipant(
+        string roomId,
+        string playerId,
+        string connectionId,
+        PlayerRole role)
+    {
+        if (_gameRoomService.TryGetAuthenticatedTeamVoiceAccess(
+                roomId,
+                playerId,
+                out _,
+                out var voiceSessionId))
+        {
+            _ = _liveKitRoomAdminService.RemoveParticipantAsync(
+                roomId,
+                voiceSessionId,
+                role,
+                playerId,
+                connectionId);
+        }
+    }
+
     private void RemovePlayerRoomRegistration(string playerId, string connectionId)
     {
         if (!_playerRooms.TryGetValue(playerId, out var registration) ||
@@ -262,6 +298,10 @@ public partial class GameNetworkServer : BackgroundService
 
         ((ICollection<KeyValuePair<string, PlayerRoomRegistration>>)_playerRooms)
             .Remove(new KeyValuePair<string, PlayerRoomRegistration>(playerId, registration));
+        _activeGameParticipants.Unregister(
+            registration.RoomId,
+            playerId,
+            connectionId);
     }
 
     private bool TryAbortGameStart(string roomId, GameSession gameSession, string leavingPlayerId)

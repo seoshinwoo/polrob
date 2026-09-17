@@ -51,7 +51,10 @@ public sealed record JoinRoomCommand(
     BinaryWriter Writer,
     string ConnectionId) : RoomCommand;
 
-public sealed record LeaveRoomCommand(string PlayerId, string ConnectionId) : RoomCommand;
+public sealed record LeaveRoomCommand(
+    string PlayerId,
+    string ConnectionId,
+    PlayerRole Role) : RoomCommand;
 
 public sealed record MoveRoomCommand(PlayerMovementInput Input, IPEndPoint RemoteEndPoint) : RoomCommand;
 

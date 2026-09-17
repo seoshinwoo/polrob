@@ -21,56 +21,81 @@
                        HorizontalOptions="Start"
                        VerticalOptions="End"/>
 
-        <!-- 오류 문구 없이 팀원과 발화 상태만 보여주는 화면 고정 로스터입니다. -->
-        <VerticalStackLayout Spacing="4"
+        <!-- 같은 팀의 연결/발화/음소거 상태를 보여줍니다. 각 행을 누르면 음소거가 토글됩니다. -->
+        <VerticalStackLayout Spacing="5"
                              Margin="0,0,14,32"
-                             MaximumWidthRequest="220"
+                             MaximumWidthRequest="240"
                              HorizontalOptions="End"
-                             VerticalOptions="End"
-                             InputTransparent="True"
-                             BindableLayout.ItemsSource="{Binding VoiceMembers, Source={x:Reference GamePage}}">
-            <BindableLayout.ItemTemplate>
-                <DataTemplate x:DataType="voice:TeamVoiceMemberViewModel">
-                    <Border BackgroundColor="#B30F172A"
-                            Stroke="#805E6B7D"
-                            StrokeThickness="1"
-                            Padding="0"
-                            HeightRequest="38"
-                            StrokeShape="RoundRectangle 7">
-                        <Grid ColumnDefinitions="38,*,Auto"
-                                ColumnSpacing="9">
-                            <Border BackgroundColor="{Binding SlotColor}"
-                                    StrokeThickness="0"
-                                    Margin="2"
-                                    Padding="0"
-                                    StrokeShape="RoundRectangle 5">
-                                <Label Text="{Binding SlotNumber}"
+                             VerticalOptions="End">
+            <Border BackgroundColor="#D90F172A"
+                    Stroke="#805E6B7D"
+                    StrokeThickness="1"
+                    Padding="8,5"
+                    StrokeShape="RoundRectangle 7">
+                <Label x:Name="VoiceStatusLabel"
+                       Text="팀 보이스 준비 중..."
+                       TextColor="#CBD5E1"
+                       FontSize="11"
+                       MaxLines="2"
+                       LineBreakMode="TailTruncation"/>
+            </Border>
+
+            <VerticalStackLayout Spacing="4"
+                                 BindableLayout.ItemsSource="{Binding VoiceMembers, Source={x:Reference GamePage}}">
+                <BindableLayout.ItemTemplate>
+                    <DataTemplate x:DataType="voice:TeamVoiceMemberViewModel">
+                        <Border BackgroundColor="#B30F172A"
+                                Stroke="#805E6B7D"
+                                StrokeThickness="1"
+                                Padding="0"
+                                HeightRequest="38"
+                                Opacity="{Binding RowOpacity}"
+                                SemanticProperties.Hint="{Binding StatusText}"
+                                StrokeShape="RoundRectangle 7">
+                            <Border.GestureRecognizers>
+                                <TapGestureRecognizer Tapped="OnVoiceMemberTapped"
+                                                      CommandParameter="{Binding Identity}"/>
+                            </Border.GestureRecognizers>
+                            <Grid ColumnDefinitions="38,*,Auto,Auto"
+                                  ColumnSpacing="7">
+                                <Border BackgroundColor="{Binding SlotColor}"
+                                        StrokeThickness="0"
+                                        Margin="2"
+                                        Padding="0"
+                                        StrokeShape="RoundRectangle 5">
+                                    <Label Text="{Binding SlotNumber}"
+                                           TextColor="White"
+                                           FontAttributes="Bold"
+                                           FontSize="16"
+                                           HorizontalTextAlignment="Center"
+                                           VerticalTextAlignment="Center"/>
+                                </Border>
+
+                                <Label Grid.Column="1"
+                                       Text="{Binding DisplayNameWithSelf}"
                                        TextColor="White"
                                        FontAttributes="Bold"
-                                       FontSize="16"
-                                       HorizontalTextAlignment="Center"
+                                       FontSize="13"
+                                       LineBreakMode="TailTruncation"
                                        VerticalTextAlignment="Center"/>
-                            </Border>
 
-                            <Label Grid.Column="1"
-                                   Text="{Binding DisplayName}"
-                                   TextColor="White"
-                                   FontAttributes="Bold"
-                                   FontSize="13"
-                                   LineBreakMode="TailTruncation"
-                                   VerticalTextAlignment="Center"/>
+                                <Label Grid.Column="2"
+                                       Text="●"
+                                       TextColor="#7DD3FC"
+                                       FontSize="15"
+                                       IsVisible="{Binding IsSpeaking}"
+                                       VerticalTextAlignment="Center"/>
 
-                            <Label Grid.Column="2"
-                                   Text="🔊"
-                                   TextColor="#7DD3FC"
-                                   FontSize="16"
-                                   Margin="0,0,9,0"
-                                   IsVisible="{Binding IsSpeaking}"
-                                   VerticalTextAlignment="Center"/>
-                        </Grid>
-                    </Border>
-                </DataTemplate>
-            </BindableLayout.ItemTemplate>
+                                <Label Grid.Column="3"
+                                       Text="{Binding MuteGlyph}"
+                                       FontSize="16"
+                                       Margin="0,0,8,0"
+                                       VerticalTextAlignment="Center"/>
+                            </Grid>
+                        </Border>
+                    </DataTemplate>
+                </BindableLayout.ItemTemplate>
+            </VerticalStackLayout>
         </VerticalStackLayout>
 
         <!-- 남은 시간은 배경 없이 숫자만 보여주는 중앙 HUD입니다. -->

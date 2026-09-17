@@ -40,6 +40,7 @@ public partial class GameNetworkServer
         string? playerId = null;
         string? roomId = null;
         string? connectionId = null;
+        PlayerRole? playerRole = null;
 
         try
         {
@@ -77,6 +78,7 @@ public partial class GameNetworkServer
 
                     playerId = authenticatedUserId;
                     connectionId = Guid.NewGuid().ToString("N");
+                    playerRole = player.Role;
 
                     var joinCommand = new JoinRoomCommand(player, client, writer, connectionId);
                     var gameSession = GetOrCreateGameSession(roomId, stoppingToken);
@@ -84,6 +86,16 @@ public partial class GameNetworkServer
                     {
                         throw new InvalidOperationException($"Room command queue is full for room {roomId}.");
                     }
+                }
+                else if (type == TcpMessageType.Heartbeat &&
+                         playerId != null &&
+                         roomId != null &&
+                         connectionId != null &&
+                         _activeGameParticipants.Refresh(roomId, playerId, connectionId))
+                {
+                    // 현재 연결의 heartbeat만 승인합니다. 교체된 이전 소켓은
+                    // 새 연결의 active lease를 되돌리거나 보이스 권한을 얻을 수 없습니다.
+                    TrySendTcp(writer, TcpMessageType.HeartbeatAcknowledged, json);
                 }
             }
         }
@@ -104,16 +116,28 @@ public partial class GameNetworkServer
         }
         finally
         {
-            if (playerId != null && roomId != null && connectionId != null &&
+            if (playerId != null && roomId != null && connectionId != null && playerRole != null &&
                 _gameSessions.TryGetValue(roomId, out var gameSession))
             {
-                if (!TryWriteRoomCommand(gameSession, new LeaveRoomCommand(playerId, connectionId)))
+                if (!TryWriteRoomCommand(
+                        gameSession,
+                        new LeaveRoomCommand(playerId, connectionId, playerRole.Value)))
                 {
+                    RemoveTeamVoiceParticipant(
+                        roomId,
+                        playerId,
+                        connectionId,
+                        playerRole.Value);
                     RemovePlayerRoomRegistration(playerId, connectionId);
                 }
             }
-            else if (playerId != null && connectionId != null)
+            else if (playerId != null && roomId != null && connectionId != null && playerRole != null)
             {
+                RemoveTeamVoiceParticipant(
+                    roomId,
+                    playerId,
+                    connectionId,
+                    playerRole.Value);
                 RemovePlayerRoomRegistration(playerId, connectionId);
             }
 

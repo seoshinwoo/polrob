@@ -18,17 +18,19 @@ public sealed class HybridWebViewVoiceRoomClient : IVoiceRoomClient
     };
 
     private readonly HybridWebView _webView;
-    private readonly TaskCompletionSource _webViewReady =
-        new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private TaskCompletionSource _webViewReady = CreateReadySource();
     private readonly ConcurrentDictionary<string, TaskCompletionSource<VoiceCommandResult>>
         _pendingCommands = new();
     private readonly object _participantsLock = new();
     private IReadOnlyList<VoiceParticipantState> _participants = Array.Empty<VoiceParticipantState>();
+    private bool _preferredLocalMicrophoneMuted;
     private bool _disposed;
+    private int _bridgeGeneration;
 
     public HybridWebViewVoiceRoomClient(HybridWebView webView)
     {
         _webView = webView ?? throw new ArgumentNullException(nameof(webView));
+        _webView.WebViewInitializing += OnWebViewInitializing;
         _webView.RawMessageReceived += OnRawMessageReceived;
     }
 
@@ -71,11 +73,10 @@ public sealed class HybridWebViewVoiceRoomClient : IVoiceRoomClient
             this,
             new VoiceConnectionStateChangedEventArgs(VoiceConnectionState.Connecting));
 
-        await _webViewReady.Task.WaitAsync(WebViewReadyTimeout, cancellationToken);
-
         // 권한이 거부되어도 방에는 수신 전용으로 접속하므로 게임 자체는 계속할 수 있습니다.
         var microphoneGranted = await RequestMicrophonePermissionAsync(cancellationToken);
-        IsLocalMicrophoneMuted = !microphoneGranted;
+        var enableMicrophone = microphoneGranted && !_preferredLocalMicrophoneMuted;
+        IsLocalMicrophoneMuted = !enableMicrophone;
 
         await SendCommandAsync(
             "connect",
@@ -83,7 +84,7 @@ public sealed class HybridWebViewVoiceRoomClient : IVoiceRoomClient
             {
                 ["url"] = connectionInfo.ServerUrl,
                 ["token"] = connectionInfo.ParticipantToken,
-                ["enableMicrophone"] = microphoneGranted
+                ["enableMicrophone"] = enableMicrophone
             },
             cancellationToken);
     }
@@ -103,6 +104,8 @@ public sealed class HybridWebViewVoiceRoomClient : IVoiceRoomClient
             "setLocalMuted",
             new Dictionary<string, object?> { ["muted"] = muted },
             cancellationToken);
+        _preferredLocalMicrophoneMuted = muted;
+        IsLocalMicrophoneMuted = muted;
     }
 
     public Task SetRemotePlaybackMutedAsync(
@@ -136,9 +139,16 @@ public sealed class HybridWebViewVoiceRoomClient : IVoiceRoomClient
 
         if (_webViewReady.Task.IsCompleted)
         {
+            using var cleanupCancellation =
+                CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            cleanupCancellation.CancelAfter(TimeSpan.FromSeconds(5));
             try
             {
-                await SendCommandAsync("disconnect", null, cancellationToken);
+                await SendCommandAsync("disconnect", null, cleanupCancellation.Token);
+            }
+            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+            {
+                System.Diagnostics.Debug.WriteLine("Voice disconnect timed out after 5 seconds.");
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
@@ -159,6 +169,7 @@ public sealed class HybridWebViewVoiceRoomClient : IVoiceRoomClient
 
         await DisconnectAsync();
         _disposed = true;
+        _webView.WebViewInitializing -= OnWebViewInitializing;
         _webView.RawMessageReceived -= OnRawMessageReceived;
 
         foreach (var (_, completion) in _pendingCommands)
@@ -173,7 +184,13 @@ public sealed class HybridWebViewVoiceRoomClient : IVoiceRoomClient
         IReadOnlyDictionary<string, object?>? values,
         CancellationToken cancellationToken)
     {
-        await _webViewReady.Task.WaitAsync(WebViewReadyTimeout, cancellationToken);
+        var bridgeGeneration = Volatile.Read(ref _bridgeGeneration);
+        var readySource = Volatile.Read(ref _webViewReady);
+        await readySource.Task.WaitAsync(WebViewReadyTimeout, cancellationToken);
+        if (bridgeGeneration != Volatile.Read(ref _bridgeGeneration))
+        {
+            throw new VoiceChatException("보이스 화면이 다시 준비되는 중입니다.");
+        }
 
         var requestId = Guid.NewGuid().ToString("N");
         var completion = new TaskCompletionSource<VoiceCommandResult>(
@@ -200,6 +217,10 @@ public sealed class HybridWebViewVoiceRoomClient : IVoiceRoomClient
             }
 
             var json = JsonSerializer.Serialize(command, JsonOptions);
+            if (bridgeGeneration != Volatile.Read(ref _bridgeGeneration))
+            {
+                throw new VoiceChatException("보이스 화면이 다시 준비되는 중입니다.");
+            }
             await MainThread.InvokeOnMainThreadAsync(() => _webView.SendRawMessage(json));
 
             var result = await completion.Task.WaitAsync(CommandTimeout, cancellationToken);
@@ -220,6 +241,28 @@ public sealed class HybridWebViewVoiceRoomClient : IVoiceRoomClient
             _pendingCommands.TryRemove(requestId, out _);
         }
     }
+
+    private void OnWebViewInitializing(object? sender, WebViewInitializingEventArgs eventArgs)
+    {
+        var replacement = CreateReadySource();
+        var previous = Interlocked.Exchange(ref _webViewReady, replacement);
+        Interlocked.Increment(ref _bridgeGeneration);
+        previous.TrySetCanceled();
+
+        foreach (var (_, completion) in _pendingCommands)
+        {
+            completion.TrySetException(
+                new VoiceChatException("보이스 화면이 다시 만들어져 연결을 재시도합니다."));
+        }
+        _pendingCommands.Clear();
+
+        // 최초 생성 시에는 화면이 아직 비활성이라 재접속이 예약되지 않고,
+        // 실행 중 재생성이라면 상위 계층이 새 토큰으로 안전하게 다시 연결합니다.
+        SetDisconnectedState();
+    }
+
+    private static TaskCompletionSource CreateReadySource() =>
+        new(TaskCreationOptions.RunContinuationsAsynchronously);
 
     private static async Task<bool> RequestMicrophonePermissionAsync(
         CancellationToken cancellationToken)
@@ -275,13 +318,19 @@ public sealed class HybridWebViewVoiceRoomClient : IVoiceRoomClient
                     HandleConnectionState(root);
                     break;
                 case "warning":
-                case "error":
                     var message = TryGetString(root, "message");
                     ConnectionStateChanged?.Invoke(
                         this,
                         new VoiceConnectionStateChangedEventArgs(
-                            VoiceConnectionState.Error,
+                            VoiceConnectionState.Warning,
                             message));
+                    break;
+                case "error":
+                    ConnectionStateChanged?.Invoke(
+                        this,
+                        new VoiceConnectionStateChangedEventArgs(
+                            VoiceConnectionState.Error,
+                            TryGetString(root, "message")));
                     break;
             }
         }
