@@ -275,7 +275,7 @@ public partial class GameNetworkServer
             foreach (var targetSession in opponentSessions)
             {
                 var target = targetSession.PlayerState;
-                var isVisibleToTeam = IsPlayerVisibleToTeam(teamSessions, role, target);
+                var isVisibleToTeam = IsPlayerVisibleToTeam(gameSession, teamSessions, role, target);
 
                 foreach (var recipientSession in teamSessions)
                 {
@@ -299,6 +299,7 @@ public partial class GameNetworkServer
     }
 
     private bool IsPlayerVisibleToTeam(
+        GameSession gameSession,
         IEnumerable<PlayerSession> sessions,
         PlayerRole teamRole,
         Player target)
@@ -306,6 +307,15 @@ public partial class GameNetworkServer
         if (teamRole == PlayerRole.Police &&
             target.Role == PlayerRole.Robber &&
             IsInJail(target))
+        {
+            return true;
+        }
+
+        // During the surrender animation every robber must see the officer who
+        // is making the arrest, regardless of the team's normal vision cones.
+        if (teamRole == PlayerRole.Robber &&
+            target.Role == PlayerRole.Police &&
+            gameSession.ActiveArrestsByRobberId.Values.Any(arrest => arrest.PoliceId == target.Id))
         {
             return true;
         }

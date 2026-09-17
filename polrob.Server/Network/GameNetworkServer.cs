@@ -166,7 +166,7 @@ public partial class GameNetworkServer : BackgroundService
         var visiblePlayers = gameSession.Sessions.Values
             .Select(s => s.PlayerState)
             .Where(p => p.Role == player.Role ||
-                        IsPlayerVisibleToTeam(gameSession.Sessions.Values, player.Role, p))
+                        IsPlayerVisibleToTeam(gameSession, gameSession.Sessions.Values, player.Role, p))
             .ToList();
 
         foreach (var visibleOpponent in visiblePlayers.Where(p => p.Role != player.Role))
@@ -178,6 +178,13 @@ public partial class GameNetworkServer : BackgroundService
 
         TrySendTcp(command.Writer, TcpMessageType.MovementSession, playerSession.MovementSessionToken);
         TrySendTcp(command.Writer, TcpMessageType.InitialState, SerializeForMetrics(visiblePlayers));
+        foreach (var arrest in gameSession.ActiveArrestsByRobberId.Values.OrderBy(a => a.RobberId))
+        {
+            TrySendTcp(
+                command.Writer,
+                TcpMessageType.Arrested,
+                $"{arrest.PoliceId},{arrest.RobberId}");
+        }
         Console.WriteLine($"{roomId} 방 {player.Role} 역할 {visiblePlayers.Count}명으로 플레이어 초기화!!");
 
         var syncData = new GameStateSync
@@ -230,15 +237,18 @@ public partial class GameNetworkServer : BackgroundService
         }
 
         gameSession.JailEntryTimes.TryRemove(command.PlayerId, out _);
-        gameSession.JailBreakStartedAtByRescuer.Remove(command.PlayerId);
-        gameSession.JailBreakProgressByRescuer.Remove(command.PlayerId);
+        var jailBreakProgressChanged =
+            gameSession.JailBreakStartedAtByRescuer.Remove(command.PlayerId) |
+            gameSession.JailBreakProgressByRescuer.Remove(command.PlayerId);
         gameSession.PendingUdpMovementPlayerIds.Remove(command.PlayerId);
         _udpRateLimits.TryRemove(command.PlayerId, out _);
+        var arrestVisibilityChanged = false;
         foreach (var arrest in gameSession.ActiveArrestsByRobberId.Values
                      .Where(a => a.RobberId == command.PlayerId || a.PoliceId == command.PlayerId)
                      .ToList())
         {
             gameSession.ActiveArrestsByRobberId.Remove(arrest.RobberId);
+            arrestVisibilityChanged = true;
         }
 
         RemovePlayerRoomRegistration(command.PlayerId, command.ConnectionId);
@@ -256,11 +266,29 @@ public partial class GameNetworkServer : BackgroundService
             command.PlayerId,
             null);
 
+        if (jailBreakProgressChanged)
+        {
+            BroadcastJailBreakProgress(gameSession, roomId);
+        }
+
+        if (arrestVisibilityChanged)
+        {
+            RefreshOpponentVisibility(gameSession);
+        }
+
         foreach (var remainingSession in gameSession.Sessions.Values)
         {
             if (remainingSession.VisibleOpponentPlayerIds.Remove(command.PlayerId))
             {
                 TrySendTcp(remainingSession.Writer, TcpMessageType.Left, command.PlayerId);
+            }
+        }
+
+        if (IsInJail(removedSession.PlayerState))
+        {
+            foreach (var jailedRobber in ArrangeJailedRobbers(gameSession))
+            {
+                BroadcastPlayerState(gameSession, jailedRobber);
             }
         }
 
@@ -505,7 +533,11 @@ public partial class GameNetworkServer : BackgroundService
         var now = DateTime.UtcNow;
         var completedArrests = gameSession.ActiveArrestsByRobberId.Values
             .Where(a => a.CompletesAtUtc <= now)
+            .OrderBy(a => a.CompletesAtUtc)
+            .ThenBy(a => a.RobberId)
             .ToList();
+        var jailLayoutChanged = false;
+        var arrestingPoliceIds = new HashSet<string>();
 
         foreach (var arrest in completedArrests)
         {
@@ -516,23 +548,29 @@ public partial class GameNetworkServer : BackgroundService
             }
 
             var robber = robberSession.PlayerState;
-            var jailPosition = GetJailHoldingPosition(robber, gameSession);
-            robber.X = jailPosition.X;
-            robber.Y = jailPosition.Y;
             robber.Angle = 0f;
             robber.IsMoving = false;
             robber.IsJailed = true;
 
-            gameSession.JailEntryTimes[robber.Id] = now;
+            gameSession.JailEntryTimes[robber.Id] = arrest.CompletesAtUtc;
             gameSession.ActiveArrestsByRobberId.Remove(robber.Id);
+            jailLayoutChanged = true;
+            arrestingPoliceIds.Add(arrest.PoliceId);
+        }
 
-            BroadcastPlayerState(gameSession, robber);
-
-            if (gameSession.Sessions.TryGetValue(arrest.PoliceId, out var policeSession))
+        if (jailLayoutChanged)
+        {
+            foreach (var jailedRobber in ArrangeJailedRobbers(gameSession))
             {
-                policeSession.PlayerState.IsMoving = false;
-                BroadcastPlayerState(gameSession, policeSession.PlayerState);
+                BroadcastPlayerState(gameSession, jailedRobber);
             }
+        }
+
+        foreach (var policeId in arrestingPoliceIds)
+        {
+            if (!gameSession.Sessions.TryGetValue(policeId, out var policeSession)) continue;
+            policeSession.PlayerState.IsMoving = false;
+            BroadcastPlayerState(gameSession, policeSession.PlayerState);
         }
     }
 
@@ -590,42 +628,43 @@ public partial class GameNetworkServer : BackgroundService
         police.IsMoving = false;
         robber.IsMoving = false;
 
+        // Add the arresting officer to every robber client's roster before the
+        // arrest animation starts, even when no robber currently sees them.
+        RefreshOpponentVisibility(gameSession);
         BroadcastTcp(gameSession, TcpMessageType.Arrested, $"{police.Id},{robber.Id}", null);
         BroadcastPlayerState(gameSession, police);
         BroadcastPlayerState(gameSession, robber);
     }
 
-    // 감옥 안에서 도둑들이 겹치지 않도록 수용 위치를 계산합니다.
-    private (float X, float Y) GetJailHoldingPosition(Player robber, GameSession gameSession)
+    // 실제 수감자만 감옥 이미지의 중앙 슬롯들에 다시 배치합니다.
+    private IReadOnlyList<Player> ArrangeJailedRobbers(GameSession gameSession)
     {
-        var robbers = gameSession.Sessions.Values
+        var jailedRobbers = gameSession.Sessions.Values
             .Select(s => s.PlayerState)
-            .Where(p => p.Role == PlayerRole.Robber)
-            .OrderBy(p => p.Id)
+            .Where(IsInJail)
+            .OrderBy(p => gameSession.JailEntryTimes.TryGetValue(p.Id, out var enteredAt)
+                ? enteredAt
+                : DateTime.MaxValue)
+            .ThenBy(p => p.Id)
             .ToList();
 
-        var index = robbers.FindIndex(p => p.Id == robber.Id);
-        if (index < 0)
+        if (jailedRobbers.Count == 0)
         {
-            index = 0;
+            return jailedRobbers;
         }
 
-        const int columns = 3;
-        const float gap = 150f;
-        var rows = Math.Max(1, (int)Math.Ceiling(robbers.Count / (double)columns));
-        var column = index % columns;
-        var row = index / columns;
-        var offsetX = (column - ((columns - 1) / 2f)) * gap;
-        var offsetY = (row - ((rows - 1) / 2f)) * gap;
-        var jailBounds = GameMap.GetBuildingCollisionBounds(_map.Jail);
-        var minX = jailBounds.Left + robber.Radius;
-        var maxX = jailBounds.Right - robber.Radius;
-        var minY = jailBounds.Top + robber.Radius;
-        var maxY = jailBounds.Bottom - robber.Radius;
+        var layoutRadius = jailedRobbers.Max(p => p.Radius);
+        for (var index = 0; index < jailedRobbers.Count; index++)
+        {
+            var robber = jailedRobbers[index];
+            var position = _map.GetJailHoldingPosition(index, jailedRobbers.Count, layoutRadius);
+            robber.X = position.X;
+            robber.Y = position.Y;
+            robber.Angle = 0f;
+            robber.IsMoving = false;
+        }
 
-        return (
-            Math.Clamp(_map.Jail.CollisionCenter.X + offsetX, minX, maxX),
-            Math.Clamp(_map.Jail.CollisionCenter.Y + offsetY, minY, maxY));
+        return jailedRobbers;
     }
 
     // 감옥 근처에서 구조 중인 도둑들의 탈옥 진행률을 갱신하고 완료 시 석방합니다.
@@ -647,7 +686,12 @@ public partial class GameNetworkServer : BackgroundService
                         !IsInJail(p) &&
                         !IsPlayerInActiveArrest(gameSession, p.Id) &&
                         IsTouchingOrNearJail(p))
-            .OrderBy(p => p.Id)
+            // Preserve a rescue already in progress when another completed
+            // rescue reduces the number of available prisoner targets.
+            .OrderBy(p => gameSession.JailBreakStartedAtByRescuer.TryGetValue(p.Id, out var startedAt)
+                ? startedAt
+                : DateTime.MaxValue)
+            .ThenBy(p => p.Id)
             .Take(jailedRobberCount)
             .ToList();
 
@@ -754,6 +798,11 @@ public partial class GameNetworkServer : BackgroundService
             BroadcastPlayerState(gameSession, target);
         }
 
+        foreach (var jailedRobber in ArrangeJailedRobbers(gameSession))
+        {
+            BroadcastPlayerState(gameSession, jailedRobber);
+        }
+
         foreach (var rescuer in readyRescuers)
         {
             gameSession.JailBreakStartedAtByRescuer.Remove(rescuer.Id);
@@ -770,7 +819,8 @@ public partial class GameNetworkServer : BackgroundService
         }
     }
 
-    // 현재 구조자별 탈옥 진행률을 같은 도둑 역할의 TCP 클라이언트에 보냅니다.
+    // 현재 구조자별 탈옥 진행률을 모든 클라이언트에 보내 구조 동작을 동기화합니다.
+    // 진행 바 자체는 도둑 클라이언트에서만 렌더링됩니다.
     private void BroadcastJailBreakProgress(GameSession gameSession, string roomId)
     {
         var syncData = new JailBreakProgressSync
@@ -779,9 +829,8 @@ public partial class GameNetworkServer : BackgroundService
             ProgressByRescuer = new Dictionary<string, float>(gameSession.JailBreakProgressByRescuer)
         };
 
-        BroadcastTcpToRole(
+        BroadcastTcp(
             gameSession,
-            PlayerRole.Robber,
             TcpMessageType.JailBreakProgress,
             SerializeForMetrics(syncData),
             null);

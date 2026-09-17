@@ -34,6 +34,7 @@ public partial class GamePlay : ContentPage
     private DateTime _lastSyncTime = DateTime.MinValue;
     private bool _lastSyncedIsMoving;
     private readonly Dictionary<string, RemotePlayerInterpolationState> _remotePlayerInterpolations = new();
+    private readonly HashSet<string> _deferredPlayerRemovals = new();
     private GamePhase _gamePhase = GamePhase.Waiting;
     private int _remainingTime = 300;
     private int _totalRobberCount;
@@ -88,8 +89,6 @@ public partial class GamePlay : ContentPage
 
     // 체포 상태 만료 시간 기록 (2초 유지용)
     private Dictionary<string, DateTime> _arrestVisualTimers = new();
-    // 탈옥 직후 해방 동작을 잠시 표시합니다.
-    private readonly Dictionary<string, DateTime> _jailBreakVisualTimers = new();
     // 화면 중앙 체포 텍스트 표시 목표 시간
     private DateTime _showArrestedTextUntil = DateTime.MinValue;
 
@@ -189,6 +188,7 @@ public partial class GamePlay : ContentPage
         _timer.Interval = TimeSpan.FromMilliseconds(16); // ~60 FPS
         _timer.Tick += (s, e) =>
         {
+            RemoveExpiredDeferredPlayers();
             UpdateRemotePlayerInterpolation();
             UpdatePhysics();
             UpdateProximityVibration();
@@ -251,6 +251,9 @@ public partial class GamePlay : ContentPage
         {
             _players.Clear();
             _remotePlayerInterpolations.Clear();
+            _deferredPlayerRemovals.Clear();
+            _arrestVisualTimers.Clear();
+            _jailBreakProgressByRescuer.Clear();
             foreach (var p in players)
             {
                 _players[p.Id] = p;
@@ -267,6 +270,7 @@ public partial class GamePlay : ContentPage
 
         _networkClient.OnPlayerJoined += (p) =>
         {
+            _deferredPlayerRemovals.Remove(p.Id);
             if (p.Id != _player.Id)
             {
                 _players[p.Id] = p;
@@ -277,6 +281,7 @@ public partial class GamePlay : ContentPage
 
         _networkClient.OnPlayerMoved += (p) =>
         {
+            _deferredPlayerRemovals.Remove(p.Id);
             var rosterChanged = false;
             if (!_players.TryGetValue(p.Id, out var player))
             {
@@ -348,8 +353,17 @@ public partial class GamePlay : ContentPage
 
         _networkClient.OnPlayerLeft += (playerId) =>
         {
+            if (_arrestVisualTimers.TryGetValue(playerId, out var arrestEnd) &&
+                DateTime.Now < arrestEnd)
+            {
+                _deferredPlayerRemovals.Add(playerId);
+                return;
+            }
+
             _players.Remove(playerId);
             _remotePlayerInterpolations.Remove(playerId);
+            _arrestVisualTimers.Remove(playerId);
+            _jailBreakProgressByRescuer.Remove(playerId);
             ScheduleTeamVoiceRosterRefresh();
         };
 
@@ -981,9 +995,33 @@ public partial class GamePlay : ContentPage
         return _gameMap.IsMovementPositionBlocked(x, y, radius, _nearbyCollisionObstacles);
     }
 
-    private void ResetJailBreakProgress()
+    private void RemoveExpiredDeferredPlayers()
     {
-        _jailBreakProgressByRescuer.Clear();
+        if (_deferredPlayerRemovals.Count == 0)
+        {
+            return;
+        }
+
+        var now = DateTime.Now;
+        var rosterChanged = false;
+        foreach (var playerId in _deferredPlayerRemovals.ToList())
+        {
+            if (_arrestVisualTimers.TryGetValue(playerId, out var arrestEnd) && now < arrestEnd)
+            {
+                continue;
+            }
+
+            _deferredPlayerRemovals.Remove(playerId);
+            rosterChanged |= _players.Remove(playerId);
+            _remotePlayerInterpolations.Remove(playerId);
+            _arrestVisualTimers.Remove(playerId);
+            _jailBreakProgressByRescuer.Remove(playerId);
+        }
+
+        if (rosterChanged)
+        {
+            ScheduleTeamVoiceRosterRefresh();
+        }
     }
 
     private void Canvas_PaintSurface(object? sender, SKPaintSurfaceEventArgs e)
@@ -1452,11 +1490,18 @@ public partial class GamePlay : ContentPage
         foreach (var player in _players.Values)
         {
             var containingBush = _gameMap.FindBushContainingPoint(player.X, player.Y);
-            var isInsideBush = containingBush != null;
+            var isArrested = _arrestVisualTimers.TryGetValue(player.Id, out var arrestEnd) &&
+                             DateTime.Now < arrestEnd;
+            var isRevealedArrestingPolice =
+                _player.Role == PlayerRole.Robber &&
+                player.Role == PlayerRole.Police &&
+                isArrested;
+            var isInsideBush = containingBush != null && !isRevealedArrestingPolice;
 
             // 부쉬 밖에서는 안쪽의 다른 플레이어가 보이지 않는다. 같은 부쉬 안에서는 다시 보인다.
             if (player.Id != _player.Id &&
                 containingBush != null &&
+                !isRevealedArrestingPolice &&
                 !GameMap.ContainsPoint(containingBush, _player.X, _player.Y))
             {
                 continue;
@@ -1464,13 +1509,10 @@ public partial class GamePlay : ContentPage
 
             // 플레이어 렌더링
             SKBitmap? currentBitmap = null;
-            bool isArrested = _arrestVisualTimers.TryGetValue(player.Id, out var arrestEnd) && DateTime.Now < arrestEnd;
-            bool isJailBreaking = _jailBreakVisualTimers.TryGetValue(player.Id, out var jailBreakEnd) && DateTime.Now < jailBreakEnd;
-
-            if (!isJailBreaking && jailBreakEnd != default)
-            {
-                _jailBreakVisualTimers.Remove(player.Id);
-            }
+            var isJailBreaking =
+                player.Role == PlayerRole.Robber &&
+                !player.IsJailed &&
+                _jailBreakProgressByRescuer.ContainsKey(player.Id);
 
             if (isArrested)
             {
@@ -1799,7 +1841,7 @@ public partial class GamePlay : ContentPage
         }
 
         _arrestVisualTimers.Remove(syncData.RobberId);
-        _jailBreakVisualTimers[syncData.RobberId] = DateTime.Now.AddSeconds(2);
+        _jailBreakProgressByRescuer.Remove(syncData.RescuerId);
 
         if (_player.Id == syncData.RobberId)
         {
@@ -1810,7 +1852,6 @@ public partial class GamePlay : ContentPage
             _player.IsMoving = false;
         }
 
-        ResetJailBreakProgress();
         _canvas.InvalidateSurface();
     }
 
@@ -1847,7 +1888,7 @@ public partial class GamePlay : ContentPage
         var endTime = DateTime.Now.AddSeconds(2);
         _arrestVisualTimers[policeId] = endTime;
         _arrestVisualTimers[robberId] = endTime;
-        _jailBreakVisualTimers.Remove(robberId);
+        _jailBreakProgressByRescuer.Remove(robberId);
 
         if (_player.Id == policeId || _player.Id == robberId)
         {

@@ -305,6 +305,33 @@ public class GameMap
         throw new InvalidOperationException($"The map has no free spawn slot {slot} for {role}.");
     }
 
+    /// <summary>
+    /// Returns a compact, centered holding slot inside the jail artwork. The
+    /// building collider describes its outside footprint, so it must not be
+    /// used as the anchor for characters rendered behind the bars.
+    /// </summary>
+    public PointF GetJailHoldingPosition(int slot, int playerCount, float radius)
+    {
+        if (playerCount <= 0) throw new ArgumentOutOfRangeException(nameof(playerCount));
+        if (slot < 0 || slot >= playerCount) throw new ArgumentOutOfRangeException(nameof(slot));
+        if (!float.IsFinite(radius) || radius <= 0f) throw new ArgumentOutOfRangeException(nameof(radius));
+
+        const float gap = 10f;
+        const float horizontalInsetRatio = 0.2f;
+        var spacing = radius * 2f + gap;
+        var requiredWidth = radius * 2f + spacing * (playerCount - 1);
+        var holdingWidth = Jail.Width * (1f - horizontalInsetRatio * 2f);
+        if (requiredWidth > holdingWidth + 0.001f)
+        {
+            throw new InvalidOperationException(
+                $"The jail holding area cannot fit {playerCount} players with radius {radius}.");
+        }
+
+        return new PointF(
+            Jail.Center.X + (slot - (playerCount - 1) / 2f) * spacing,
+            Jail.Center.Y);
+    }
+
     private static IEnumerable<(int X, int Y)> EnumerateSpawnRing(int ring)
     {
         if (ring == 0)

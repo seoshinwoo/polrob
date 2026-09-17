@@ -118,6 +118,42 @@ public sealed class TownMapPhysicsTests
         AssertPointReachable(map, reachable, release, playerRadius, "Jail release apron");
     }
 
+    [TestCase(1)]
+    [TestCase(2)]
+    [TestCase(3)]
+    [TestCase(4)]
+    public void JailHoldingSlotsAreCenteredInsideTheArtworkAndDoNotOverlap(int playerCount)
+    {
+        const float playerRadius = 25f;
+        const float horizontalInsetRatio = 0.2f;
+        var map = new GameMap();
+        var positions = Enumerable.Range(0, playerCount)
+            .Select(slot => map.GetJailHoldingPosition(slot, playerCount, playerRadius))
+            .ToArray();
+        var safeLeft = map.Jail.LeftTop.X + map.Jail.Width * horizontalInsetRatio;
+        var safeRight = map.Jail.RightBottom.X - map.Jail.Width * horizontalInsetRatio;
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(positions.Average(position => position.X), Is.EqualTo(map.Jail.Center.X).Within(0.001f));
+            Assert.That(positions.All(position => MathF.Abs(position.Y - map.Jail.Center.Y) < 0.001f), Is.True);
+            Assert.That(positions.All(position => position.X - playerRadius >= safeLeft - 0.001f), Is.True);
+            Assert.That(positions.All(position => position.X + playerRadius <= safeRight + 0.001f), Is.True);
+        });
+
+        for (var first = 0; first < positions.Length; first++)
+        {
+            for (var second = first + 1; second < positions.Length; second++)
+            {
+                var deltaX = positions[first].X - positions[second].X;
+                var deltaY = positions[first].Y - positions[second].Y;
+                Assert.That(
+                    deltaX * deltaX + deltaY * deltaY,
+                    Is.GreaterThanOrEqualTo(MathF.Pow(playerRadius * 2f, 2f)));
+            }
+        }
+    }
+
     private const float GridStep = 32f;
 
     [TestCase(25f)]
