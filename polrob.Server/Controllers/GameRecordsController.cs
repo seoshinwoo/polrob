@@ -7,11 +7,11 @@ namespace polrob.Server.Controllers;
 [Route("game-records")]
 public sealed class GameRecordsController : ControllerBase
 {
-    private readonly GameRecordDbService _gameRecordDbService;
+    private readonly IGameRecordStatsReader _gameRecordStatsReader;
 
-    public GameRecordsController(GameRecordDbService gameRecordDbService)
+    public GameRecordsController(IGameRecordStatsReader gameRecordStatsReader)
     {
-        _gameRecordDbService = gameRecordDbService;
+        _gameRecordStatsReader = gameRecordStatsReader;
     }
 
     [HttpGet("me/stats")]
@@ -22,7 +22,7 @@ public sealed class GameRecordsController : ControllerBase
             return Unauthorized("유효한 로그인 세션이 필요합니다.");
         }
 
-        return Ok(await _gameRecordDbService.GetPlayerStatsAsync(userId, cancellationToken));
+        return Ok(await _gameRecordStatsReader.GetPlayerStatsAsync(userId, cancellationToken));
     }
 
     private bool TryGetAuthenticatedUserId(out string userId)

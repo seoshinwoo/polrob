@@ -40,6 +40,40 @@ public sealed class GameRecordStatsCalculatorTests
         });
     }
 
+    [TestCase(PlayerRole.Police)]
+    [TestCase(PlayerRole.Robber)]
+    public void Calculate_WithOnlyOnePlayerRole_LeavesOtherRoleAtZero(PlayerRole playerRole)
+    {
+        var losingRole = playerRole == PlayerRole.Police
+            ? PlayerRole.Robber
+            : PlayerRole.Police;
+        var outcomes = new[]
+        {
+            new PlayerGameOutcome(playerRole, playerRole),
+            new PlayerGameOutcome(playerRole, losingRole),
+            new PlayerGameOutcome(playerRole, playerRole)
+        };
+
+        var result = GameRecordStatsCalculator.Calculate(outcomes);
+        var playedRole = playerRole == PlayerRole.Police ? result.Police : result.Robber;
+        var otherRole = playerRole == PlayerRole.Police ? result.Robber : result.Police;
+
+        Assert.Multiple(() =>
+        {
+            AssertBreakdown(result.Overall, totalGames: 3, wins: 2, losses: 1, winRate: 200d / 3d);
+            AssertBreakdown(playedRole, totalGames: 3, wins: 2, losses: 1, winRate: 200d / 3d);
+            AssertBreakdown(otherRole, totalGames: 0, wins: 0, losses: 0, winRate: 0d);
+        });
+    }
+
+    [Test]
+    public void Calculate_WithNullOutcomes_ThrowsArgumentNullException()
+    {
+        Assert.That(
+            () => GameRecordStatsCalculator.Calculate(null!),
+            Throws.ArgumentNullException);
+    }
+
     [Test]
     public void Calculate_WithInvalidRole_RejectsTheOutcome()
     {

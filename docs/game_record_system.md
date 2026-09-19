@@ -4,10 +4,9 @@
 
 ## Cosmos DB 컨테이너
 
-서버 시작 시 `PolRobDB`에 다음 컨테이너가 없으면 자동 생성한다. 이름은 `CosmosDb` 설정에서 변경할 수 있다.
+서버 시작 시 `PolRobDB`에 `GameRecords` 컨테이너가 없으면 자동 생성한다. 이름은 `CosmosDb` 설정에서 변경할 수 있으며 파티션 키는 `/id`다.
 
-- `GameRecords` (`/id`): 한 경기당 하나인 원본 전적
-- `PlayerGameRecords` (`/playerId`): 프로필 조회를 위한 사용자별 보조 인덱스
+이 컨테이너에는 한 경기당 하나인 원본 전적과 사용자별 파생 문서가 함께 저장된다. 원본 전적이 승률 계산의 기준 데이터이며, 파생 문서는 `player:{gameId}:{playerId}` 형식의 ID를 사용한다.
 
 원본 전적에는 다음 값이 저장된다.
 
@@ -26,7 +25,7 @@
 }
 ```
 
-커스텀 재경기는 같은 방 ID를 다시 사용하므로 `roomId`와 별개인 경기 GUID를 문서 ID로 사용한다. 같은 경기 저장을 재시도해도 `CreateItem` 충돌을 성공으로 처리하며, 사용자별 보조 문서도 경기 GUID를 ID로 사용해 중복 집계를 막는다.
+커스텀 재경기는 같은 방 ID를 다시 사용하므로 `roomId`와 별개인 경기 GUID를 문서 ID로 사용한다. 같은 경기 저장을 재시도해도 `CreateItem` 충돌을 성공으로 처리하며, 사용자별 파생 문서도 경기 GUID와 사용자 ID를 조합한 결정적 ID를 사용해 중복 생성을 막는다.
 
 ## 기록 시점과 장애 처리
 
@@ -41,4 +40,6 @@
 
 `GET /game-records/me/stats`에 로그인 Bearer 토큰이 필요하다. 요청 사용자 ID는 본문이나 쿼리에서 받지 않고 서버 세션에서만 결정한다.
 
-응답에는 `overall`, `police`, `robber`가 있으며 각 항목은 `totalGames`, `wins`, `losses`, `winRate`를 포함한다. 조회는 `PlayerGameRecords`의 `/playerId` 단일 파티션만 사용한다.
+응답에는 `overall`, `police`, `robber`가 있으며 각 항목은 `totalGames`, `wins`, `losses`, `winRate`를 포함한다.
+
+통계는 `GameRecords`의 원본 전적에서 `policePlayerIds`, `robberPlayerIds`, `winnerRole`을 조회해 계산한다. 과거 버전이 사용자별 파생 문서를 별도 컨테이너에 저장했던 적이 있어, 현재 API는 파생 문서의 위치나 `playerRecordsIndexed` 값에 의존하지 않는다. 따라서 이전에 저장된 원본 전적도 별도 마이그레이션 완료를 기다리지 않고 승률에 포함된다. 현재 파티션 키가 `/id`이므로 이 조회는 여러 파티션에 걸쳐 수행된다.

@@ -43,6 +43,8 @@ builder.Services.AddSingleton(_ => new CosmosClient(
     }));
 builder.Services.AddSingleton<UserDbService>();
 builder.Services.AddSingleton<GameRecordDbService>();
+builder.Services.AddSingleton<IGameRecordStatsReader>(
+    sp => sp.GetRequiredService<GameRecordDbService>());
 builder.Services.AddSingleton<GameRecordWriter>();
 builder.Services.AddSingleton<IGameRecordQueue>(sp => sp.GetRequiredService<GameRecordWriter>());
 builder.Services.AddSingleton<IHostedService>(sp => sp.GetRequiredService<GameRecordWriter>());

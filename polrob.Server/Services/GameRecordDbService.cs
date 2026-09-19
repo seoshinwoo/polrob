@@ -3,7 +3,7 @@ using Microsoft.Azure.Cosmos;
 using Microsoft.Extensions.Options;
 using polrob.Shared;
 
-public sealed class GameRecordDbService
+public sealed class GameRecordDbService : IGameRecordStatsReader
 {
     private const string GameRecordPartitionKeyPath = "/id";
 
@@ -200,14 +200,15 @@ public sealed class GameRecordDbService
         ValidateIdentifier(userId, nameof(userId));
 
         var query = new QueryDefinition(
-                "SELECT c.playerRole, c.winnerRole " +
-                "FROM c WHERE IS_DEFINED(c.playerId) " +
-                "AND c.playerId = @userId")
+                "SELECT c.id, c.winnerRole, c.policePlayerIds, c.robberPlayerIds " +
+                "FROM c WHERE NOT IS_DEFINED(c.playerId) " +
+                "AND (ARRAY_CONTAINS(c.policePlayerIds, @userId) " +
+                "OR ARRAY_CONTAINS(c.robberPlayerIds, @userId))")
             .WithParameter("@userId", userId);
 
         var accumulator = new GameRecordStatsAccumulator();
         using var iterator = _gameRecordsContainer
-            .GetItemQueryIterator<PlayerGameRecordStatsProjection>(
+            .GetItemQueryIterator<GameRecordStatsSourceProjection>(
                 query);
 
         while (iterator.HasMoreResults)
@@ -215,18 +216,24 @@ public sealed class GameRecordDbService
             var response = await iterator.ReadNextAsync(cancellationToken);
             foreach (var document in response)
             {
-                if (!TryParsePlayerRole(document.PlayerRole, out var playerRole) ||
-                    !TryParsePlayerRole(document.WinnerRole, out var winnerRole))
+                if (!GameRecordStatsSourceProjector.TryCreateOutcome(
+                        userId,
+                        document.WinnerRole,
+                        document.PolicePlayerIds,
+                        document.RobberPlayerIds,
+                        out var outcome,
+                        out var failure))
                 {
                     _logger.LogWarning(
-                        "Ignoring a player game record with invalid roles {PlayerRole}/{WinnerRole} while calculating stats for user {UserId}.",
-                        document.PlayerRole,
-                        document.WinnerRole,
-                        userId);
+                        "Ignoring source game record {GameRecordId} while calculating stats for user {UserId}: {ProjectionFailure} (winner role: {WinnerRole}).",
+                        document.Id,
+                        userId,
+                        failure,
+                        document.WinnerRole);
                     continue;
                 }
 
-                accumulator.Add(new PlayerGameOutcome(playerRole, winnerRole));
+                accumulator.Add(outcome);
             }
         }
 
@@ -335,9 +342,11 @@ public sealed class GameRecordDbService
         public int SchemaVersion { get; init; }
     }
 
-    private sealed class PlayerGameRecordStatsProjection
+    private sealed class GameRecordStatsSourceProjection
     {
-        public string? PlayerRole { get; init; }
+        public string Id { get; init; } = string.Empty;
         public string? WinnerRole { get; init; }
+        public string[]? PolicePlayerIds { get; init; }
+        public string[]? RobberPlayerIds { get; init; }
     }
 }
