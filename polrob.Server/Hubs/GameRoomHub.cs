@@ -154,11 +154,24 @@ public class GameRoomHub : Hub
         await Clients.Group(roomId).SendAsync("RoomStatusUpdated", status);
     }
 
-    public Task LeaveRoom(string roomId)
+    public async Task LeaveRoom(string roomId)
     {
-        return string.IsNullOrWhiteSpace(roomId)
-            ? Task.CompletedTask
-            : Groups.RemoveFromGroupAsync(Context.ConnectionId, roomId);
+        if (string.IsNullOrWhiteSpace(roomId))
+        {
+            return;
+        }
+
+        var userId = GetAuthenticatedUserId();
+        // 게임 화면 등으로 정상 이동한 연결은 이후 OnDisconnected에서 참가자 이탈로
+        // 오인하지 않도록 presence 추적도 함께 종료합니다.
+        if (Connections.TryGetValue(Context.ConnectionId, out var connection)
+            && string.Equals(connection.RoomId, roomId, StringComparison.Ordinal)
+            && string.Equals(connection.UserId, userId, StringComparison.Ordinal))
+        {
+            RemoveConnectionTracking(Context.ConnectionId, roomId, userId);
+        }
+
+        await Groups.RemoveFromGroupAsync(Context.ConnectionId, roomId);
     }
 
     public async Task CancelMatching(string roomId)
@@ -229,7 +242,10 @@ public class GameRoomHub : Hub
         {
             RemoveActiveUserConnection(connection.RoomId, connection.UserId, Context.ConnectionId);
 
-            if (!_gameRoomService.IsRoomMatched(connection.RoomId))
+            // 정상 화면 전환은 LeaveRoom에서 추적을 제거합니다. 여기까지 남아 있는
+            // 연결은 예기치 않게 끊긴 presence이며, 진행 중인 게임이 아닐 때만
+            // 실제 로비 참가자에서 제거합니다.
+            if (!_gameRoomService.IsGameInProgress(connection.RoomId))
             {
                 var status = _gameRoomService.RemovePlayer(connection.RoomId, connection.UserId);
                 await Clients.Group(connection.RoomId).SendAsync("RoomStatusUpdated", status);

@@ -289,6 +289,12 @@ public partial class GameLobby : ContentPage
         _canStartGame = response.Players.Any(p => p.Role == PlayerRole.Police)
             && response.Players.Any(p => p.Role == PlayerRole.Robber);
 
+        _isHost = !string.IsNullOrWhiteSpace(AuthSession.UserId)
+            && string.Equals(
+                response.HostUserId,
+                AuthSession.UserId,
+                StringComparison.Ordinal);
+
         if (!string.IsNullOrWhiteSpace(AuthSession.UserId))
         {
             var localPlayer = response.Players.FirstOrDefault(p => p.Id == AuthSession.UserId);

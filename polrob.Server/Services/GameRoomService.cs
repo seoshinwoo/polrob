@@ -2,8 +2,6 @@ using polrob.Shared;
 
 public class GameRoomService
 {
-    private static readonly TimeSpan EmptyCustomRoomReplayLifetime = TimeSpan.FromMinutes(10);
-
     private readonly Lock _roomLock = new();
     private readonly List<Game> Games = new();
     private readonly UserDbService _userDbService;
@@ -339,7 +337,12 @@ public class GameRoomService
 
             if (game.Players.Count == 0 && !game.IsOnGame)
             {
+                game.HostUserId = string.Empty;
                 Games.Remove(game);
+            }
+            else
+            {
+                ReassignHostIfNeeded(game);
             }
 
             return CreateRoomStatusResponse(game);
@@ -381,9 +384,9 @@ public class GameRoomService
             {
                 Games.Remove(game);
             }
-            else if (string.Equals(game.HostUserId, leavingUserId, StringComparison.Ordinal))
+            else
             {
-                game.HostUserId = game.Players[0].Id;
+                ReassignHostIfNeeded(game);
             }
 
             response = CreateRoomStatusResponse(
@@ -550,8 +553,9 @@ public class GameRoomService
             {
                 game.IsOnGame = false;
                 game.VoiceSessionId = string.Empty;
-                game.Players.Clear(); // 랜덤 게임방인 경우 그냥 방을 삭제(방 재사용이 필요 없으니..)
-                game.EmptyRoomExpiresAtUtc = DateTime.UtcNow.Add(EmptyCustomRoomReplayLifetime);
+                // 커스텀 게임은 같은 참가자와 방장을 유지한 채 재경기 로비로 돌아갑니다.
+                // 이후 실제로 나가거나 연결이 끊긴 참가자만 RemovePlayer에서 제거합니다.
+                game.EmptyRoomExpiresAtUtc = null;
                 response = CreateRoomStatusResponse(game, message: "게임이 종료되었습니다.");
             }
             else
@@ -586,6 +590,15 @@ public class GameRoomService
 
             var game = Games.FirstOrDefault(g => g.Id == roomId);
             return game is { IsOnGame: true } || game?.Players.Count >= 6;
+        }
+    }
+
+    public bool IsGameInProgress(string roomId)
+    {
+        lock (_roomLock)
+        {
+            RemoveExpiredEmptyRoomsCore(DateTime.UtcNow);
+            return Games.Any(game => game.Id == roomId && game.IsOnGame);
         }
     }
 
@@ -746,6 +759,23 @@ public class GameRoomService
     {
         return game.Players.Any(p => p.Role == PlayerRole.Police)
             && game.Players.Any(p => p.Role == PlayerRole.Robber);
+    }
+
+    private static void ReassignHostIfNeeded(Game game)
+    {
+        if (game.Players.Count == 0)
+        {
+            game.HostUserId = string.Empty;
+            return;
+        }
+
+        var hostIsStillPresent = game.Players.Any(player =>
+            string.Equals(player.Id, game.HostUserId, StringComparison.Ordinal));
+        if (!hostIsStillPresent)
+        {
+            // Players는 입장 순서의 List이므로 가장 앞에 남은 플레이어에게 위임합니다.
+            game.HostUserId = game.Players[0].Id;
+        }
     }
 
     private async Task<User?> GetUserAsync(string userId)

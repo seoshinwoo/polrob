@@ -1,5 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
+using Microsoft.AspNetCore.Http.Connections;
+using Microsoft.AspNetCore.SignalR.Client;
 using polrob.Shared;
 
 namespace polrob.Client;
@@ -15,6 +17,10 @@ namespace polrob.Client;
 [QueryProperty(nameof(TotalRobbers), "totalRobbers")]
 public partial class GameOver : ContentPage
 {
+    private static readonly TimeSpan CustomReplayDelay = TimeSpan.FromSeconds(5);
+
+    private HubConnection? _hubConnection;
+    private CancellationTokenSource? _autoReplayCancellation;
     private string _roomId = string.Empty;
     private string _roomCode = string.Empty;
     private PlayerRole _role = PlayerRole.Robber;
@@ -24,6 +30,7 @@ public partial class GameOver : ContentPage
     private int _remainingTime;
     private int _capturedRobbers;
     private int _totalRobbers;
+    private bool _isNavigating;
     private GameOverLayoutDensity? _appliedLayoutDensity;
 
     public string RoomId
@@ -118,10 +125,38 @@ public partial class GameOver : ContentPage
         await AuthSession.LoadAsync();
         UpdateAuthHeader();
         UpdateResultDisplay();
+
+        if (string.Equals(_gameType, "custom", StringComparison.OrdinalIgnoreCase)
+            && !string.IsNullOrWhiteSpace(_roomId)
+            && !string.IsNullOrWhiteSpace(AuthSession.UserId))
+        {
+            StartCustomReplayCountdown();
+            await StartRoomPresenceAsync();
+        }
     }
 
     private async void OnHomeClicked(object? sender, TappedEventArgs e)
     {
+        if (_isNavigating)
+        {
+            return;
+        }
+
+        _isNavigating = true;
+        CancelCustomReplayCountdown();
+
+        if (string.Equals(_gameType, "custom", StringComparison.OrdinalIgnoreCase))
+        {
+            var leaveAcknowledged = await DisconnectRoomPresenceAsync(removePlayer: true);
+            if (!leaveAcknowledged)
+            {
+                _isNavigating = false;
+                StartCustomReplayCountdown();
+                await DisplayAlertAsync("홈으로", "서버 연결이 복구된 뒤 다시 시도해주세요.", "OK");
+                return;
+            }
+        }
+
         await Shell.Current.GoToAsync("//MainPage", true);
     }
 
@@ -132,6 +167,11 @@ public partial class GameOver : ContentPage
 
     private async void OnPlayAgainClicked(object? sender, EventArgs e)
     {
+        if (_isNavigating)
+        {
+            return;
+        }
+
         await AuthSession.LoadAsync();
         if (!AuthSession.IsLoggedIn || string.IsNullOrWhiteSpace(AuthSession.UserId))
         {
@@ -245,6 +285,11 @@ public partial class GameOver : ContentPage
 
     private async Task NavigateToCustomLobbyAsync()
     {
+        if (_isNavigating)
+        {
+            return;
+        }
+
         if (string.IsNullOrWhiteSpace(_roomId))
         {
             await DisplayAlertAsync("Play Again", "방 정보를 찾을 수 없습니다.", "OK");
@@ -253,6 +298,9 @@ public partial class GameOver : ContentPage
 
         try
         {
+            _isNavigating = true;
+            CancelCustomReplayCountdown();
+
             using var httpClient = new HttpClient { BaseAddress = new Uri(AuthSession.ApiBaseUrl) };
             AuthSession.ApplyAuthorization(httpClient);
             var response = await httpClient.PostAsJsonAsync(
@@ -264,12 +312,14 @@ public partial class GameOver : ContentPage
                 if (response.StatusCode == HttpStatusCode.Unauthorized)
                 {
                     AuthSession.ClearLocalSession();
+                    await DisconnectRoomPresenceAsync(removePlayer: false);
                     await DisplayAlertAsync("Play Again", "로그인 세션이 만료되었습니다. 다시 로그인해주세요.", "OK");
                     await Shell.Current.GoToAsync("Login");
                     return;
                 }
 
                 await DisplayAlertAsync("Play Again", await ReadErrorMessageAsync(response), "OK");
+                _isNavigating = false;
                 return;
             }
 
@@ -277,24 +327,177 @@ public partial class GameOver : ContentPage
             if (serverResponse?.Success != true || string.IsNullOrWhiteSpace(serverResponse.RoomId))
             {
                 await DisplayAlertAsync("Play Again", serverResponse?.Message ?? "방에 다시 들어갈 수 없습니다.", "OK");
+                _isNavigating = false;
                 return;
             }
 
             var roomId = Uri.EscapeDataString(serverResponse.RoomId);
             var roomCode = Uri.EscapeDataString(serverResponse.RoomCode ?? _roomCode);
             var role = serverResponse.Role ?? _role;
-            var isHost = _isHost.ToString().ToLowerInvariant();
+            var isHost = string.Equals(
+                    serverResponse.HostUserId,
+                    AuthSession.UserId,
+                    StringComparison.Ordinal)
+                .ToString()
+                .ToLowerInvariant();
 
+            await DisconnectRoomPresenceAsync(removePlayer: false);
             await Shell.Current.GoToAsync($"GameLobby?roomId={roomId}&roomCode={roomCode}&role={role}&isHost={isHost}");
         }
         catch (HttpRequestException)
         {
             await DisplayAlertAsync("Play Again", "서버에 연결할 수 없습니다.", "OK");
+            _isNavigating = false;
         }
         catch (Exception ex)
         {
             await DisplayAlertAsync("Play Again", $"방 입장 중 오류가 발생했습니다: {ex.Message}", "OK");
+            _isNavigating = false;
         }
+    }
+
+    private async Task StartRoomPresenceAsync()
+    {
+        if (_hubConnection != null)
+        {
+            return;
+        }
+
+        var connection = new HubConnectionBuilder()
+            .WithUrl(
+                new Uri(new Uri(AuthSession.ApiBaseUrl), "hubs/game-room"),
+                options =>
+                {
+                    options.Transports = HttpTransportType.WebSockets;
+                    options.SkipNegotiation = true;
+                    options.AccessTokenProvider = () => Task.FromResult(AuthSession.SessionToken);
+                })
+            .WithAutomaticReconnect()
+            .Build();
+
+        connection.On<ServerResponse>("RoomStatusUpdated", response =>
+        {
+            if (response.Success)
+            {
+                _isHost = string.Equals(
+                    response.HostUserId,
+                    AuthSession.UserId,
+                    StringComparison.Ordinal);
+            }
+        });
+
+        connection.Reconnected += async _ =>
+        {
+            if (!string.IsNullOrWhiteSpace(_roomId))
+            {
+                await connection.InvokeAsync("JoinRoom", _roomId);
+            }
+        };
+
+        try
+        {
+            await connection.StartAsync();
+            await connection.InvokeAsync("JoinRoom", _roomId);
+            _hubConnection = connection;
+        }
+        catch
+        {
+            await connection.DisposeAsync();
+            // 자동 로비 복귀는 HTTP reset-room으로 계속 시도합니다.
+        }
+    }
+
+    private void StartCustomReplayCountdown()
+    {
+        CancelCustomReplayCountdown();
+        _autoReplayCancellation = new CancellationTokenSource();
+        _ = ReturnToCustomLobbyAfterDelayAsync(_autoReplayCancellation.Token);
+    }
+
+    private async Task ReturnToCustomLobbyAfterDelayAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            await Task.Delay(CustomReplayDelay, cancellationToken);
+            await NavigateToCustomLobbyAsync();
+        }
+        catch (OperationCanceledException)
+        {
+        }
+    }
+
+    private void CancelCustomReplayCountdown()
+    {
+        var cancellation = _autoReplayCancellation;
+        _autoReplayCancellation = null;
+        cancellation?.Cancel();
+        cancellation?.Dispose();
+    }
+
+    private async Task<bool> DisconnectRoomPresenceAsync(bool removePlayer)
+    {
+        var connection = _hubConnection;
+        if (connection == null)
+        {
+            return !removePlayer;
+        }
+
+        _hubConnection = null;
+        try
+        {
+            if (connection.State == HubConnectionState.Connected)
+            {
+                if (removePlayer)
+                {
+                    var response = await connection.InvokeAsync<ServerResponse?>(
+                        "CancelMatchingWithAcknowledgement",
+                        _roomId);
+                    if (response?.Success != true)
+                    {
+                        _hubConnection = connection;
+                        return false;
+                    }
+                }
+                else
+                {
+                    await connection.InvokeAsync("LeaveRoom", _roomId);
+                }
+            }
+            else if (removePlayer)
+            {
+                _hubConnection = connection;
+                return false;
+            }
+
+            await connection.DisposeAsync();
+            return true;
+        }
+        catch
+        {
+            if (removePlayer)
+            {
+                _hubConnection = connection;
+                return false;
+            }
+
+            await connection.DisposeAsync();
+            return true;
+        }
+    }
+
+    protected override void OnDisappearing()
+    {
+        CancelCustomReplayCountdown();
+        var connection = _hubConnection;
+        _hubConnection = null;
+        if (connection != null)
+        {
+            // 정상 로비/홈 이동은 위에서 명시적으로 처리됩니다. 그 외 화면 이탈은
+            // 연결 종료로 남겨 서버의 disconnect grace 이후 참가자를 제거합니다.
+            _ = connection.DisposeAsync().AsTask();
+        }
+
+        base.OnDisappearing();
     }
 
     private static async Task<string> ReadErrorMessageAsync(HttpResponseMessage response)

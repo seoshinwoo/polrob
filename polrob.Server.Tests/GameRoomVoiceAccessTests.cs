@@ -58,8 +58,6 @@ public sealed class GameRoomVoiceAccessTests
         var repeatedStartSessionId = game.VoiceSessionId;
 
         service.CompleteGame(game.Id);
-        game.Players.Add(CreatePlayer("police-1", PlayerRole.Police, game.Id));
-        game.Players.Add(CreatePlayer("robber-1", PlayerRole.Robber, game.Id));
         service.StartGameIfMatched(game.Id);
         var replaySessionId = game.VoiceSessionId;
 
