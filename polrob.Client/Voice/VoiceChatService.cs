@@ -54,6 +54,13 @@ public sealed class VoiceChatService : IAsyncDisposable
             cancellationToken);
     }
 
+    public Task SetRemotePlaybackVolumeAsync(
+        double volume,
+        CancellationToken cancellationToken = default)
+    {
+        return _roomClient.SetRemotePlaybackVolumeAsync(volume, cancellationToken);
+    }
+
     public Task LeaveAsync(CancellationToken cancellationToken = default)
     {
         return _roomClient.DisconnectAsync(cancellationToken);

@@ -23,6 +23,7 @@ public partial class MainPage : ContentPage
 		AuthSession.Changed += UpdateAuthHeader;
 		await AuthSession.LoadAsync();
 		UpdateAuthHeader();
+		await GameSettings.RequestMicrophonePermissionOnFirstLaunchAsync();
 	}
 
 	protected override void OnDisappearing()
@@ -43,7 +44,7 @@ public partial class MainPage : ContentPage
 
 	private async void OnSettingsClicked(object? sender, TappedEventArgs e)
 	{
-		await DisplayAlertAsync("설정", "설정 화면은 준비 중입니다.", "확인");
+		await Shell.Current.GoToAsync("Settings");
 	}
 
 	private async void OnCreateClicked(object? sender, EventArgs e)

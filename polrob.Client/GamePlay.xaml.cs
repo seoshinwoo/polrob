@@ -570,7 +570,8 @@ public partial class GamePlay : ContentPage
 
     private void UpdateProximityVibration()
     {
-        if (!_isInitialized ||
+        if (!GameSettings.VibrationEnabled ||
+            !_isInitialized ||
             _gamePhase != GamePhase.Playing ||
             _proximityVibrationPulseMilliseconds == 0)
         {

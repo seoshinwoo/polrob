@@ -24,6 +24,7 @@ public sealed class HybridWebViewVoiceRoomClient : IVoiceRoomClient
     private readonly object _participantsLock = new();
     private IReadOnlyList<VoiceParticipantState> _participants = Array.Empty<VoiceParticipantState>();
     private bool _preferredLocalMicrophoneMuted;
+    private double _preferredRemotePlaybackVolume = GameSettings.SoundVolume;
     private bool _disposed;
     private int _bridgeGeneration;
 
@@ -74,7 +75,7 @@ public sealed class HybridWebViewVoiceRoomClient : IVoiceRoomClient
             new VoiceConnectionStateChangedEventArgs(VoiceConnectionState.Connecting));
 
         // 권한이 거부되어도 방에는 수신 전용으로 접속하므로 게임 자체는 계속할 수 있습니다.
-        var microphoneGranted = await RequestMicrophonePermissionAsync(cancellationToken);
+        var microphoneGranted = await HasMicrophonePermissionAsync(cancellationToken);
         var enableMicrophone = microphoneGranted && !_preferredLocalMicrophoneMuted;
         IsLocalMicrophoneMuted = !enableMicrophone;
 
@@ -84,7 +85,8 @@ public sealed class HybridWebViewVoiceRoomClient : IVoiceRoomClient
             {
                 ["url"] = connectionInfo.ServerUrl,
                 ["token"] = connectionInfo.ParticipantToken,
-                ["enableMicrophone"] = enableMicrophone
+                ["enableMicrophone"] = enableMicrophone,
+                ["playbackVolume"] = _preferredRemotePlaybackVolume
             },
             cancellationToken);
     }
@@ -95,7 +97,7 @@ public sealed class HybridWebViewVoiceRoomClient : IVoiceRoomClient
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
 
-        if (!muted && !await RequestMicrophonePermissionAsync(cancellationToken))
+        if (!muted && !await HasMicrophonePermissionAsync(cancellationToken))
         {
             throw new VoiceChatException("마이크 권한이 없어 마이크를 켤 수 없습니다.");
         }
@@ -127,6 +129,24 @@ public sealed class HybridWebViewVoiceRoomClient : IVoiceRoomClient
                 ["identity"] = participantIdentity,
                 ["muted"] = muted
             },
+            cancellationToken);
+    }
+
+    public async Task SetRemotePlaybackVolumeAsync(
+        double volume,
+        CancellationToken cancellationToken = default)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+
+        _preferredRemotePlaybackVolume = Math.Clamp(volume, 0d, 1d);
+        if (!IsConnected)
+        {
+            return;
+        }
+
+        await SendCommandAsync(
+            "setPlaybackVolume",
+            new Dictionary<string, object?> { ["volume"] = _preferredRemotePlaybackVolume },
             cancellationToken);
     }
 
@@ -264,23 +284,12 @@ public sealed class HybridWebViewVoiceRoomClient : IVoiceRoomClient
     private static TaskCompletionSource CreateReadySource() =>
         new(TaskCreationOptions.RunContinuationsAsynchronously);
 
-    private static async Task<bool> RequestMicrophonePermissionAsync(
+    private static async Task<bool> HasMicrophonePermissionAsync(
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
         var status = await Permissions.CheckStatusAsync<Permissions.Microphone>();
-        if (status != PermissionStatus.Granted && Permissions.ShouldShowRationale<Permissions.Microphone>())
-        {
-            System.Diagnostics.Debug.WriteLine("Voice chat requires microphone permission.");
-        }
-
-        if (status != PermissionStatus.Granted)
-        {
-            status = await MainThread.InvokeOnMainThreadAsync(
-                Permissions.RequestAsync<Permissions.Microphone>);
-        }
-
         cancellationToken.ThrowIfCancellationRequested();
         return status == PermissionStatus.Granted;
     }

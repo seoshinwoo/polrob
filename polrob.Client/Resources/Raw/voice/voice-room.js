@@ -5,6 +5,7 @@
     let connected = false;
     let connectionGeneration = 0;
     let commandQueue = Promise.resolve();
+    let playbackVolume = 1;
     const remoteMutedIdentities = new Set();
     const activeSpeakerIdentities = new Set();
     const attachedAudioElements = new Map();
@@ -94,7 +95,7 @@
         document.getElementById("audio-root").appendChild(element);
         attachedAudioElements.set(key, { track, element });
 
-        participant.setVolume(remoteMutedIdentities.has(gameIdentity(participant)) ? 0 : 1);
+        participant.setVolume(remoteMutedIdentities.has(gameIdentity(participant)) ? 0 : playbackVolume);
     }
 
     function detachAudio(track) {
@@ -138,7 +139,7 @@
             if (!isCurrentRoom(targetRoom)) {
                 return;
             }
-            participant.setVolume(remoteMutedIdentities.has(gameIdentity(participant)) ? 0 : 1);
+            participant.setVolume(remoteMutedIdentities.has(gameIdentity(participant)) ? 0 : playbackVolume);
             emitParticipants();
         });
         targetRoom.on(RoomEvent.ParticipantDisconnected, () => {
@@ -181,7 +182,7 @@
             }
             connected = true;
             for (const participant of targetRoom.remoteParticipants.values()) {
-                participant.setVolume(remoteMutedIdentities.has(gameIdentity(participant)) ? 0 : 1);
+                participant.setVolume(remoteMutedIdentities.has(gameIdentity(participant)) ? 0 : playbackVolume);
             }
             emitConnection("connected");
             emitParticipants();
@@ -219,6 +220,7 @@
             await disconnect();
         }
 
+        playbackVolume = Math.min(1, Math.max(0, Number(command.playbackVolume ?? 1)));
         const generation = ++connectionGeneration;
         const { Room } = window.LivekitClient;
         const targetRoom = new Room({
@@ -316,11 +318,27 @@
         }
 
         // 볼륨 조절은 이 WebView의 재생에만 적용되므로 상대나 다른 팀원에게 영향이 없습니다.
-        participant.setVolume(muted ? 0 : 1);
+        participant.setVolume(muted ? 0 : playbackVolume);
         if (!isCurrentRoom(activeRoom)) {
             throw new Error("팀 보이스 연결이 변경되었습니다.");
         }
         emitParticipants();
+    }
+
+    function setPlaybackVolume(volume) {
+        playbackVolume = Math.min(1, Math.max(0, Number(volume)));
+        if (!Number.isFinite(playbackVolume)) {
+            playbackVolume = 1;
+        }
+
+        if (!room || !connected) {
+            return;
+        }
+
+        for (const participant of room.remoteParticipants.values()) {
+            participant.setVolume(
+                remoteMutedIdentities.has(gameIdentity(participant)) ? 0 : playbackVolume);
+        }
     }
 
     async function disconnect() {
@@ -359,6 +377,9 @@
                     break;
                 case "setRemoteMuted":
                     setRemoteMuted(String(command.identity || ""), Boolean(command.muted));
+                    break;
+                case "setPlaybackVolume":
+                    setPlaybackVolume(command.volume);
                     break;
                 case "disconnect":
                     await disconnect();

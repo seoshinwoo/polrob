@@ -28,5 +28,10 @@ public interface IVoiceRoomClient : IAsyncDisposable
         bool muted,
         CancellationToken cancellationToken = default);
 
+    // 모든 팀원 음성의 이 기기 재생 볼륨을 조절합니다.
+    Task SetRemotePlaybackVolumeAsync(
+        double volume,
+        CancellationToken cancellationToken = default);
+
     Task DisconnectAsync(CancellationToken cancellationToken = default);
 }
