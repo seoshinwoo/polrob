@@ -21,7 +21,6 @@ public partial class GameNetworkServer : BackgroundService
     private readonly LiveKitRoomAdminService _liveKitRoomAdminService;
     private readonly IGameRecordQueue _gameRecordQueue;
     private readonly ILogger<GameNetworkServer> _logger;
-    private readonly GameMap _map = new();
     private readonly RuntimeMetricSampler _runtimeMetrics = new();
     private readonly int _roomCommandQueueCapacity; // 방마다 갖는 명령 큐의 최대 길이.. 큐가 꽉 차면 새 명령을 받지 못하고 드롭함..
     private readonly double _udpPacketsPerSecond; // 플레이어 한 명이 초당 처리할 수 있는 UDP 이동 패킷 수.. 
@@ -53,7 +52,6 @@ public partial class GameNetworkServer : BackgroundService
     private const double ArrestDurationSeconds = 2d;
     private const double JailBreakDurationSeconds = 3d;
     private const float JailBreakReleaseOffset = 20f;
-    private const float JailBreakContactTolerance = 90f;
     private const float ServerPlayerSpeed = 4f;
     private const float ServerPlayerRadius = 25f;
     private const float MovementUnitsPerSecondMultiplier = 60f;
@@ -190,6 +188,7 @@ public partial class GameNetworkServer : BackgroundService
         var syncData = new GameStateSync
         {
             RoomId = roomId,
+            MapId = gameSession.Map.MapId,
             Phase = gameSession.GamePhase,
             CountdownTime = gameSession.CountdownTime,
             GameTime = gameSession.GameTime,
@@ -361,6 +360,7 @@ public partial class GameNetworkServer : BackgroundService
         {
             RoomId = roomId,
             HostUserId = resetStatus.HostUserId,
+            MapId = gameSession.Map.MapId,
             Phase = GamePhase.Rematching,
             CountdownTime = 0,
             GameTime = gameSession.GameTime,
@@ -450,17 +450,17 @@ public partial class GameNetworkServer : BackgroundService
             }
 
             var distance = player.Speed * MovementUnitsPerSecondMultiplier * deltaSeconds;
-            var nextX = Math.Clamp(player.X + session.InputX * distance, player.Radius, _map.Width - player.Radius);
-            var nextY = Math.Clamp(player.Y + session.InputY * distance, player.Radius, _map.Height - player.Radius);
+            var nextX = Math.Clamp(player.X + session.InputX * distance, player.Radius, gameSession.Map.Width - player.Radius);
+            var nextY = Math.Clamp(player.Y + session.InputY * distance, player.Radius, gameSession.Map.Height - player.Radius);
             var moved = false;
 
-            if (!IsMovementPositionBlocked(nextX, player.Y, player.Radius, session.NearbyCollisionObstacles))
+            if (!IsMovementPositionBlocked(gameSession, nextX, player.Y, player.Radius, session.NearbyCollisionObstacles))
             {
                 moved |= MathF.Abs(nextX - player.X) > 0.001f;
                 player.X = nextX;
             }
 
-            if (!IsMovementPositionBlocked(player.X, nextY, player.Radius, session.NearbyCollisionObstacles))
+            if (!IsMovementPositionBlocked(gameSession, player.X, nextY, player.Radius, session.NearbyCollisionObstacles))
             {
                 moved |= MathF.Abs(nextY - player.Y) > 0.001f;
                 player.Y = nextY;
@@ -473,9 +473,9 @@ public partial class GameNetworkServer : BackgroundService
         }
     }
 
-    private bool IsMovementPositionBlocked(float x, float y, float radius, List<Obstacle> nearbyObstacles)
+    private static bool IsMovementPositionBlocked(GameSession gameSession, float x, float y, float radius, List<Obstacle> nearbyObstacles)
     {
-        return _map.IsMovementPositionBlocked(x, y, radius, nearbyObstacles);
+        return gameSession.Map.IsMovementPositionBlocked(x, y, radius, nearbyObstacles);
     }
 
     private void FlushPendingUdpMovementBroadcasts(GameSession gameSession)
@@ -512,7 +512,7 @@ public partial class GameNetworkServer : BackgroundService
             .ToArray();
         for (var slot = 0; ; slot++)
         {
-            var spawn = _map.GetSpawnPosition(player.Role, slot, player.Radius);
+            var spawn = gameSession.Map.GetSpawnPosition(player.Role, slot, player.Radius);
             var occupied = otherPlayers.Any(other =>
             {
                 var dx = spawn.X - other.X;
@@ -598,14 +598,14 @@ public partial class GameNetworkServer : BackgroundService
                     continue;
                 }
 
-                var robberBush = _map.FindBushContainingPoint(robber.X, robber.Y);
+                var robberBush = gameSession.Map.FindBushContainingPoint(robber.X, robber.Y);
                 if (robberBush != null && !GameMap.ContainsPoint(robberBush, police.X, police.Y))
                 {
                     continue;
                 }
 
                 if (IsPointInVision(police, robber.X, robber.Y) &&
-                    !IsVisionBlockedByObstacle(police, robber))
+                    !IsVisionBlockedByObstacle(gameSession, police, robber))
                 {
                     StartArrest(gameSession, police, robber);
                     break;
@@ -657,7 +657,7 @@ public partial class GameNetworkServer : BackgroundService
         for (var index = 0; index < jailedRobbers.Count; index++)
         {
             var robber = jailedRobbers[index];
-            var position = _map.GetJailHoldingPosition(index, jailedRobbers.Count, layoutRadius);
+            var position = gameSession.Map.GetJailHoldingPosition(index, jailedRobbers.Count, layoutRadius);
             robber.X = position.X;
             robber.Y = position.Y;
             robber.Angle = 0f;
@@ -685,7 +685,7 @@ public partial class GameNetworkServer : BackgroundService
             .Where(p => p.Role == PlayerRole.Robber &&
                         !IsInJail(p) &&
                         !IsPlayerInActiveArrest(gameSession, p.Id) &&
-                        IsTouchingOrNearJail(p))
+                        IsTouchingOrNearJail(gameSession, p))
             // Preserve a rescue already in progress when another completed
             // rescue reduces the number of available prisoner targets.
             .OrderBy(p => gameSession.JailBreakStartedAtByRescuer.TryGetValue(p.Id, out var startedAt)
@@ -771,7 +771,7 @@ public partial class GameNetworkServer : BackgroundService
         for (var i = 0; i < targetSessions.Count; i++)
         {
             var target = targetSessions[i].Session.PlayerState;
-            var releasePosition = GetJailReleasePosition(target.Radius, i);
+            var releasePosition = GetJailReleasePosition(gameSession, target.Radius, i);
 
             target.X = releasePosition.X;
             target.Y = releasePosition.Y;
@@ -896,9 +896,9 @@ public partial class GameNetworkServer : BackgroundService
     }
 
     // 경찰과 도둑 사이의 선분을 실제로 가로막는 장애물이 있는지 확인합니다.
-    private bool IsVisionBlockedByObstacle(Player police, Player robber)
+    private static bool IsVisionBlockedByObstacle(GameSession gameSession, Player police, Player robber)
     {
-        foreach (var building in _map.Buildings)
+        foreach (var building in gameSession.Map.Buildings)
         {
             if (building.BlocksVision &&
                 DoesSegmentIntersectBuilding(
@@ -912,7 +912,7 @@ public partial class GameNetworkServer : BackgroundService
             }
         }
 
-        foreach (var obstacle in _map.Obstacles)
+        foreach (var obstacle in gameSession.Map.Obstacles)
         {
             if (!obstacle.BlocksVision)
             {
@@ -1277,18 +1277,22 @@ public partial class GameNetworkServer : BackgroundService
     }
 
     // 플레이어가 탈옥 구조를 진행할 만큼 감옥에 가까이 붙어 있는지 확인합니다.
-    private bool IsTouchingOrNearJail(Player player)
+    private static bool IsTouchingOrNearJail(GameSession gameSession, Player player)
     {
-        var allowedDistance = player.Radius + JailBreakContactTolerance;
+        if (gameSession.Map.JailRescueArea is { } rescueArea)
+            return GameMap.ContainsPoint(rescueArea, player.X, player.Y);
 
-        return GameMap.GetDistanceSquaredToBuilding(player.X, player.Y, _map.Jail) <=
+        // The classic map uses proximity to the jail, not the new map's front trigger.
+        const float classicContactTolerance = 90f;
+        var allowedDistance = player.Radius + classicContactTolerance;
+        return GameMap.GetDistanceSquaredToBuilding(player.X, player.Y, gameSession.Map.Jail) <=
                allowedDistance * allowedDistance;
     }
 
     // 감옥 아래쪽에서 장애물과 겹치지 않는 석방 위치를 찾습니다.
-    private (float X, float Y) GetJailReleasePosition(float radius, int releaseIndex)
+    private static (float X, float Y) GetJailReleasePosition(GameSession gameSession, float radius, int releaseIndex)
     {
-        var jail = _map.Jail;
+        var jail = gameSession.Map.Jail;
         var jailBounds = GameMap.GetBuildingCollisionBounds(jail);
         var startY = jailBounds.Bottom + radius + JailBreakReleaseOffset;
         var candidates = new List<(float X, float Y)>();
@@ -1300,13 +1304,13 @@ public partial class GameNetworkServer : BackgroundService
 
         for (var row = 0; row < 5; row++)
         {
-            var y = Math.Clamp(startY + row * radius * 1.5f, radius, _map.Height - radius);
+            var y = Math.Clamp(startY + row * radius * 1.5f, radius, gameSession.Map.Height - radius);
             var offsets = rowOffsets[row % rowOffsets.Length];
 
             foreach (var offset in offsets)
             {
-                var x = Math.Clamp(jail.CollisionCenter.X + offset, radius, _map.Width - radius);
-                if (!IsReleasePositionBlocked(x, y, radius))
+                var x = Math.Clamp(jail.CollisionCenter.X + offset, radius, gameSession.Map.Width - radius);
+                if (!IsReleasePositionBlocked(gameSession, x, y, radius))
                 {
                     candidates.Add((x, y));
                 }
@@ -1318,13 +1322,13 @@ public partial class GameNetworkServer : BackgroundService
             return candidates[Math.Min(releaseIndex, candidates.Count - 1)];
         }
 
-        return (Math.Clamp(jail.CollisionCenter.X, radius, _map.Width - radius), Math.Clamp(startY, radius, _map.Height - radius));
+        return (Math.Clamp(jail.CollisionCenter.X, radius, gameSession.Map.Width - radius), Math.Clamp(startY, radius, gameSession.Map.Height - radius));
     }
 
     // 석방 후보 위치가 감옥이나 장애물과 충돌하는지 확인합니다.
-    private bool IsReleasePositionBlocked(float x, float y, float radius)
+    private static bool IsReleasePositionBlocked(GameSession gameSession, float x, float y, float radius)
     {
-        return _map.IsMovementPositionBlocked(x, y, radius, new List<Obstacle>());
+        return gameSession.Map.IsMovementPositionBlocked(x, y, radius, new List<Obstacle>());
     }
 
 }

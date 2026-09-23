@@ -32,13 +32,24 @@ public class GameController : ControllerBase
             userId,
             request.Type,
             request.Role,
-            request.IsPrivate);
+            request.IsPrivate,
+            request.MapId);
 
         if (!response.Success)
         {
             return BadRequest(response);
         }
 
+        return Ok(response);
+    }
+
+    [HttpGet("{roomId}/status")]
+    public ActionResult<ServerResponse> GetRoomStatus(string roomId)
+    {
+        if (!TryGetAuthenticatedUserId(out var userId)) return Unauthorized();
+        var response = _gameRoomService.GetRoomStatus(roomId);
+        if (!response.Success) return NotFound(response);
+        if (!response.Players.Any(player => player.Id == userId)) return StatusCode(403);
         return Ok(response);
     }
 
@@ -167,7 +178,8 @@ public class GameController : ControllerBase
     public sealed record CreateRoomRequest(
         string Type = "custom",
         PlayerRole Role = PlayerRole.Police,
-        bool IsPrivate = true);
+        bool IsPrivate = true,
+        string MapId = MapRegistry.DefaultId);
 
     public sealed record JoinCustomGameRequest(string RoomCode, PlayerRole Role = PlayerRole.Robber);
     public sealed record JoinRandomGameRequest(PlayerRole Role);

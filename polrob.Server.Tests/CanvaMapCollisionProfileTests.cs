@@ -17,8 +17,8 @@ public sealed class CanvaMapCollisionProfileTests
     public void RectanglesStartAtOriginalBottomLeftIncludingTransparentMargins(
         string file, int sourceWidth, int sourceHeight, int height, int cropLeft, int cropTop, int cropRight, int cropBottom)
     {
-        var map = new GameMap();
-        foreach (var prop in GameMap.PropLayouts.Where(p => p.AssetPath == "MapAssets/" + file))
+        var map = new GameMap(useLegacyCanvaMap: true);
+        foreach (var prop in CanvaMapLayout.Props.Where(p => p.AssetPath == "MapAssets/" + file))
         {
             var sx = prop.Width / (cropRight - cropLeft); var sy = prop.Height / (cropBottom - cropTop);
             var left = prop.CenterX - prop.Width / 2 - cropLeft * sx;
@@ -54,8 +54,8 @@ public sealed class CanvaMapCollisionProfileTests
         string file, int sourceWidth, int sourceHeight, float centerY, float radius,
         int cropLeft, int cropTop, int cropRight, int cropBottom)
     {
-        var map = new GameMap();
-        foreach (var prop in GameMap.PropLayouts.Where(p => p.AssetPath == "MapAssets/" + file))
+        var map = new GameMap(useLegacyCanvaMap: true);
+        foreach (var prop in CanvaMapLayout.Props.Where(p => p.AssetPath == "MapAssets/" + file))
         {
             var sx = prop.Width / (cropRight - cropLeft); var sy = prop.Height / (cropBottom - cropTop);
             var x = prop.CenterX - prop.Width / 2 + (sourceWidth / 2f - cropLeft) * sx;
@@ -81,8 +81,8 @@ public sealed class CanvaMapCollisionProfileTests
     [TestCase("streetlamp.png")]
     public void CrownAndLampHeadAreOutsideTheBaseCollider(string file)
     {
-        var map = new GameMap();
-        foreach (var prop in GameMap.PropLayouts.Where(p => p.AssetPath == "MapAssets/" + file))
+        var map = new GameMap(useLegacyCanvaMap: true);
+        foreach (var prop in CanvaMapLayout.Props.Where(p => p.AssetPath == "MapAssets/" + file))
         {
             var shape = map.Obstacles.Single(o => o.ImageFileName == prop.AssetPath &&
                 Math.Abs(o.Center.X - prop.CenterX - prop.CollisionOffsetX) < .01f &&
@@ -94,9 +94,9 @@ public sealed class CanvaMapCollisionProfileTests
     [Test]
     public void TracedBoxesKeepTheUpperRightNotchOpen()
     {
-        var prop = GameMap.PropLayouts.Single(p => p.AssetPath == "MapAssets/boxes.png");
+        var prop = CanvaMapLayout.Props.Single(p => p.AssetPath == "MapAssets/boxes.png");
         var image = CanvaMapCollisions.Profiles["boxes.png"].Image;
-        var obstacle = new GameMap().Obstacles.Single(o => o.ImageFileName == prop.AssetPath);
+        var obstacle = new GameMap(useLegacyCanvaMap: true).Obstacles.Single(o => o.ImageFileName == prop.AssetPath);
         var empty = image.ToWorld(prop, new(800, 900));
         var solid = image.ToWorld(prop, new(250, 850));
         Assert.That(obstacle.Type, Is.EqualTo("Polygon"));
@@ -104,16 +104,16 @@ public sealed class CanvaMapCollisionProfileTests
         Assert.That(GameMap.IsCircleCollidingWithObstacle(solid.X, solid.Y, 3, obstacle), Is.True);
         var nearby = new List<Obstacle>();
         var bounds = GameMap.GetObstacleBounds(obstacle);
-        new GameMap().GetNearbyObstacles(bounds.Right, bounds.Bottom, 5, nearby);
+        new GameMap(useLegacyCanvaMap: true).GetNearbyObstacles(bounds.Right, bounds.Bottom, 5, nearby);
         Assert.That(nearby.Any(o => o.ImageFileName == prop.AssetPath), Is.True);
     }
 
     [Test]
     public void PondBlocksWaterAndRimButNotTheImageCorners()
     {
-        var prop = GameMap.PropLayouts.Single(p => p.AssetPath == "MapAssets/pond.png");
+        var prop = CanvaMapLayout.Props.Single(p => p.AssetPath == "MapAssets/pond.png");
         var profile = CanvaMapCollisions.Profiles["pond.png"];
-        var obstacle = new GameMap().Obstacles.Single(o => o.ImageFileName == prop.AssetPath);
+        var obstacle = new GameMap(useLegacyCanvaMap: true).Obstacles.Single(o => o.ImageFileName == prop.AssetPath);
         foreach (var source in new[] { new PointF(694, 420), new PointF(680, 50) })
         {
             var point = profile.Image.ToWorld(prop, source);

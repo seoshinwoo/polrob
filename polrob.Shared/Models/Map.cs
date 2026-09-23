@@ -5,7 +5,9 @@ namespace polrob.Shared;
 public class GameMap
 {
     // The renderer and shared physics use the same authored prop placements.
-    public static readonly MapPropLayout[] PropLayouts = CanvaMapLayout.Props;
+    public MapDefinition Definition { get; }
+    public string MapId => Definition.Id;
+    public MapPropLayout[] PropLayouts => Definition.Props;
 
     // Legacy geometry helpers remain only as migration references.
     private const float CanonicalCoordinateScale = 2560f / 5000f;
@@ -181,10 +183,16 @@ public class GameMap
     public List<MapBuilding> Buildings = new();
     public MapBuilding PoliceStation { get; private set; } = null!;
     public MapBuilding Jail { get; private set; } = null!;
+    public Obstacle? JailHoldingArea { get; private set; }
+    public Obstacle? JailRescueArea { get; private set; }
 
-    public GameMap()
+    public GameMap(bool useLegacyCanvaMap) : this(useLegacyCanvaMap ? MapRegistry.ClassicTown : MapRegistry.ChaseTown) { }
+
+    public GameMap(string mapId = MapRegistry.DefaultId)
     {
-        AddMapPropColliders();
+        Definition = MapRegistry.Get(mapId);
+        if (mapId == MapRegistry.ClassicTown) AddMapPropColliders();
+        else AddChaseTownColliders();
         if (PoliceStation == null || Jail == null)
         {
             throw new InvalidOperationException("The town map requires a police station and jail.");
@@ -193,9 +201,47 @@ public class GameMap
         BuildSpatialIndex();
     }
 
+    private void AddChaseTownColliders()
+    {
+        foreach (var placement in ChaseTownLayout.Placements)
+        {
+            var asset = placement.Asset;
+            var regions = placement.Regions;
+            if (placement.BuildingType != null)
+            {
+                var body = regions.FirstOrDefault(r => r.Name == "body")?.Obstacle;
+                var building = new MapBuilding
+                {
+                    Type = placement.BuildingType, ImageFileName = asset.AssetPath,
+                    LeftTop = new(placement.Center.X - asset.Width * placement.Scale / 2,
+                        placement.Center.Y - asset.Height * placement.Scale / 2),
+                    RightBottom = new(placement.Center.X + asset.Width * placement.Scale / 2,
+                        placement.Center.Y + asset.Height * placement.Scale / 2),
+                    CollisionPolygon = body?.PolygonPoints ?? [],
+                    BlocksMovement = body?.BlocksMovement ?? false,
+                    BlocksVision = body?.BlocksVision ?? false, IsVisible = false
+                };
+                Buildings.Add(building);
+                if (building.Type == "PoliceStation") PoliceStation = building;
+                if (building.Type == "Jail") Jail = building;
+            }
+            foreach (var region in regions)
+            {
+                if (region.Name == "body" && placement.BuildingType != null) continue;
+                if (region.Kind == "holding") JailHoldingArea = region.Obstacle;
+                else if (region.Kind == "interaction") JailRescueArea = region.Obstacle;
+                else if (region.Kind != "occlusion")
+                {
+                    region.Obstacle.IsHidingArea = region.Kind == "hiding";
+                    Obstacles.Add(region.Obstacle);
+                }
+            }
+        }
+    }
+
     private void AddMapPropColliders()
     {
-        foreach (var layout in PropLayouts)
+        foreach (var layout in CanvaMapLayout.Props)
         {
             var collisionWidth = layout.CollisionWidth > 0f ? layout.CollisionWidth : layout.Width;
             var collisionHeight = layout.CollisionHeight > 0f ? layout.CollisionHeight : layout.Height;
@@ -315,6 +361,20 @@ public class GameMap
         if (playerCount <= 0) throw new ArgumentOutOfRangeException(nameof(playerCount));
         if (slot < 0 || slot >= playerCount) throw new ArgumentOutOfRangeException(nameof(slot));
         if (!float.IsFinite(radius) || radius <= 0f) throw new ArgumentOutOfRangeException(nameof(radius));
+
+        if (JailHoldingArea != null)
+        {
+            var bounds = GetObstacleBounds(JailHoldingArea);
+            var step = radius * 2 + 10;
+            var columns = (int)MathF.Floor((bounds.Right - bounds.Left - radius * 2) / step) + 1;
+            var rows = columns > 0 ? (int)Math.Ceiling((double)playerCount / columns) : int.MaxValue;
+            if (columns <= 0 || rows * step - 10 > bounds.Bottom - bounds.Top)
+                throw new InvalidOperationException("The jail holding area cannot fit these players.");
+            var row = slot / columns;
+            var rowCount = Math.Min(columns, playerCount - row * columns);
+            return new((bounds.Left + bounds.Right) / 2 + (slot % columns - (rowCount - 1) / 2f) * step,
+                (bounds.Top + bounds.Bottom) / 2 + (row - (rows - 1) / 2f) * step);
+        }
 
         const float gap = 10f;
         const float horizontalInsetRatio = 0.2f;
@@ -583,7 +643,7 @@ public class GameMap
     }
 
     public static bool IsBushObstacle(Obstacle obstacle) =>
-        obstacle.ImageFileName == "bush.png";
+        obstacle.IsHidingArea || obstacle.ImageFileName == "bush.png";
 
     public static bool ContainsPoint(Obstacle obstacle, float x, float y)
     {
@@ -1656,6 +1716,7 @@ public class MapBuilding
 
 public class Obstacle
 {
+    public bool IsHidingArea { get; set; }
     public string Type { get; set; } = string.Empty;
     public string ImageFileName { get; set; } = string.Empty;
     public PointF LeftTop { get; set; }

@@ -1,0 +1,1376 @@
+{
+  "Version": 1,
+  "Coordinates": "top-left; \u002BX right; \u002BY down; whole PNG including margin",
+  "WorldScale": 2.5,
+  "SourceMapSize": [
+    1024,
+    1536
+  ],
+  "RuntimeActivated": true,
+  "Assets": [
+    {
+      "Id": "police-station",
+      "SourceX": 478,
+      "SourceY": 34,
+      "Width": 230,
+      "Height": 189,
+      "Regions": [
+        {
+          "Name": "body",
+          "Kind": "solid",
+          "Shape": "polygon",
+          "BlocksMovement": true,
+          "BlocksVision": true,
+          "Points": [
+            {
+              "X": 11.333333,
+              "Y": 19
+            },
+            {
+              "X": 222.44444,
+              "Y": 19
+            },
+            {
+              "X": 223,
+              "Y": 20
+            },
+            {
+              "X": 223,
+              "Y": 163
+            },
+            {
+              "X": 160,
+              "Y": 163
+            },
+            {
+              "X": 160,
+              "Y": 182
+            },
+            {
+              "X": 73,
+              "Y": 182
+            },
+            {
+              "X": 73,
+              "Y": 163
+            },
+            {
+              "X": 11,
+              "Y": 163
+            },
+            {
+              "X": 11,
+              "Y": 20
+            }
+          ],
+          "Center": {
+            "X": 0,
+            "Y": 0
+          },
+          "Radius": 0
+        }
+      ],
+      "IsTile": false,
+      "RearInsetPixels": 8,
+      "AssetPath": "ChaseTownV7/props/police-station.png",
+      "Pivot": {
+        "X": 115,
+        "Y": 94.5
+      },
+      "WorldWidth": 575,
+      "WorldHeight": 472.5
+    },
+    {
+      "Id": "cafe",
+      "SourceX": 196,
+      "SourceY": 382,
+      "Width": 132,
+      "Height": 147,
+      "Regions": [
+        {
+          "Name": "body",
+          "Kind": "solid",
+          "Shape": "polygon",
+          "BlocksMovement": true,
+          "BlocksVision": true,
+          "Points": [
+            {
+              "X": 12.131147,
+              "Y": 20
+            },
+            {
+              "X": 121.16495,
+              "Y": 20
+            },
+            {
+              "X": 123,
+              "Y": 109
+            },
+            {
+              "X": 119,
+              "Y": 109
+            },
+            {
+              "X": 119,
+              "Y": 134
+            },
+            {
+              "X": 88,
+              "Y": 134
+            },
+            {
+              "X": 88,
+              "Y": 140
+            },
+            {
+              "X": 48,
+              "Y": 140
+            },
+            {
+              "X": 48,
+              "Y": 134
+            },
+            {
+              "X": 14,
+              "Y": 134
+            }
+          ],
+          "Center": {
+            "X": 0,
+            "Y": 0
+          },
+          "Radius": 0
+        }
+      ],
+      "IsTile": false,
+      "RearInsetPixels": 8,
+      "AssetPath": "ChaseTownV7/props/cafe.png",
+      "Pivot": {
+        "X": 66,
+        "Y": 73.5
+      },
+      "WorldWidth": 330,
+      "WorldHeight": 367.5
+    },
+    {
+      "Id": "donut-shop",
+      "SourceX": 208,
+      "SourceY": 585,
+      "Width": 126,
+      "Height": 140,
+      "Regions": [
+        {
+          "Name": "body",
+          "Kind": "solid",
+          "Shape": "polygon",
+          "BlocksMovement": true,
+          "BlocksVision": true,
+          "Points": [
+            {
+              "X": 11,
+              "Y": 22
+            },
+            {
+              "X": 118,
+              "Y": 22
+            },
+            {
+              "X": 118,
+              "Y": 101
+            },
+            {
+              "X": 108,
+              "Y": 101
+            },
+            {
+              "X": 108,
+              "Y": 124
+            },
+            {
+              "X": 84,
+              "Y": 124
+            },
+            {
+              "X": 84,
+              "Y": 131
+            },
+            {
+              "X": 45,
+              "Y": 131
+            },
+            {
+              "X": 45,
+              "Y": 124
+            },
+            {
+              "X": 18,
+              "Y": 124
+            },
+            {
+              "X": 18,
+              "Y": 102
+            },
+            {
+              "X": 11,
+              "Y": 102
+            }
+          ],
+          "Center": {
+            "X": 0,
+            "Y": 0
+          },
+          "Radius": 0
+        }
+      ],
+      "IsTile": false,
+      "RearInsetPixels": 8,
+      "AssetPath": "ChaseTownV7/props/donut-shop.png",
+      "Pivot": {
+        "X": 63,
+        "Y": 70
+      },
+      "WorldWidth": 315,
+      "WorldHeight": 350
+    },
+    {
+      "Id": "burger-shop",
+      "SourceX": 552,
+      "SourceY": 382,
+      "Width": 132,
+      "Height": 147,
+      "Regions": [
+        {
+          "Name": "body",
+          "Kind": "solid",
+          "Shape": "polygon",
+          "BlocksMovement": true,
+          "BlocksVision": true,
+          "Points": [
+            {
+              "X": 12.131147,
+              "Y": 20
+            },
+            {
+              "X": 121.16495,
+              "Y": 20
+            },
+            {
+              "X": 123,
+              "Y": 109
+            },
+            {
+              "X": 119,
+              "Y": 109
+            },
+            {
+              "X": 119,
+              "Y": 134
+            },
+            {
+              "X": 88,
+              "Y": 134
+            },
+            {
+              "X": 88,
+              "Y": 140
+            },
+            {
+              "X": 48,
+              "Y": 140
+            },
+            {
+              "X": 48,
+              "Y": 134
+            },
+            {
+              "X": 14,
+              "Y": 134
+            }
+          ],
+          "Center": {
+            "X": 0,
+            "Y": 0
+          },
+          "Radius": 0
+        }
+      ],
+      "IsTile": false,
+      "RearInsetPixels": 8,
+      "AssetPath": "ChaseTownV7/props/burger-shop.png",
+      "Pivot": {
+        "X": 66,
+        "Y": 73.5
+      },
+      "WorldWidth": 330,
+      "WorldHeight": 367.5
+    },
+    {
+      "Id": "house",
+      "SourceX": 698,
+      "SourceY": 416,
+      "Width": 120,
+      "Height": 114,
+      "Regions": [
+        {
+          "Name": "body",
+          "Kind": "solid",
+          "Shape": "polygon",
+          "BlocksMovement": true,
+          "BlocksVision": true,
+          "Points": [
+            {
+              "X": 8,
+              "Y": 17
+            },
+            {
+              "X": 112.08081,
+              "Y": 17
+            },
+            {
+              "X": 113,
+              "Y": 108
+            },
+            {
+              "X": 77,
+              "Y": 108
+            },
+            {
+              "X": 77,
+              "Y": 111
+            },
+            {
+              "X": 47,
+              "Y": 111
+            },
+            {
+              "X": 47,
+              "Y": 108
+            },
+            {
+              "X": 8,
+              "Y": 108
+            }
+          ],
+          "Center": {
+            "X": 0,
+            "Y": 0
+          },
+          "Radius": 0
+        }
+      ],
+      "IsTile": false,
+      "RearInsetPixels": 8,
+      "AssetPath": "ChaseTownV7/props/house.png",
+      "Pivot": {
+        "X": 60,
+        "Y": 57
+      },
+      "WorldWidth": 300,
+      "WorldHeight": 285
+    },
+    {
+      "Id": "warehouse-large",
+      "SourceX": 209,
+      "SourceY": 1051,
+      "Width": 297,
+      "Height": 192,
+      "Regions": [
+        {
+          "Name": "body",
+          "Kind": "solid",
+          "Shape": "polygon",
+          "BlocksMovement": true,
+          "BlocksVision": true,
+          "Points": [
+            {
+              "X": 10,
+              "Y": 18
+            },
+            {
+              "X": 287,
+              "Y": 18
+            },
+            {
+              "X": 287,
+              "Y": 174
+            },
+            {
+              "X": 234,
+              "Y": 174
+            },
+            {
+              "X": 234,
+              "Y": 185
+            },
+            {
+              "X": 160,
+              "Y": 185
+            },
+            {
+              "X": 160,
+              "Y": 176
+            },
+            {
+              "X": 128,
+              "Y": 176
+            },
+            {
+              "X": 128,
+              "Y": 185
+            },
+            {
+              "X": 50,
+              "Y": 185
+            },
+            {
+              "X": 50,
+              "Y": 175
+            },
+            {
+              "X": 10,
+              "Y": 175
+            }
+          ],
+          "Center": {
+            "X": 0,
+            "Y": 0
+          },
+          "Radius": 0
+        }
+      ],
+      "IsTile": false,
+      "RearInsetPixels": 8,
+      "AssetPath": "ChaseTownV7/props/warehouse-large.png",
+      "Pivot": {
+        "X": 148.5,
+        "Y": 96
+      },
+      "WorldWidth": 742.5,
+      "WorldHeight": 480
+    },
+    {
+      "Id": "warehouse-small",
+      "SourceX": 695,
+      "SourceY": 608,
+      "Width": 121,
+      "Height": 130,
+      "Regions": [
+        {
+          "Name": "body",
+          "Kind": "solid",
+          "Shape": "polygon",
+          "BlocksMovement": true,
+          "BlocksVision": true,
+          "Points": [
+            {
+              "X": 8,
+              "Y": 18
+            },
+            {
+              "X": 113,
+              "Y": 18
+            },
+            {
+              "X": 113,
+              "Y": 116
+            },
+            {
+              "X": 86,
+              "Y": 116
+            },
+            {
+              "X": 86,
+              "Y": 126
+            },
+            {
+              "X": 30,
+              "Y": 126
+            },
+            {
+              "X": 30,
+              "Y": 116
+            },
+            {
+              "X": 8,
+              "Y": 116
+            }
+          ],
+          "Center": {
+            "X": 0,
+            "Y": 0
+          },
+          "Radius": 0
+        }
+      ],
+      "IsTile": false,
+      "RearInsetPixels": 8,
+      "AssetPath": "ChaseTownV7/props/warehouse-small.png",
+      "Pivot": {
+        "X": 60.5,
+        "Y": 65
+      },
+      "WorldWidth": 302.5,
+      "WorldHeight": 325
+    },
+    {
+      "Id": "jail",
+      "SourceX": 874,
+      "SourceY": 93,
+      "Width": 137,
+      "Height": 150,
+      "Regions": [
+        {
+          "Name": "back-bars",
+          "Kind": "solid",
+          "Shape": "polygon",
+          "BlocksMovement": true,
+          "BlocksVision": false,
+          "Points": [
+            {
+              "X": 15,
+              "Y": 34
+            },
+            {
+              "X": 122,
+              "Y": 34
+            },
+            {
+              "X": 122,
+              "Y": 41
+            },
+            {
+              "X": 15,
+              "Y": 41
+            }
+          ],
+          "Center": {
+            "X": 0,
+            "Y": 0
+          },
+          "Radius": 0
+        },
+        {
+          "Name": "left-bars",
+          "Kind": "solid",
+          "Shape": "polygon",
+          "BlocksMovement": true,
+          "BlocksVision": false,
+          "Points": [
+            {
+              "X": 10,
+              "Y": 35
+            },
+            {
+              "X": 20,
+              "Y": 35
+            },
+            {
+              "X": 20,
+              "Y": 136
+            },
+            {
+              "X": 10,
+              "Y": 136
+            }
+          ],
+          "Center": {
+            "X": 0,
+            "Y": 0
+          },
+          "Radius": 0
+        },
+        {
+          "Name": "right-bars",
+          "Kind": "solid",
+          "Shape": "polygon",
+          "BlocksMovement": true,
+          "BlocksVision": false,
+          "Points": [
+            {
+              "X": 117,
+              "Y": 35
+            },
+            {
+              "X": 127,
+              "Y": 35
+            },
+            {
+              "X": 127,
+              "Y": 136
+            },
+            {
+              "X": 117,
+              "Y": 136
+            }
+          ],
+          "Center": {
+            "X": 0,
+            "Y": 0
+          },
+          "Radius": 0
+        },
+        {
+          "Name": "front-left",
+          "Kind": "solid",
+          "Shape": "polygon",
+          "BlocksMovement": true,
+          "BlocksVision": false,
+          "Points": [
+            {
+              "X": 18,
+              "Y": 129
+            },
+            {
+              "X": 43,
+              "Y": 129
+            },
+            {
+              "X": 43,
+              "Y": 140
+            },
+            {
+              "X": 18,
+              "Y": 140
+            }
+          ],
+          "Center": {
+            "X": 0,
+            "Y": 0
+          },
+          "Radius": 0
+        },
+        {
+          "Name": "front-right",
+          "Kind": "solid",
+          "Shape": "polygon",
+          "BlocksMovement": true,
+          "BlocksVision": false,
+          "Points": [
+            {
+              "X": 94,
+              "Y": 129
+            },
+            {
+              "X": 119,
+              "Y": 129
+            },
+            {
+              "X": 119,
+              "Y": 140
+            },
+            {
+              "X": 94,
+              "Y": 140
+            }
+          ],
+          "Center": {
+            "X": 0,
+            "Y": 0
+          },
+          "Radius": 0
+        },
+        {
+          "Name": "locked-gate",
+          "Kind": "gate",
+          "Shape": "polygon",
+          "BlocksMovement": true,
+          "BlocksVision": false,
+          "Points": [
+            {
+              "X": 43,
+              "Y": 129
+            },
+            {
+              "X": 94,
+              "Y": 129
+            },
+            {
+              "X": 94,
+              "Y": 140
+            },
+            {
+              "X": 43,
+              "Y": 140
+            }
+          ],
+          "Center": {
+            "X": 0,
+            "Y": 0
+          },
+          "Radius": 0
+        },
+        {
+          "Name": "holding-area",
+          "Kind": "holding",
+          "Shape": "polygon",
+          "BlocksMovement": false,
+          "BlocksVision": false,
+          "Points": [
+            {
+              "X": 25,
+              "Y": 46
+            },
+            {
+              "X": 112,
+              "Y": 46
+            },
+            {
+              "X": 112,
+              "Y": 123
+            },
+            {
+              "X": 25,
+              "Y": 123
+            }
+          ],
+          "Center": {
+            "X": 0,
+            "Y": 0
+          },
+          "Radius": 0
+        },
+        {
+          "Name": "rescue-area",
+          "Kind": "interaction",
+          "Shape": "polygon",
+          "BlocksMovement": false,
+          "BlocksVision": false,
+          "Points": [
+            {
+              "X": 37,
+              "Y": 145
+            },
+            {
+              "X": 100,
+              "Y": 145
+            },
+            {
+              "X": 100,
+              "Y": 180
+            },
+            {
+              "X": 37,
+              "Y": 180
+            }
+          ],
+          "Center": {
+            "X": 0,
+            "Y": 0
+          },
+          "Radius": 0
+        }
+      ],
+      "IsTile": false,
+      "RearInsetPixels": 0,
+      "AssetPath": "ChaseTownV7/props/jail.png",
+      "Pivot": {
+        "X": 68.5,
+        "Y": 75
+      },
+      "WorldWidth": 342.5,
+      "WorldHeight": 375
+    },
+    {
+      "Id": "jail-open",
+      "SourceX": 874,
+      "SourceY": 93,
+      "Width": 137,
+      "Height": 150,
+      "Regions": [
+        {
+          "Name": "back-bars",
+          "Kind": "solid",
+          "Shape": "polygon",
+          "BlocksMovement": true,
+          "BlocksVision": false,
+          "Points": [
+            {
+              "X": 15,
+              "Y": 34
+            },
+            {
+              "X": 122,
+              "Y": 34
+            },
+            {
+              "X": 122,
+              "Y": 41
+            },
+            {
+              "X": 15,
+              "Y": 41
+            }
+          ],
+          "Center": {
+            "X": 0,
+            "Y": 0
+          },
+          "Radius": 0
+        },
+        {
+          "Name": "left-bars",
+          "Kind": "solid",
+          "Shape": "polygon",
+          "BlocksMovement": true,
+          "BlocksVision": false,
+          "Points": [
+            {
+              "X": 10,
+              "Y": 35
+            },
+            {
+              "X": 20,
+              "Y": 35
+            },
+            {
+              "X": 20,
+              "Y": 136
+            },
+            {
+              "X": 10,
+              "Y": 136
+            }
+          ],
+          "Center": {
+            "X": 0,
+            "Y": 0
+          },
+          "Radius": 0
+        },
+        {
+          "Name": "right-bars",
+          "Kind": "solid",
+          "Shape": "polygon",
+          "BlocksMovement": true,
+          "BlocksVision": false,
+          "Points": [
+            {
+              "X": 117,
+              "Y": 35
+            },
+            {
+              "X": 127,
+              "Y": 35
+            },
+            {
+              "X": 127,
+              "Y": 136
+            },
+            {
+              "X": 117,
+              "Y": 136
+            }
+          ],
+          "Center": {
+            "X": 0,
+            "Y": 0
+          },
+          "Radius": 0
+        },
+        {
+          "Name": "front-left",
+          "Kind": "solid",
+          "Shape": "polygon",
+          "BlocksMovement": true,
+          "BlocksVision": false,
+          "Points": [
+            {
+              "X": 18,
+              "Y": 129
+            },
+            {
+              "X": 43,
+              "Y": 129
+            },
+            {
+              "X": 43,
+              "Y": 140
+            },
+            {
+              "X": 18,
+              "Y": 140
+            }
+          ],
+          "Center": {
+            "X": 0,
+            "Y": 0
+          },
+          "Radius": 0
+        },
+        {
+          "Name": "front-right",
+          "Kind": "solid",
+          "Shape": "polygon",
+          "BlocksMovement": true,
+          "BlocksVision": false,
+          "Points": [
+            {
+              "X": 94,
+              "Y": 129
+            },
+            {
+              "X": 119,
+              "Y": 129
+            },
+            {
+              "X": 119,
+              "Y": 140
+            },
+            {
+              "X": 94,
+              "Y": 140
+            }
+          ],
+          "Center": {
+            "X": 0,
+            "Y": 0
+          },
+          "Radius": 0
+        },
+        {
+          "Name": "holding-area",
+          "Kind": "holding",
+          "Shape": "polygon",
+          "BlocksMovement": false,
+          "BlocksVision": false,
+          "Points": [
+            {
+              "X": 25,
+              "Y": 46
+            },
+            {
+              "X": 112,
+              "Y": 46
+            },
+            {
+              "X": 112,
+              "Y": 123
+            },
+            {
+              "X": 25,
+              "Y": 123
+            }
+          ],
+          "Center": {
+            "X": 0,
+            "Y": 0
+          },
+          "Radius": 0
+        },
+        {
+          "Name": "rescue-area",
+          "Kind": "interaction",
+          "Shape": "polygon",
+          "BlocksMovement": false,
+          "BlocksVision": false,
+          "Points": [
+            {
+              "X": 37,
+              "Y": 145
+            },
+            {
+              "X": 100,
+              "Y": 145
+            },
+            {
+              "X": 100,
+              "Y": 180
+            },
+            {
+              "X": 37,
+              "Y": 180
+            }
+          ],
+          "Center": {
+            "X": 0,
+            "Y": 0
+          },
+          "Radius": 0
+        }
+      ],
+      "IsTile": false,
+      "RearInsetPixels": 0,
+      "AssetPath": "ChaseTownV7/props/jail-open.png",
+      "Pivot": {
+        "X": 68.5,
+        "Y": 75
+      },
+      "WorldWidth": 342.5,
+      "WorldHeight": 375
+    },
+    {
+      "Id": "tree",
+      "SourceX": 392,
+      "SourceY": 1371,
+      "Width": 82,
+      "Height": 86,
+      "Regions": [
+        {
+          "Name": "trunk",
+          "Kind": "solid",
+          "Shape": "circle",
+          "BlocksMovement": true,
+          "BlocksVision": true,
+          "Points": [],
+          "Center": {
+            "X": 42,
+            "Y": 48
+          },
+          "Radius": 9
+        },
+        {
+          "Name": "canopy",
+          "Kind": "occlusion",
+          "Shape": "circle",
+          "BlocksMovement": false,
+          "BlocksVision": false,
+          "Points": [],
+          "Center": {
+            "X": 42,
+            "Y": 42
+          },
+          "Radius": 35
+        }
+      ],
+      "IsTile": false,
+      "RearInsetPixels": 0,
+      "AssetPath": "ChaseTownV7/props/tree.png",
+      "Pivot": {
+        "X": 41,
+        "Y": 43
+      },
+      "WorldWidth": 205,
+      "WorldHeight": 215
+    },
+    {
+      "Id": "bush",
+      "SourceX": 326,
+      "SourceY": 548,
+      "Width": 49,
+      "Height": 49,
+      "Regions": [
+        {
+          "Name": "hide",
+          "Kind": "hiding",
+          "Shape": "circle",
+          "BlocksMovement": false,
+          "BlocksVision": false,
+          "Points": [],
+          "Center": {
+            "X": 24,
+            "Y": 26
+          },
+          "Radius": 17
+        }
+      ],
+      "IsTile": false,
+      "RearInsetPixels": 0,
+      "AssetPath": "ChaseTownV7/props/bush.png",
+      "Pivot": {
+        "X": 24.5,
+        "Y": 24.5
+      },
+      "WorldWidth": 122.5,
+      "WorldHeight": 122.5
+    },
+    {
+      "Id": "crate",
+      "SourceX": 519,
+      "SourceY": 1088,
+      "Width": 45,
+      "Height": 51,
+      "Regions": [
+        {
+          "Name": "box",
+          "Kind": "solid",
+          "Shape": "polygon",
+          "BlocksMovement": true,
+          "BlocksVision": true,
+          "Points": [
+            {
+              "X": 8,
+              "Y": 8
+            },
+            {
+              "X": 39,
+              "Y": 8
+            },
+            {
+              "X": 39,
+              "Y": 45
+            },
+            {
+              "X": 8,
+              "Y": 45
+            }
+          ],
+          "Center": {
+            "X": 0,
+            "Y": 0
+          },
+          "Radius": 0
+        }
+      ],
+      "IsTile": false,
+      "RearInsetPixels": 0,
+      "AssetPath": "ChaseTownV7/props/crate.png",
+      "Pivot": {
+        "X": 22.5,
+        "Y": 25.5
+      },
+      "WorldWidth": 112.5,
+      "WorldHeight": 127.5
+    },
+    {
+      "Id": "wall-horizontal",
+      "SourceX": 584,
+      "SourceY": 752,
+      "Width": 107,
+      "Height": 44,
+      "Regions": [
+        {
+          "Name": "wall",
+          "Kind": "solid",
+          "Shape": "polygon",
+          "BlocksMovement": true,
+          "BlocksVision": true,
+          "Points": [
+            {
+              "X": 9,
+              "Y": 14
+            },
+            {
+              "X": 102,
+              "Y": 14
+            },
+            {
+              "X": 102,
+              "Y": 37
+            },
+            {
+              "X": 9,
+              "Y": 37
+            }
+          ],
+          "Center": {
+            "X": 0,
+            "Y": 0
+          },
+          "Radius": 0
+        }
+      ],
+      "IsTile": false,
+      "RearInsetPixels": 0,
+      "AssetPath": "ChaseTownV7/props/wall-horizontal.png",
+      "Pivot": {
+        "X": 53.5,
+        "Y": 22
+      },
+      "WorldWidth": 267.5,
+      "WorldHeight": 110
+    },
+    {
+      "Id": "wall-vertical",
+      "SourceX": 586,
+      "SourceY": 1033,
+      "Width": 30,
+      "Height": 209,
+      "Regions": [
+        {
+          "Name": "wall",
+          "Kind": "solid",
+          "Shape": "polygon",
+          "BlocksMovement": true,
+          "BlocksVision": true,
+          "Points": [
+            {
+              "X": 8,
+              "Y": 10
+            },
+            {
+              "X": 24,
+              "Y": 10
+            },
+            {
+              "X": 24,
+              "Y": 198
+            },
+            {
+              "X": 8,
+              "Y": 198
+            }
+          ],
+          "Center": {
+            "X": 0,
+            "Y": 0
+          },
+          "Radius": 0
+        }
+      ],
+      "IsTile": false,
+      "RearInsetPixels": 0,
+      "AssetPath": "ChaseTownV7/props/wall-vertical.png",
+      "Pivot": {
+        "X": 15,
+        "Y": 104.5
+      },
+      "WorldWidth": 75,
+      "WorldHeight": 522.5
+    },
+    {
+      "Id": "wall-corner",
+      "SourceX": 216,
+      "SourceY": 532,
+      "Width": 80,
+      "Height": 62,
+      "Regions": [
+        {
+          "Name": "wall",
+          "Kind": "solid",
+          "Shape": "polygon",
+          "BlocksMovement": true,
+          "BlocksVision": true,
+          "Points": [
+            {
+              "X": 9,
+              "Y": 11
+            },
+            {
+              "X": 22,
+              "Y": 11
+            },
+            {
+              "X": 22,
+              "Y": 29
+            },
+            {
+              "X": 75,
+              "Y": 29
+            },
+            {
+              "X": 75,
+              "Y": 53
+            },
+            {
+              "X": 9,
+              "Y": 53
+            }
+          ],
+          "Center": {
+            "X": 0,
+            "Y": 0
+          },
+          "Radius": 0
+        }
+      ],
+      "IsTile": false,
+      "RearInsetPixels": 0,
+      "AssetPath": "ChaseTownV7/props/wall-corner.png",
+      "Pivot": {
+        "X": 40,
+        "Y": 31
+      },
+      "WorldWidth": 200,
+      "WorldHeight": 155
+    },
+    {
+      "Id": "wall-post",
+      "SourceX": 155,
+      "SourceY": 1028,
+      "Width": 29,
+      "Height": 46,
+      "Regions": [
+        {
+          "Name": "post",
+          "Kind": "solid",
+          "Shape": "polygon",
+          "BlocksMovement": true,
+          "BlocksVision": true,
+          "Points": [
+            {
+              "X": 8,
+              "Y": 12
+            },
+            {
+              "X": 24,
+              "Y": 12
+            },
+            {
+              "X": 24,
+              "Y": 39
+            },
+            {
+              "X": 8,
+              "Y": 39
+            }
+          ],
+          "Center": {
+            "X": 0,
+            "Y": 0
+          },
+          "Radius": 0
+        }
+      ],
+      "IsTile": false,
+      "RearInsetPixels": 0,
+      "AssetPath": "ChaseTownV7/props/wall-post.png",
+      "Pivot": {
+        "X": 14.5,
+        "Y": 23
+      },
+      "WorldWidth": 72.5,
+      "WorldHeight": 115
+    },
+    {
+      "Id": "grass",
+      "SourceX": 840,
+      "SourceY": 1050,
+      "Width": 64,
+      "Height": 64,
+      "Regions": [],
+      "IsTile": true,
+      "RearInsetPixels": 0,
+      "AssetPath": "ChaseTownV7/tiles/grass.png",
+      "Pivot": {
+        "X": 32,
+        "Y": 32
+      },
+      "WorldWidth": 160,
+      "WorldHeight": 160
+    },
+    {
+      "Id": "road",
+      "SourceX": 480,
+      "SourceY": 330,
+      "Width": 64,
+      "Height": 64,
+      "Regions": [],
+      "IsTile": true,
+      "RearInsetPixels": 0,
+      "AssetPath": "ChaseTownV7/tiles/road.png",
+      "Pivot": {
+        "X": 32,
+        "Y": 32
+      },
+      "WorldWidth": 160,
+      "WorldHeight": 160
+    },
+    {
+      "Id": "paving",
+      "SourceX": 580,
+      "SourceY": 245,
+      "Width": 64,
+      "Height": 64,
+      "Regions": [],
+      "IsTile": true,
+      "RearInsetPixels": 0,
+      "AssetPath": "ChaseTownV7/tiles/paving.png",
+      "Pivot": {
+        "X": 32,
+        "Y": 32
+      },
+      "WorldWidth": 160,
+      "WorldHeight": 160
+    }
+  ]
+}

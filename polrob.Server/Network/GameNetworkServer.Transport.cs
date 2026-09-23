@@ -76,6 +76,9 @@ public partial class GameNetworkServer
                         throw new InvalidDataException("인증된 사용자가 해당 방에 참여 중이지 않습니다.");
                     }
 
+                    var status = _gameRoomService.GetRoomStatus(roomId);
+                    if (!status.Success || !string.Equals(status.MapId, joinRequest.MapId, StringComparison.Ordinal))
+                        throw new InvalidDataException("방의 맵과 클라이언트 맵이 일치하지 않습니다.");
                     playerId = authenticatedUserId;
                     connectionId = Guid.NewGuid().ToString("N");
                     playerRole = player.Role;

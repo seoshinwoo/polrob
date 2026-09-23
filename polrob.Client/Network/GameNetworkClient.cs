@@ -38,7 +38,8 @@ public class GameNetworkClient
         string ipAddress,
         Player localPlayer,
         string sessionToken,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        string mapId = MapRegistry.DefaultId)
     {
         _isDisconnected = false;
         _movementInputSequence = 0;
@@ -60,7 +61,8 @@ public class GameNetworkClient
         SendTcp(TcpMessageType.Join, JsonSerializer.Serialize(new GameJoinRequest
         {
             SessionToken = sessionToken,
-            RoomId = localPlayer.RoomId
+            RoomId = localPlayer.RoomId,
+            MapId = mapId
         }));
 
         try

@@ -4,38 +4,37 @@ using SkiaSharp;
 namespace polrob.Client;
 
 /// <summary>Also linked into the preview tool, so exported maps use the actual game renderer.</summary>
-public sealed class TownMapRenderer : IDisposable
+public sealed class TownMapRenderer : IMapRenderer
 {
     public static readonly string[] TileAssets =
-        ["TownMap/tiles/grass.png", "TownMap/tiles/asphalt.png", "TownMap/tiles/paving.png"];
+        ["ChaseTownV7/tiles/grass.png", "ChaseTownV7/tiles/road.png", "ChaseTownV7/tiles/paving.png"];
     private readonly Dictionary<string, SKImage> _sprites = new(StringComparer.Ordinal);
     private static readonly SKSamplingOptions SpriteSampling = new(SKFilterMode.Linear, SKMipmapMode.Linear);
     private readonly Dictionary<string, SKRect> _sources = new(StringComparer.Ordinal);
-    private readonly SKPath[] _roads = CanvaMapLayout.Roads.Select(r => SKPath.ParseSvgPathData(r.Path)).ToArray();
-    private readonly SKPath _roadArea = MergeAreas([], CanvaMapLayout.Roads.Select(r => (r.Path, r.Width)));
-    private readonly SKPath _pavedBlocks;
     private readonly Dictionary<string, SKPaint> _tiles = new(StringComparer.Ordinal);
     private readonly SKPaint _spritePaint = new() { IsAntialias = true };
     private readonly SKPaint _stroke = new() { IsAntialias = true, Style = SKPaintStyle.Stroke, StrokeJoin = SKStrokeJoin.Round, StrokeCap = SKStrokeCap.Round };
     private readonly SKPaint _fill = new() { IsAntialias = true };
-    private readonly SKPathEffect _dash = SKPathEffect.CreateDash([30f, 30f], 0);
-    private readonly MapPropLayout[] _props = GameMap.PropLayouts.OrderBy(p => p.CenterY + p.Height / 2).ToArray();
+    private readonly MapPropLayout[] _props = ChaseTownLayout.Props.OrderBy(p => p.CenterY + p.Height / 2).ToArray();
+    private readonly Dictionary<MapPropLayout, Obstacle> _fadeAreas = new();
 
-    public TownMapRenderer(
-        IReadOnlyDictionary<string, SKBitmap?> bitmaps,
-        Func<string, SKBitmap, SKRect> getSourceBounds)
+    public TownMapRenderer(IReadOnlyDictionary<string, SKBitmap?> bitmaps)
     {
-        _pavedBlocks = CreatePavedBlocks(_roadArea, GameMap.WorldWidth, GameMap.WorldHeight);
-        foreach (var name in new[] { "grass", "asphalt", "paving" })
+        for (var i = 0; i < ChaseTownLayout.Placements.Length; i++)
         {
-            var paint = new SKPaint { IsAntialias = true, Color = SKColor.Parse(name switch
+            var cover = ChaseTownLayout.Placements[i].Regions.FirstOrDefault(r => r.Kind is "occlusion" or "hiding");
+            if (cover != null) _fadeAreas[ChaseTownLayout.Props[i]] = cover.Obstacle;
+        }
+        foreach (var name in new[] { "grass", "road", "paving" })
+        {
+            var paint = new SKPaint { IsAntialias = false, Color = SKColor.Parse(name switch
             {
-                "grass" => "#758B60", "asphalt" => "#505960", "dirt" => "#A8936D", _ => "#AEA997"
+                "grass" => ChaseTownLayout.GrassColor, "road" => ChaseTownLayout.RoadColor, _ => ChaseTownLayout.PavingColor
             }) };
-            if (bitmaps.TryGetValue($"{CanvaMapLayout.GroundAssetRoot}/{name}.png", out var tile) && tile != null)
+            if (bitmaps.TryGetValue($"ChaseTownV7/tiles/{name}.png", out var tile) && tile != null)
             {
                 paint.Color = SKColors.White;
-                var repeatSize = name == "paving" ? CanvaMapLayout.PavingRepeatSize : CanvaMapLayout.TileSize;
+                var repeatSize = ChaseTownLayout.TileSize;
                 paint.Shader = SKShader.CreateBitmap(tile, SKShaderTileMode.Repeat, SKShaderTileMode.Repeat,
                     SKMatrix.CreateScale(repeatSize / tile.Width, repeatSize / tile.Height));
             }
@@ -45,7 +44,9 @@ public sealed class TownMapRenderer : IDisposable
         {
             if (bitmap != null && !TileAssets.Contains(name))
             {
-                _sources[name] = getSourceBounds(name, bitmap);
+                // HD texture pixels map onto the original logical prop dimensions.
+                // Never derive world size or collision geometry from bitmap.Width.
+                _sources[name] = new SKRect(0, 0, bitmap.Width, bitmap.Height);
                 _sprites[name] = SKImage.FromBitmap(bitmap);
             }
         }
@@ -55,30 +56,28 @@ public sealed class TownMapRenderer : IDisposable
     {
         canvas.Save();
         canvas.ClipRect(new SKRect(0, 0, GameMap.WorldWidth, GameMap.WorldHeight));
-        canvas.DrawRect(visible, _tiles["grass"]);
-
-        // Fill complete enclosed blocks first; the curved roads and curbs cover their edges.
-        canvas.DrawPath(_pavedBlocks, _tiles["paving"]);
-
-        // Layer the whole network together so joined roads never leave curb seams.
-        for (var layer = 0; layer < 3; layer++)
-        for (var i = 0; i < _roads.Length; i++)
+        const int size = ChaseTownLayout.TileSize;
+        var minX = Math.Max(0, (int)MathF.Floor(visible.Left / size));
+        var maxX = Math.Min(ChaseTownLayout.Columns - 1, (int)MathF.Floor(visible.Right / size));
+        var minY = Math.Max(0, (int)MathF.Floor(visible.Top / size));
+        var maxY = Math.Min(ChaseTownLayout.Rows - 1, (int)MathF.Floor(visible.Bottom / size));
+        for (var y = minY; y <= maxY; y++)
+        for (var x = minX; x <= maxX; x++)
         {
-            _stroke.PathEffect = null;
-            _stroke.StrokeWidth = CanvaMapLayout.Roads[i].Width + (layer == 0 ? 52 : layer == 1 ? 40 : 6);
-            _stroke.Color = SKColor.Parse(layer == 0 ? "#69735B" : layer == 1 ? "#D2CAAB" : "#72766F");
-            canvas.DrawPath(_roads[i], _stroke);
+            var kind = ChaseTownLayout.Ground[x, y];
+            var rect = new SKRect(x * size, y * size, (x + 1) * size, (y + 1) * size);
+            canvas.DrawRect(rect, _tiles[kind switch
+            { GroundTile.Road => "road", GroundTile.Paving => "paving", _ => "grass" }]);
+            if (kind != GroundTile.Road) continue;
+            // 4-neighbour autotile edges: curbs only border land, never other road tiles.
+            bool Land(int cx, int cy) => cx >= 0 && cy >= 0 && cx < ChaseTownLayout.Columns &&
+                cy < ChaseTownLayout.Rows && ChaseTownLayout.Ground[cx, cy] != GroundTile.Road;
+            const float curb = 14;
+            if (Land(x - 1, y)) canvas.DrawRect(new(rect.Left, rect.Top, rect.Left + curb, rect.Bottom), _tiles["paving"]);
+            if (Land(x + 1, y)) canvas.DrawRect(new(rect.Right - curb, rect.Top, rect.Right, rect.Bottom), _tiles["paving"]);
+            if (Land(x, y - 1)) canvas.DrawRect(new(rect.Left, rect.Top, rect.Right, rect.Top + curb), _tiles["paving"]);
+            if (Land(x, y + 1)) canvas.DrawRect(new(rect.Left, rect.Bottom - curb, rect.Right, rect.Bottom), _tiles["paving"]);
         }
-        for (var i = 0; i < _roads.Length; i++) DrawTexturedStroke(canvas, _roads[i], "asphalt", CanvaMapLayout.Roads[i].Width);
-
-        _stroke.Color = SKColor.Parse("#E5C568"); _stroke.StrokeWidth = 5;
-        _stroke.PathEffect = _dash; _stroke.StrokeCap = SKStrokeCap.Butt;
-        for (var i = 0; i < _roads.Length; i++)
-            if (CanvaMapLayout.Roads[i].Marked) canvas.DrawPath(_roads[i], _stroke);
-        _stroke.PathEffect = null; _stroke.StrokeCap = SKStrokeCap.Round;
-
-        foreach (var crossing in CanvaMapLayout.Crosswalks)
-            DrawCrosswalk(canvas, crossing.X, crossing.Y, crossing.VerticalRoad);
         canvas.Restore();
     }
 
@@ -138,7 +137,7 @@ public sealed class TownMapRenderer : IDisposable
         return result;
     }
 
-    public void DrawProps(SKCanvas canvas, SKRect visible)
+    public void DrawProps(SKCanvas canvas, SKRect visible, System.Drawing.PointF? viewer = null)
     {
         canvas.Save();
         canvas.ClipRect(new SKRect(0, 0, GameMap.WorldWidth, GameMap.WorldHeight));
@@ -148,6 +147,9 @@ public sealed class TownMapRenderer : IDisposable
             var destination = new SKRect(prop.CenterX - prop.Width / 2, prop.CenterY - prop.Height / 2,
                 prop.CenterX + prop.Width / 2, prop.CenterY + prop.Height / 2);
             if (!Intersects(destination, visible)) continue;
+            _spritePaint.Color = SKColors.White.WithAlpha(viewer is {} point &&
+                _fadeAreas.TryGetValue(prop, out var cover) && GameMap.ContainsPoint(cover, point.X, point.Y)
+                ? (byte)140 : (byte)255);
             canvas.DrawImage(sprite, _sources[prop.AssetPath], destination, SpriteSampling, _spritePaint);
         }
         canvas.Restore();
@@ -160,9 +162,9 @@ public sealed class TownMapRenderer : IDisposable
         _fill.Color = new SKColor(255, 78, 91, 35);
         foreach (var building in map.Buildings.Where(b => b.BlocksMovement))
         {
-            var b = GameMap.GetBuildingCollisionBounds(building);
-            var rect = new SKRect(b.Left, b.Top, b.Right, b.Bottom);
-            canvas.DrawRect(rect, _fill); canvas.DrawRect(rect, _stroke);
+            using var path = new SKPath();
+            path.AddPoly(building.CollisionPolygon.Select(p => new SKPoint(p.X, p.Y)).ToArray(), close: true);
+            canvas.DrawPath(path, _fill); canvas.DrawPath(path, _stroke);
         }
         foreach (var obstacle in map.Obstacles.Where(o => o.BlocksMovement))
         {
@@ -192,28 +194,12 @@ public sealed class TownMapRenderer : IDisposable
         }
     }
 
-    private void DrawCrosswalk(SKCanvas canvas, float x, float y, bool verticalRoad)
-    {
-        // Clear the center line beneath the crosswalk using the same world-anchored texture.
-        canvas.Save();
-        canvas.ClipPath(_roadArea, SKClipOperation.Intersect, antialias: true);
-        var patch = verticalRoad ? new SKRect(x - 106, y - 34, x + 106, y + 34) : new SKRect(x - 34, y - 106, x + 34, y + 106);
-        canvas.DrawRect(patch, _tiles["asphalt"]);
-        canvas.Translate(x, y); if (verticalRoad) canvas.RotateDegrees(90);
-        _fill.Color = SKColor.Parse("#EEE7CC");
-        for (var i = -3; i <= 3; i++) canvas.DrawRoundRect(new SKRect(-27, i * 25 - 7, 27, i * 25 + 7), 2, 2, _fill);
-        canvas.Restore();
-    }
-
     private static bool Intersects(SKRect a, SKRect b) => a.Left <= b.Right && a.Right >= b.Left && a.Top <= b.Bottom && a.Bottom >= b.Top;
 
     public void Dispose()
     {
-        foreach (var path in _roads) path.Dispose();
-        _pavedBlocks.Dispose();
-        _roadArea.Dispose();
         foreach (var sprite in _sprites.Values) sprite.Dispose();
         foreach (var paint in _tiles.Values) { paint.Shader?.Dispose(); paint.Dispose(); }
-        _spritePaint.Dispose(); _stroke.Dispose(); _fill.Dispose(); _dash.Dispose();
+        _spritePaint.Dispose(); _stroke.Dispose(); _fill.Dispose();
     }
 }

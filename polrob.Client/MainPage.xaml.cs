@@ -14,6 +14,9 @@ public partial class MainPage : ContentPage
 	public MainPage()
 	{
 		InitializeComponent();
+		MapPicker.ItemsSource = MapRegistry.All.ToList();
+		MapPicker.ItemDisplayBinding = new Binding(nameof(MapDefinition.DisplayName));
+		MapPicker.SelectedItem = MapRegistry.Get(MapRegistry.DefaultId);
 	}
 
 	protected override async void OnAppearing()
@@ -62,7 +65,8 @@ public partial class MainPage : ContentPage
 			AuthSession.ApplyAuthorization(HttpClient);
 			var response = await HttpClient.PostAsJsonAsync(
 				"game/create",
-				new CreateRoomRequest("custom", PlayerRole.Police, true));
+				new CreateRoomRequest("custom", PlayerRole.Police, true,
+					(MapPicker.SelectedItem as MapDefinition)?.Id ?? MapRegistry.DefaultId));
 
 			if (!response.IsSuccessStatusCode)
 			{
@@ -126,5 +130,6 @@ public partial class MainPage : ContentPage
 	private sealed record CreateRoomRequest(
 		string Type,
 		PlayerRole Role,
-		bool IsPrivate);
+		bool IsPrivate,
+		string MapId);
 }

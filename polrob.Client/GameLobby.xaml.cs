@@ -286,6 +286,9 @@ public partial class GameLobby : ContentPage
         }
 
         LobbyStatusLabel.Text = string.Empty;
+        MapNameLabel.Text = MapRegistry.Contains(response.MapId)
+            ? $"맵 · {MapRegistry.Get(response.MapId).DisplayName}"
+            : "지원하지 않는 맵 · 앱 업데이트 필요";
         _canStartGame = response.Players.Any(p => p.Role == PlayerRole.Police)
             && response.Players.Any(p => p.Role == PlayerRole.Robber);
 

@@ -25,8 +25,11 @@ public class GameRoomService
         string userId,
         string type = "custom",
         PlayerRole role = PlayerRole.Police,
-        bool isPrivate = true)
+        bool isPrivate = true,
+        string mapId = MapRegistry.DefaultId)
     {
+        if (!MapRegistry.Contains(mapId))
+            return new ServerResponse { Success = false, Message = "지원하지 않는 맵입니다." };
         if (!Enum.IsDefined(role))
         {
             return CreateInvalidRoleResponse(role);
@@ -49,6 +52,7 @@ public class GameRoomService
 
             var game = new Game(type, isPrivate)
             {
+                MapId = mapId,
                 RoomCode = CreateUniqueRoomCode(),
                 HostUserId = userId
             };
@@ -700,6 +704,7 @@ public class GameRoomService
             Success = true,
             Message = message,
             RoomId = game.Id,
+            MapId = game.MapId,
             RoomCode = game.RoomCode,
             HostUserId = game.HostUserId,
             Role = role,
@@ -723,6 +728,7 @@ public class GameRoomService
             Success = true,
             Message = message,
             RoomId = game.Id,
+            MapId = game.MapId,
             RoomCode = game.RoomCode,
             HostUserId = game.HostUserId,
             Role = role,

@@ -207,6 +207,10 @@
                 </Border>
 
                 <!-- 성공 시에는 비워두고 오류/복사 결과만 잠시 표시합니다. -->
+                <Label x:Name="MapNameLabel"
+                       FontSize="13"
+                       TextColor="#E2E6ED"
+                       HorizontalTextAlignment="Center" />
                 <Label x:Name="LobbyStatusLabel"
                        Text=""
                        MinimumHeightRequest="18"

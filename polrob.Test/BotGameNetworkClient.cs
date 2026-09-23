@@ -30,7 +30,8 @@ public sealed class BotGameNetworkClient : IAsyncDisposable
         string serverHost,
         Player localPlayer,
         string sessionToken,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string mapId = MapRegistry.DefaultId)
     {
         _receiveCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
 
@@ -54,7 +55,8 @@ public sealed class BotGameNetworkClient : IAsyncDisposable
         SendTcp(TcpMessageType.Join, JsonSerializer.Serialize(new GameJoinRequest
         {
             SessionToken = sessionToken,
-            RoomId = localPlayer.RoomId
+            RoomId = localPlayer.RoomId,
+            MapId = mapId
         }));
     }
 

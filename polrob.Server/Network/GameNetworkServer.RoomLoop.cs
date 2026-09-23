@@ -22,7 +22,10 @@ public partial class GameNetworkServer
                 continue;
             }
 
-            var createdSession = new GameSession(_roomCommandQueueCapacity);
+            var roomStatus = _gameRoomService.GetRoomStatus(roomId);
+            if (!roomStatus.Success && roomId != DefaultRoomId)
+                throw new InvalidOperationException($"Room no longer exists: {roomId}");
+            var createdSession = new GameSession(_roomCommandQueueCapacity, roomStatus.MapId);
             if (!_gameSessions.TryAdd(roomId, createdSession))
             {
                 continue;
@@ -346,6 +349,7 @@ public partial class GameNetworkServer
         var syncData = new GameStateSync
         {
             RoomId = roomId,
+            MapId = gameSession.Map.MapId,
             Phase = gameSession.GamePhase,
             CountdownTime = gameSession.CountdownTime,
             GameTime = gameSession.GameTime,

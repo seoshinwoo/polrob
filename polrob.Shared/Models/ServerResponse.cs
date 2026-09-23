@@ -5,6 +5,7 @@ public class ServerResponse
     public bool Success { get; set; }
     public string? Message { get; set; }
     public string? RoomId { get; set; }
+    public string MapId { get; set; } = MapRegistry.DefaultId;
     public string? RoomCode { get; set; }
     public string? HostUserId { get; set; }
     public PlayerRole? Role { get; set; }

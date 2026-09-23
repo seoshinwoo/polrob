@@ -184,11 +184,14 @@
 
             <!-- 방 만들기 / 참가 -->
             <Grid Grid.Row="2"
+                  RowDefinitions="Auto,Auto"
+                  RowSpacing="10"
                   ColumnDefinitions="*,*"
                   ColumnSpacing="14"
                   MaximumWidthRequest="620"
                   HorizontalOptions="Fill">
                 <Border x:Name="CreateButton"
+                        Grid.Row="1"
                         Grid.Column="0"
                         HeightRequest="168"
                         Padding="0"
@@ -248,7 +251,16 @@
                     </Border>
                 </Border>
 
+                <Picker x:Name="MapPicker"
+                        Grid.ColumnSpan="2"
+                        Title="방 만들기 · 맵 선택"
+                        TextColor="#FFF8E8"
+                        TitleColor="#FFF8E8"
+                        BackgroundColor="#CC171A22"
+                        SemanticProperties.Description="방 만들기에 사용할 맵. 기본값은 새 추격 마을입니다." />
+
                 <Border Grid.Column="1"
+                        Grid.Row="1"
                         HeightRequest="168"
                         Padding="0"
                         BackgroundColor="#171A22"

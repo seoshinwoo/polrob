@@ -1,0 +1,1039 @@
+{
+  "MapId": "chase-town-v1",
+  "Width": 2560,
+  "Height": 3840,
+  "TileSize": 80,
+  "Columns": 32,
+  "Rows": 48,
+  "Ground": [
+    "PPPPPPRRPPPPPPPPPPPPPPPPPRRRRPPP",
+    "PPPPPPRRPPPPPPPPPPPPPPPPPRRRRPPP",
+    "PPPPPPRRPPPPPPPPPPPPPPPPPRRPPPPP",
+    "PPPPPPRRPPPPPPPPPPPPPPPPPRRPPPPP",
+    "PPPPPPRRRPPPPPPPPPPPPPPPPRRPPPPP",
+    "PPPPPPRRRPPPPPPPPPPPPPPPPRRPPPPP",
+    "PPPPPPPRRPPPPPPPPPPPPPPPPRRPPPPP",
+    "PPPPPPPRRPPPPPPPPPPPPPPPPRRPPPPP",
+    "PPPPPPPRRPPPPPPPPPPPPPPPPRRPPPPP",
+    "PRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR",
+    "PRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR",
+    "PPPPRRPPPPPPPPPRRPPPPPPPPPRRPPPP",
+    "PPPPRRPPPPPPPPPRRPPPPPPPPPRRPPPP",
+    "PPPPRRPPPPPPPPPRRPPPPPPPPPRRPPPP",
+    "RRRRRRPPPPPPPPPRRPPPPPPPPPRRPPPP",
+    "RRRRRRPPPPPPPPPRRPPPPPPPPPRRPPPP",
+    "PPPPRRPPPPPPPPPRRPPPPPPPPPRRPPPP",
+    "PPPPRRPPPPPPPPPRRPPPPPPPPPRRPPPP",
+    "PPPPRRPPPPPPPPPRRPPPPPPPPPRRPPPP",
+    "PPPPRRPPPPPPPPPRRPPPPPPPPPRRPPPP",
+    "PPPPRRPPPPPPPPPRRPPPPPPPPPRRPPPP",
+    "PPPPRRPPPPPPPPPRRPPPPPPPPPRRPPPP",
+    "PPPPRRPPPPPPPPPRRPPPPPPPPPRRPPPP",
+    "PPPPRRPPPPPPPPPRRPPPPPPPPPRRPPPP",
+    "PPPPRRPPPPPPPPPRRPPPPPPPPPRRPPPP",
+    "PPPPRRRRRRRRRRRRRRRRRRRRRRRRPPPP",
+    "PPPPRRRRRRRRRRRRRRRRRRRRRRRRPPPP",
+    "PPPPRRPPPPPPPPPRRGGGGGGGGGRRPPPP",
+    "GGRRRRRRRRRRRRRRRGGGGGGGGGRRRRRR",
+    "GGRRRRRRRRRRRRRRRGGGGGGGGGRRRRRR",
+    "GGRRPPPPPPPPPPPRRRRRRRGGGGGGGGGG",
+    "GGRRPPPPPPPPPPPRRRRRRRGGGGGGGGGG",
+    "GGRRPPPPPPPPPPPPPPPPRRGGGGGGGGGG",
+    "GGRRPPPPPPPPPPPPPPPPRRGGGGGGGGGG",
+    "GGRRPPPPPPPPPPPPPPPPRRGGGGGGGGGG",
+    "GGRRPPPPPPPPPPPPPPPPRRGGGGGGGGGG",
+    "GGRRPPPPPPPPPPPPPPPPRRGGGGGGGGGG",
+    "GGRRPPPPPPPPPPPPPPPPRRGGGGGGGGGG",
+    "GGRRPPPPPPPPPPPPPPPPRRGGGGGGGGGG",
+    "GGRRPPPPPPPPPPPPPPPPRRGGGGGGGGGG",
+    "GGRRPPPPPPPPPPPPPPPPRRGGGGGGGGGG",
+    "GGRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR",
+    "GGRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR",
+    "GGRRRRRRRRRGGGGGGGGGGGGGGGGGGGGG",
+    "GGRRRRRRRRRGGGGGGGGGGGGGGGGGGGGG",
+    "GGGGGGGGGRRGGGGGGGGGGGGGGGGGGGGG",
+    "GGGGGGGGGRRGGGGGGGGGGGGGGGGGGGGG",
+    "GGGGGGGGGRRGGGGGGGGGGGGGGGGGGGGG"
+  ],
+  "Placements": [
+    {
+      "Id": "police-station-0",
+      "AssetId": "police-station",
+      "Center": {
+        "IsEmpty": false,
+        "X": 1507.5,
+        "Y": 380
+      },
+      "Scale": 2.5,
+      "BuildingType": "PoliceStation"
+    },
+    {
+      "Id": "jail-1",
+      "AssetId": "jail",
+      "Center": {
+        "IsEmpty": false,
+        "X": 2360,
+        "Y": 382.5
+      },
+      "Scale": 2.5,
+      "BuildingType": "Jail"
+    },
+    {
+      "Id": "cafe-2",
+      "AssetId": "cafe",
+      "Center": {
+        "IsEmpty": false,
+        "X": 655,
+        "Y": 1137.5
+      },
+      "Scale": 2.5,
+      "BuildingType": "Cafe"
+    },
+    {
+      "Id": "donut-shop-3",
+      "AssetId": "donut-shop",
+      "Center": {
+        "IsEmpty": false,
+        "X": 677.5,
+        "Y": 1640
+      },
+      "Scale": 2.5,
+      "BuildingType": "DonutShop"
+    },
+    {
+      "Id": "burger-shop-4",
+      "AssetId": "burger-shop",
+      "Center": {
+        "IsEmpty": false,
+        "X": 1545,
+        "Y": 1137.5
+      },
+      "Scale": 2.5,
+      "BuildingType": "BurgerShop"
+    },
+    {
+      "Id": "house-5",
+      "AssetId": "house",
+      "Center": {
+        "IsEmpty": false,
+        "X": 245,
+        "Y": 385
+      },
+      "Scale": 2.5,
+      "BuildingType": "House-5"
+    },
+    {
+      "Id": "house-6",
+      "AssetId": "house",
+      "Center": {
+        "IsEmpty": false,
+        "X": 1042.5,
+        "Y": 1187.5
+      },
+      "Scale": 2.5,
+      "BuildingType": "House-6"
+    },
+    {
+      "Id": "house-7",
+      "AssetId": "house",
+      "Center": {
+        "IsEmpty": false,
+        "X": 1062.5,
+        "Y": 1660
+      },
+      "Scale": 2.5,
+      "BuildingType": "House-7"
+    },
+    {
+      "Id": "house-8",
+      "AssetId": "house",
+      "Center": {
+        "IsEmpty": false,
+        "X": 1932.5,
+        "Y": 1182.5
+      },
+      "Scale": 2.5,
+      "BuildingType": "House-8"
+    },
+    {
+      "Id": "house-9",
+      "AssetId": "house",
+      "Center": {
+        "IsEmpty": false,
+        "X": 1545,
+        "Y": 1610
+      },
+      "Scale": 2.5,
+      "BuildingType": "House-9"
+    },
+    {
+      "Id": "house-10",
+      "AssetId": "house",
+      "Center": {
+        "IsEmpty": false,
+        "X": 200,
+        "Y": 1440
+      },
+      "Scale": 2.5,
+      "BuildingType": "House-10"
+    },
+    {
+      "Id": "house-11",
+      "AssetId": "house",
+      "Center": {
+        "IsEmpty": false,
+        "X": 217.5,
+        "Y": 1872.5
+      },
+      "Scale": 2.5,
+      "BuildingType": "House-11"
+    },
+    {
+      "Id": "house-12",
+      "AssetId": "house",
+      "Center": {
+        "IsEmpty": false,
+        "X": 2352.5,
+        "Y": 1400
+      },
+      "Scale": 2.5,
+      "BuildingType": "House-12"
+    },
+    {
+      "Id": "house-13",
+      "AssetId": "house",
+      "Center": {
+        "IsEmpty": false,
+        "X": 2352.5,
+        "Y": 1867.5
+      },
+      "Scale": 2.5,
+      "BuildingType": "House-13"
+    },
+    {
+      "Id": "warehouse-small-14",
+      "AssetId": "warehouse-small",
+      "Center": {
+        "IsEmpty": false,
+        "X": 1925,
+        "Y": 1687.5
+      },
+      "Scale": 2.5,
+      "BuildingType": "Workshop"
+    },
+    {
+      "Id": "warehouse-large-15",
+      "AssetId": "warehouse-large",
+      "Center": {
+        "IsEmpty": false,
+        "X": 807.5,
+        "Y": 2852.5
+      },
+      "Scale": 2.5,
+      "BuildingType": "Warehouse"
+    },
+    {
+      "Id": "wall-horizontal-16",
+      "AssetId": "wall-horizontal",
+      "Center": {
+        "IsEmpty": false,
+        "X": 1087.5,
+        "Y": 82.5
+      },
+      "Scale": 2.5,
+      "BuildingType": null
+    },
+    {
+      "Id": "wall-horizontal-17",
+      "AssetId": "wall-horizontal",
+      "Center": {
+        "IsEmpty": false,
+        "X": 1880,
+        "Y": 82.5
+      },
+      "Scale": 2.5,
+      "BuildingType": null
+    },
+    {
+      "Id": "wall-horizontal-18",
+      "AssetId": "wall-horizontal",
+      "Center": {
+        "IsEmpty": false,
+        "X": 1117.5,
+        "Y": 682.5
+      },
+      "Scale": 2.5,
+      "BuildingType": null
+    },
+    {
+      "Id": "wall-horizontal-19",
+      "AssetId": "wall-horizontal",
+      "Center": {
+        "IsEmpty": false,
+        "X": 1860,
+        "Y": 692.5
+      },
+      "Scale": 2.5,
+      "BuildingType": null
+    },
+    {
+      "Id": "wall-horizontal-20",
+      "AssetId": "wall-horizontal",
+      "Center": {
+        "IsEmpty": false,
+        "X": 650,
+        "Y": 1937.5
+      },
+      "Scale": 2.5,
+      "BuildingType": null
+    },
+    {
+      "Id": "wall-horizontal-21",
+      "AssetId": "wall-horizontal",
+      "Center": {
+        "IsEmpty": false,
+        "X": 1595,
+        "Y": 1937.5
+      },
+      "Scale": 2.5,
+      "BuildingType": null
+    },
+    {
+      "Id": "wall-horizontal-22",
+      "AssetId": "wall-horizontal",
+      "Center": {
+        "IsEmpty": false,
+        "X": 475,
+        "Y": 3200
+      },
+      "Scale": 2.5,
+      "BuildingType": null
+    },
+    {
+      "Id": "wall-horizontal-23",
+      "AssetId": "wall-horizontal",
+      "Center": {
+        "IsEmpty": false,
+        "X": 2037.5,
+        "Y": 3200
+      },
+      "Scale": 2.5,
+      "BuildingType": null
+    },
+    {
+      "Id": "wall-vertical-24",
+      "AssetId": "wall-vertical",
+      "Center": {
+        "IsEmpty": false,
+        "X": 987.5,
+        "Y": 335
+      },
+      "Scale": 2.5,
+      "BuildingType": null
+    },
+    {
+      "Id": "wall-vertical-25",
+      "AssetId": "wall-vertical",
+      "Center": {
+        "IsEmpty": false,
+        "X": 1990,
+        "Y": 337.5
+      },
+      "Scale": 2.5,
+      "BuildingType": null
+    },
+    {
+      "Id": "wall-vertical-26",
+      "AssetId": "wall-vertical",
+      "Center": {
+        "IsEmpty": false,
+        "X": 1515,
+        "Y": 2842.5
+      },
+      "Scale": 2.5,
+      "BuildingType": null
+    },
+    {
+      "Id": "wall-corner-27",
+      "AssetId": "wall-corner",
+      "Center": {
+        "IsEmpty": false,
+        "X": 625,
+        "Y": 1402.5
+      },
+      "Scale": 2.5,
+      "BuildingType": null
+    },
+    {
+      "Id": "wall-corner-28",
+      "AssetId": "wall-corner",
+      "Center": {
+        "IsEmpty": false,
+        "X": 175,
+        "Y": 940
+      },
+      "Scale": 2.5,
+      "BuildingType": null
+    },
+    {
+      "Id": "wall-corner-29",
+      "AssetId": "wall-corner",
+      "Center": {
+        "IsEmpty": false,
+        "X": 2225,
+        "Y": 2840
+      },
+      "Scale": 2.5,
+      "BuildingType": null
+    },
+    {
+      "Id": "wall-post-30",
+      "AssetId": "wall-post",
+      "Center": {
+        "IsEmpty": false,
+        "X": 375,
+        "Y": 2645
+      },
+      "Scale": 2.5,
+      "BuildingType": null
+    },
+    {
+      "Id": "wall-post-31",
+      "AssetId": "wall-post",
+      "Center": {
+        "IsEmpty": false,
+        "X": 375,
+        "Y": 3120
+      },
+      "Scale": 2.5,
+      "BuildingType": null
+    },
+    {
+      "Id": "crate-32",
+      "AssetId": "crate",
+      "Center": {
+        "IsEmpty": false,
+        "X": 1125,
+        "Y": 377.5
+      },
+      "Scale": 2.5,
+      "BuildingType": null
+    },
+    {
+      "Id": "crate-33",
+      "AssetId": "crate",
+      "Center": {
+        "IsEmpty": false,
+        "X": 1300,
+        "Y": 2675
+      },
+      "Scale": 2.5,
+      "BuildingType": null
+    },
+    {
+      "Id": "crate-34",
+      "AssetId": "crate",
+      "Center": {
+        "IsEmpty": false,
+        "X": 1300,
+        "Y": 2885
+      },
+      "Scale": 2.5,
+      "BuildingType": null
+    },
+    {
+      "Id": "crate-35",
+      "AssetId": "crate",
+      "Center": {
+        "IsEmpty": false,
+        "X": 1290,
+        "Y": 3095
+      },
+      "Scale": 2.5,
+      "BuildingType": null
+    },
+    {
+      "Id": "crate-36",
+      "AssetId": "crate",
+      "Center": {
+        "IsEmpty": false,
+        "X": 2175,
+        "Y": 3020
+      },
+      "Scale": 2.5,
+      "BuildingType": null
+    },
+    {
+      "Id": "crate-37",
+      "AssetId": "crate",
+      "Center": {
+        "IsEmpty": false,
+        "X": 1040,
+        "Y": 1912.5
+      },
+      "Scale": 2.5,
+      "BuildingType": null
+    },
+    {
+      "Id": "crate-38",
+      "AssetId": "crate",
+      "Center": {
+        "IsEmpty": false,
+        "X": 1910,
+        "Y": 1415
+      },
+      "Scale": 2.5,
+      "BuildingType": null
+    },
+    {
+      "Id": "tree-39",
+      "AssetId": "tree",
+      "Center": {
+        "IsEmpty": false,
+        "X": 207.5,
+        "Y": 132.5
+      },
+      "Scale": 2.5,
+      "BuildingType": null
+    },
+    {
+      "Id": "tree-40",
+      "AssetId": "tree",
+      "Center": {
+        "IsEmpty": false,
+        "X": 762.5,
+        "Y": 145
+      },
+      "Scale": 2.5,
+      "BuildingType": null
+    },
+    {
+      "Id": "tree-41",
+      "AssetId": "tree",
+      "Center": {
+        "IsEmpty": false,
+        "X": 795,
+        "Y": 470
+      },
+      "Scale": 2.5,
+      "BuildingType": null
+    },
+    {
+      "Id": "tree-42",
+      "AssetId": "tree",
+      "Center": {
+        "IsEmpty": false,
+        "X": 2287.5,
+        "Y": 1025
+      },
+      "Scale": 2.5,
+      "BuildingType": null
+    },
+    {
+      "Id": "tree-43",
+      "AssetId": "tree",
+      "Center": {
+        "IsEmpty": false,
+        "X": 97.5,
+        "Y": 2132.5
+      },
+      "Scale": 2.5,
+      "BuildingType": null
+    },
+    {
+      "Id": "tree-44",
+      "AssetId": "tree",
+      "Center": {
+        "IsEmpty": false,
+        "X": 490,
+        "Y": 2487.5
+      },
+      "Scale": 2.5,
+      "BuildingType": null
+    },
+    {
+      "Id": "tree-45",
+      "AssetId": "tree",
+      "Center": {
+        "IsEmpty": false,
+        "X": 700,
+        "Y": 2405
+      },
+      "Scale": 2.5,
+      "BuildingType": null
+    },
+    {
+      "Id": "tree-46",
+      "AssetId": "tree",
+      "Center": {
+        "IsEmpty": false,
+        "X": 1440,
+        "Y": 2255
+      },
+      "Scale": 2.5,
+      "BuildingType": null
+    },
+    {
+      "Id": "tree-47",
+      "AssetId": "tree",
+      "Center": {
+        "IsEmpty": false,
+        "X": 2015,
+        "Y": 2435
+      },
+      "Scale": 2.5,
+      "BuildingType": null
+    },
+    {
+      "Id": "tree-48",
+      "AssetId": "tree",
+      "Center": {
+        "IsEmpty": false,
+        "X": 1917.5,
+        "Y": 2687.5
+      },
+      "Scale": 2.5,
+      "BuildingType": null
+    },
+    {
+      "Id": "tree-49",
+      "AssetId": "tree",
+      "Center": {
+        "IsEmpty": false,
+        "X": 2417.5,
+        "Y": 3170
+      },
+      "Scale": 2.5,
+      "BuildingType": null
+    },
+    {
+      "Id": "tree-50",
+      "AssetId": "tree",
+      "Center": {
+        "IsEmpty": false,
+        "X": 2360,
+        "Y": 2622.5
+      },
+      "Scale": 2.5,
+      "BuildingType": null
+    },
+    {
+      "Id": "tree-51",
+      "AssetId": "tree",
+      "Center": {
+        "IsEmpty": false,
+        "X": 95,
+        "Y": 2575
+      },
+      "Scale": 2.5,
+      "BuildingType": null
+    },
+    {
+      "Id": "tree-52",
+      "AssetId": "tree",
+      "Center": {
+        "IsEmpty": false,
+        "X": 97.5,
+        "Y": 3237.5
+      },
+      "Scale": 2.5,
+      "BuildingType": null
+    },
+    {
+      "Id": "tree-53",
+      "AssetId": "tree",
+      "Center": {
+        "IsEmpty": false,
+        "X": 1080,
+        "Y": 3537.5
+      },
+      "Scale": 2.5,
+      "BuildingType": null
+    },
+    {
+      "Id": "tree-54",
+      "AssetId": "tree",
+      "Center": {
+        "IsEmpty": false,
+        "X": 1775,
+        "Y": 3537.5
+      },
+      "Scale": 2.5,
+      "BuildingType": null
+    },
+    {
+      "Id": "tree-55",
+      "AssetId": "tree",
+      "Center": {
+        "IsEmpty": false,
+        "X": 1952.5,
+        "Y": 3637.5
+      },
+      "Scale": 2.5,
+      "BuildingType": null
+    },
+    {
+      "Id": "tree-56",
+      "AssetId": "tree",
+      "Center": {
+        "IsEmpty": false,
+        "X": 120,
+        "Y": 3537.5
+      },
+      "Scale": 2.5,
+      "BuildingType": null
+    },
+    {
+      "Id": "tree-57",
+      "AssetId": "tree",
+      "Center": {
+        "IsEmpty": false,
+        "X": 1425,
+        "Y": 3775
+      },
+      "Scale": 2.5,
+      "BuildingType": null
+    },
+    {
+      "Id": "bush-58",
+      "AssetId": "bush",
+      "Center": {
+        "IsEmpty": false,
+        "X": 102.5,
+        "Y": 555
+      },
+      "Scale": 2.5,
+      "BuildingType": null
+    },
+    {
+      "Id": "bush-59",
+      "AssetId": "bush",
+      "Center": {
+        "IsEmpty": false,
+        "X": 382.5,
+        "Y": 670
+      },
+      "Scale": 2.5,
+      "BuildingType": null
+    },
+    {
+      "Id": "bush-60",
+      "AssetId": "bush",
+      "Center": {
+        "IsEmpty": false,
+        "X": 1110,
+        "Y": 225
+      },
+      "Scale": 2.5,
+      "BuildingType": null
+    },
+    {
+      "Id": "bush-61",
+      "AssetId": "bush",
+      "Center": {
+        "IsEmpty": false,
+        "X": 2465,
+        "Y": 940
+      },
+      "Scale": 2.5,
+      "BuildingType": null
+    },
+    {
+      "Id": "bush-62",
+      "AssetId": "bush",
+      "Center": {
+        "IsEmpty": false,
+        "X": 835,
+        "Y": 607.5
+      },
+      "Scale": 2.5,
+      "BuildingType": null
+    },
+    {
+      "Id": "bush-63",
+      "AssetId": "bush",
+      "Center": {
+        "IsEmpty": false,
+        "X": 175,
+        "Y": 1055
+      },
+      "Scale": 2.5,
+      "BuildingType": null
+    },
+    {
+      "Id": "bush-64",
+      "AssetId": "bush",
+      "Center": {
+        "IsEmpty": false,
+        "X": 957.5,
+        "Y": 962.5
+      },
+      "Scale": 2.5,
+      "BuildingType": null
+    },
+    {
+      "Id": "bush-65",
+      "AssetId": "bush",
+      "Center": {
+        "IsEmpty": false,
+        "X": 1800,
+        "Y": 962.5
+      },
+      "Scale": 2.5,
+      "BuildingType": null
+    },
+    {
+      "Id": "bush-66",
+      "AssetId": "bush",
+      "Center": {
+        "IsEmpty": false,
+        "X": 825,
+        "Y": 1420
+      },
+      "Scale": 2.5,
+      "BuildingType": null
+    },
+    {
+      "Id": "bush-67",
+      "AssetId": "bush",
+      "Center": {
+        "IsEmpty": false,
+        "X": 1117.5,
+        "Y": 1432.5
+      },
+      "Scale": 2.5,
+      "BuildingType": null
+    },
+    {
+      "Id": "bush-68",
+      "AssetId": "bush",
+      "Center": {
+        "IsEmpty": false,
+        "X": 1445,
+        "Y": 1385
+      },
+      "Scale": 2.5,
+      "BuildingType": null
+    },
+    {
+      "Id": "bush-69",
+      "AssetId": "bush",
+      "Center": {
+        "IsEmpty": false,
+        "X": 1647.5,
+        "Y": 1820
+      },
+      "Scale": 2.5,
+      "BuildingType": null
+    },
+    {
+      "Id": "bush-70",
+      "AssetId": "bush",
+      "Center": {
+        "IsEmpty": false,
+        "X": 1977.5,
+        "Y": 1917.5
+      },
+      "Scale": 2.5,
+      "BuildingType": null
+    },
+    {
+      "Id": "bush-71",
+      "AssetId": "bush",
+      "Center": {
+        "IsEmpty": false,
+        "X": 2465,
+        "Y": 2137.5
+      },
+      "Scale": 2.5,
+      "BuildingType": null
+    },
+    {
+      "Id": "bush-72",
+      "AssetId": "bush",
+      "Center": {
+        "IsEmpty": false,
+        "X": 1577.5,
+        "Y": 2297.5
+      },
+      "Scale": 2.5,
+      "BuildingType": null
+    },
+    {
+      "Id": "bush-73",
+      "AssetId": "bush",
+      "Center": {
+        "IsEmpty": false,
+        "X": 1620,
+        "Y": 2305
+      },
+      "Scale": 2.5,
+      "BuildingType": null
+    },
+    {
+      "Id": "bush-74",
+      "AssetId": "bush",
+      "Center": {
+        "IsEmpty": false,
+        "X": 900,
+        "Y": 2377.5
+      },
+      "Scale": 2.5,
+      "BuildingType": null
+    },
+    {
+      "Id": "bush-75",
+      "AssetId": "bush",
+      "Center": {
+        "IsEmpty": false,
+        "X": 1037.5,
+        "Y": 2492.5
+      },
+      "Scale": 2.5,
+      "BuildingType": null
+    },
+    {
+      "Id": "bush-76",
+      "AssetId": "bush",
+      "Center": {
+        "IsEmpty": false,
+        "X": 1475,
+        "Y": 3207.5
+      },
+      "Scale": 2.5,
+      "BuildingType": null
+    },
+    {
+      "Id": "bush-77",
+      "AssetId": "bush",
+      "Center": {
+        "IsEmpty": false,
+        "X": 1112.5,
+        "Y": 3207.5
+      },
+      "Scale": 2.5,
+      "BuildingType": null
+    },
+    {
+      "Id": "bush-78",
+      "AssetId": "bush",
+      "Center": {
+        "IsEmpty": false,
+        "X": 1877.5,
+        "Y": 2975
+      },
+      "Scale": 2.5,
+      "BuildingType": null
+    },
+    {
+      "Id": "bush-79",
+      "AssetId": "bush",
+      "Center": {
+        "IsEmpty": false,
+        "X": 1935,
+        "Y": 3035
+      },
+      "Scale": 2.5,
+      "BuildingType": null
+    },
+    {
+      "Id": "bush-80",
+      "AssetId": "bush",
+      "Center": {
+        "IsEmpty": false,
+        "X": 2470,
+        "Y": 2905
+      },
+      "Scale": 2.5,
+      "BuildingType": null
+    },
+    {
+      "Id": "bush-81",
+      "AssetId": "bush",
+      "Center": {
+        "IsEmpty": false,
+        "X": 175,
+        "Y": 3695
+      },
+      "Scale": 2.5,
+      "BuildingType": null
+    },
+    {
+      "Id": "bush-82",
+      "AssetId": "bush",
+      "Center": {
+        "IsEmpty": false,
+        "X": 247.5,
+        "Y": 3655
+      },
+      "Scale": 2.5,
+      "BuildingType": null
+    },
+    {
+      "Id": "bush-83",
+      "AssetId": "bush",
+      "Center": {
+        "IsEmpty": false,
+        "X": 1467.5,
+        "Y": 3545
+      },
+      "Scale": 2.5,
+      "BuildingType": null
+    },
+    {
+      "Id": "bush-84",
+      "AssetId": "bush",
+      "Center": {
+        "IsEmpty": false,
+        "X": 1517.5,
+        "Y": 3607.5
+      },
+      "Scale": 2.5,
+      "BuildingType": null
+    },
+    {
+      "Id": "bush-85",
+      "AssetId": "bush",
+      "Center": {
+        "IsEmpty": false,
+        "X": 1275,
+        "Y": 3687.5
+      },
+      "Scale": 2.5,
+      "BuildingType": null
+    },
+    {
+      "Id": "bush-86",
+      "AssetId": "bush",
+      "Center": {
+        "IsEmpty": false,
+        "X": 1335,
+        "Y": 3712.5
+      },
+      "Scale": 2.5,
+      "BuildingType": null
+    },
+    {
+      "Id": "bush-87",
+      "AssetId": "bush",
+      "Center": {
+        "IsEmpty": false,
+        "X": 2345,
+        "Y": 3572.5
+      },
+      "Scale": 2.5,
+      "BuildingType": null
+    },
+    {
+      "Id": "bush-88",
+      "AssetId": "bush",
+      "Center": {
+        "IsEmpty": false,
+        "X": 2407.5,
+        "Y": 3625
+      },
+      "Scale": 2.5,
+      "BuildingType": null
+    }
+  ]
+}

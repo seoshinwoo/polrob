@@ -1,4 +1,5 @@
 using System.Linq;
+using System.Net.Http.Json;
 using Microsoft.Maui.Devices;
 using SkiaSharp;
 using SkiaSharp.Views.Maui;
@@ -77,7 +78,7 @@ public partial class GamePlay : ContentPage
     private SKBitmap?[] _robberRunBitmaps = new SKBitmap?[8];
     private SKBitmap? _robberSurrendBitmap;
     private SKBitmap? _robberPrisonBreakBitmap;
-    private TownMapRenderer? _townMapRenderer;
+    private IMapRenderer? _townMapRenderer;
     private readonly SKBitmap?[,] _terrainTiles = new SKBitmap?[4, 4];
     private readonly Dictionary<SKBitmap, SKRect> _spriteVisibleBounds = new();
     private readonly Dictionary<string, SKBitmap?> _mapPropBitmaps = new(StringComparer.Ordinal);
@@ -85,7 +86,6 @@ public partial class GamePlay : ContentPage
     // the same body pivot. Arm poses never change the body's scale or anchor.
     private static readonly PlayerSpriteProfile NormalizedPlayerSpriteProfile = new(512f, 544f, 544f);
 
-    private static readonly MapPropLayout[] MapPropPlacements = GameMap.PropLayouts;
 
     // 체포 상태 만료 시간 기록 (2초 유지용)
     private Dictionary<string, DateTime> _arrestVisualTimers = new();
@@ -217,6 +217,7 @@ public partial class GamePlay : ContentPage
         _player.Name = GetLocalName();
         ScheduleTeamVoiceRosterRefresh();
 
+        if (!await LoadRoomMapAsync()) return;
         await LoadAssetsAsync();
         if (!await InitializeNetworkAsync())
         {
@@ -485,7 +486,8 @@ public partial class GamePlay : ContentPage
                 GetServerIpAddress(),
                 _player,
                 AuthSession.SessionToken ?? string.Empty,
-                networkCancellation);
+                networkCancellation,
+                _gameMap.MapId);
             return true;
         }
         catch (OperationCanceledException)
@@ -642,6 +644,35 @@ public partial class GamePlay : ContentPage
         });
     }
 
+    private async Task<bool> LoadRoomMapAsync()
+    {
+        try
+        {
+            using var http = new HttpClient
+            {
+                BaseAddress = new Uri(AuthSession.ApiBaseUrl), Timeout = TimeSpan.FromSeconds(15)
+            };
+            AuthSession.ApplyAuthorization(http);
+            var status = await http.GetFromJsonAsync<ServerResponse>(
+                $"game/{Uri.EscapeDataString(_roomId)}/status",
+                _voiceLifetimeCancellation?.Token ?? CancellationToken.None);
+            if (status?.Success != true || !MapRegistry.Contains(status.MapId))
+                throw new InvalidOperationException("방의 맵을 확인할 수 없습니다. 클라이언트와 서버 버전을 확인해주세요.");
+            if (!_isTeamVoicePageActive) return false;
+            if (_assetsLoaded && _gameMap.MapId != status.MapId)
+                throw new InvalidOperationException("맵이 변경되었습니다. 방에 다시 입장해주세요.");
+            _gameMap = new GameMap(status.MapId);
+            return true;
+        }
+        catch (OperationCanceledException) when (!_isTeamVoicePageActive ||
+            _voiceLifetimeCancellation?.IsCancellationRequested == true) { return false; }
+        catch (Exception ex)
+        {
+            await DisplayAlertAsync("맵 불러오기 실패", ex.Message, "확인");
+            return false;
+        }
+    }
+
     private async Task LoadAssetsAsync()
     {
         await _assetLoadLock.WaitAsync();
@@ -660,10 +691,10 @@ public partial class GamePlay : ContentPage
             _policeArrestBitmap = await LoadCharacterBitmapAsync("char_police_arrest.png");
             _robberSurrendBitmap = await LoadCharacterBitmapAsync("char_robber_surrend.png");
             _robberPrisonBreakBitmap = await LoadCharacterBitmapAsync("char_robber_prison_break.png");
-            foreach (var assetPath in MapPropPlacements
+            foreach (var assetPath in _gameMap.PropLayouts
                 .Select(placement => placement.AssetPath)
                 .Where(path => !string.IsNullOrEmpty(path))
-                .Concat(TownMapRenderer.TileAssets)
+                .Concat(_gameMap.Definition.TileAssets)
                 .Distinct(StringComparer.Ordinal))
             {
                 _mapPropBitmaps[assetPath] = await LoadBitmapAsync(assetPath);
@@ -684,13 +715,13 @@ public partial class GamePlay : ContentPage
         }
     }
 
-    private TownMapRenderer CreateTownMapRenderer() =>
-        new(
-            _mapPropBitmaps,
-            static (assetPath, bitmap) => GeneratedAssetBounds.GetMap(
-                assetPath,
-                bitmap.Width,
-                bitmap.Height));
+    private IMapRenderer CreateTownMapRenderer() => _gameMap.MapId switch
+    {
+        MapRegistry.ChaseTown => new TownMapRenderer(_mapPropBitmaps),
+        MapRegistry.ClassicTown => new ClassicTownMapRenderer(_mapPropBitmaps,
+            static (assetPath, bitmap) => GeneratedAssetBounds.GetMap(assetPath, bitmap.Width, bitmap.Height)),
+        _ => throw new InvalidOperationException($"지원하지 않는 맵: {_gameMap.MapId}")
+    };
 
     private async Task<SKBitmap?> LoadCharacterBitmapAsync(string fileName)
     {
@@ -1150,7 +1181,7 @@ public partial class GamePlay : ContentPage
 
     private void DrawMapProps(SKCanvas canvas, SKRect visibleWorldBounds)
     {
-        _townMapRenderer?.DrawProps(canvas, visibleWorldBounds);
+        _townMapRenderer?.DrawProps(canvas, visibleWorldBounds, new System.Drawing.PointF(_player.X, _player.Y));
     }
 
     private void DrawOuterTerrain(SKCanvas canvas, SKRect visibleWorldBounds)

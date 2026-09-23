@@ -8,8 +8,9 @@ namespace polrob.Server.Network;
 
 public class GameSession
 {
-    public GameSession(int commandQueueCapacity)
+    public GameSession(int commandQueueCapacity, string mapId = MapRegistry.DefaultId)
     {
+        Map = new GameMap(mapId);
         Commands = Channel.CreateBounded<RoomCommand>(
             new BoundedChannelOptions(commandQueueCapacity)
             {
@@ -19,6 +20,7 @@ public class GameSession
             });
     }
 
+    public GameMap Map { get; }
     public object CommandGate { get; } = new();
     public Channel<RoomCommand> Commands { get; } // 해당 방으로 들어온 입장, 퇴자 , 이동 명령이 잠시 쌓임. 
     public int QueuedCommandCount;

@@ -9,7 +9,7 @@ public sealed class BotMovementController
     private const float RescueArrivalDistance = 20f;
     private static readonly float[] SteeringAngles = [0f, 25f, -25f, 50f, -50f, 90f, -90f, 135f, -135f, 180f];
 
-    private readonly GameMap _map = new();
+    private readonly GameMap _map;
     private readonly List<Obstacle> _nearbyCollisionObstacles = new();
     private readonly Random _random;
     private Vector2 _wanderDirection;
@@ -17,8 +17,9 @@ public sealed class BotMovementController
     private DateTime _pausedUntilUtc = DateTime.MinValue;
     private DateTime _nextPauseCheckUtc = DateTime.MinValue;
 
-    public BotMovementController(string botId)
+    public BotMovementController(string botId, string mapId = MapRegistry.DefaultId)
     {
+        _map = new GameMap(mapId);
         _random = new Random(StringComparer.Ordinal.GetHashCode(botId));
         _wanderDirection = CreateRandomDirection();
     }
@@ -135,6 +136,8 @@ public sealed class BotMovementController
 
     private Vector2 GetRescueContactPoint(float radius, int rescuerIndex)
     {
+        if (_map.JailRescueArea is { } rescueArea)
+            return new Vector2(rescueArea.Center.X, rescueArea.Center.Y);
         var jail = _map.Jail;
         var jailBounds = GameMap.GetBuildingCollisionBounds(jail);
         var contactGap = radius + 15f;

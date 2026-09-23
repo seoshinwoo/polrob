@@ -3,6 +3,7 @@ namespace polrob.Shared;
 public class GameStateSync
 {
     public string RoomId { get; set; } = string.Empty;
+    public string MapId { get; set; } = MapRegistry.DefaultId;
     public string? HostUserId { get; set; }
     public GamePhase Phase { get; set; }
     public int CountdownTime { get; set; } // 3, 2, 1

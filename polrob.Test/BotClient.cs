@@ -34,6 +34,7 @@ public class BotClient : IAsyncDisposable
     public string SessionToken { get; private set; } = string.Empty;
     public PlayerRole Role { get; set; }
     public string RoomId { get; private set; } = string.Empty;
+    public string MapId { get; private set; } = MapRegistry.DefaultId;
     public int CurrentRoomCount { get; private set; }
     public bool IsMatched { get; private set; }
     public PlayerRole? WinnerRole { get; private set; }
@@ -118,6 +119,7 @@ public class BotClient : IAsyncDisposable
         }
 
         CurrentRoomCount = response.CurrentCount;
+        MapId = MapRegistry.Get(response.MapId).Id;
         IsMatched = response.Matched;
 
         if (IsMatched)
@@ -139,7 +141,7 @@ public class BotClient : IAsyncDisposable
             TaskCreationOptions.RunContinuationsAsynchronously);
         _gameEnded = new TaskCompletionSource(
             TaskCreationOptions.RunContinuationsAsynchronously);
-        _movementController = new BotMovementController(Id);
+        _movementController = new BotMovementController(Id, MapId);
         _gameNetworkClient = new BotGameNetworkClient();
 
         RegisterGameNetworkEvents(_gameNetworkClient);
@@ -162,7 +164,8 @@ public class BotClient : IAsyncDisposable
                 serverHost,
                 joiningPlayer,
                 SessionToken,
-                gameplayCancellation.Token);
+                gameplayCancellation.Token,
+                MapId);
             try
             {
                 await _initialStateReceived.Task.WaitAsync(InitialStateTimeout);

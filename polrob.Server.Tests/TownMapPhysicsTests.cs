@@ -7,38 +7,34 @@ namespace polrob.Server.Tests;
 public sealed class TownMapPhysicsTests
 {
     [Test]
-    public void CanvaMapRegistersTheSpecifiedPropCollisions()
+    public void ActiveMapRegistersAssetProfilesAndNonSolidHidingAreas()
     {
         var map = new GameMap();
         Assert.Multiple(() =>
         {
             Assert.That(map.Width, Is.EqualTo(2560f));
             Assert.That(map.Height, Is.EqualTo(3840f));
-            Assert.That(GameMap.PropLayouts, Is.SameAs(CanvaMapLayout.Props));
-            Assert.That(GameMap.PropLayouts.Length, Is.EqualTo(70));
-            Assert.That(GameMap.PropLayouts.All(prop => prop.BlocksMovement), Is.True);
-            Assert.That(GameMap.PropLayouts.All(prop => prop.AssetPath.StartsWith("MapAssets/", StringComparison.Ordinal)), Is.True);
-            Assert.That(map.Buildings.Count, Is.EqualTo(GameMap.PropLayouts.Count(prop => prop.BuildingType != null)));
+            Assert.That(map.PropLayouts, Is.SameAs(ChaseTownLayout.Props));
+            Assert.That(map.PropLayouts.Length, Is.EqualTo(89));
+            Assert.That(map.PropLayouts.All(prop => prop.AssetPath.StartsWith("ChaseTownV7/", StringComparison.Ordinal)), Is.True);
+            Assert.That(map.Buildings.Count, Is.EqualTo(map.PropLayouts.Count(prop => prop.BuildingType != null)));
             Assert.That(map.PoliceStation.BlocksMovement, Is.True);
-            Assert.That(map.Jail.BlocksMovement, Is.True);
+            Assert.That(map.Jail.BlocksMovement, Is.False, "Only its bars and gate are solid, not the whole jail.");
             Assert.That(map.PoliceStation.ImageFileName, Is.Not.Empty);
             Assert.That(map.Jail.ImageFileName, Is.Not.Empty);
-            Assert.That(map.Buildings.Count + map.Obstacles.Count, Is.EqualTo(GameMap.PropLayouts.Length));
-            Assert.That(map.Obstacles.Count(o => o.Type == "Polygon"), Is.EqualTo(2));
+            Assert.That(map.Obstacles.Count(o => o.IsHidingArea), Is.GreaterThan(20));
         });
 
         foreach (var building in map.Buildings)
         {
-            var layout = GameMap.PropLayouts.Single(prop => prop.BuildingType == building.Type);
+            var layout = map.PropLayouts.Single(prop => prop.BuildingType == building.Type);
             Assert.Multiple(() =>
             {
                 Assert.That(building.Center.X, Is.EqualTo(layout.CenterX));
                 Assert.That(building.Center.Y, Is.EqualTo(layout.CenterY));
-                Assert.That(building.CollisionCenter.X, Is.EqualTo(layout.CenterX + layout.CollisionOffsetX));
-                Assert.That(building.CollisionCenter.Y, Is.EqualTo(layout.CenterY + layout.CollisionOffsetY));
-                Assert.That(building.CollisionPolygon, Is.Empty, building.Type);
-                Assert.That(building.BlocksVision, Is.False, building.Type);
-                Assert.That(building.BlocksMovement, Is.True, building.Type);
+                Assert.That(building.CollisionPolygon.Length, building.Type == "Jail" ? Is.EqualTo(0) : Is.GreaterThan(3));
+                Assert.That(building.BlocksVision, Is.EqualTo(building.Type != "Jail"), building.Type);
+                Assert.That(building.BlocksMovement, Is.EqualTo(building.Type != "Jail"), building.Type);
             });
         }
     }
@@ -49,12 +45,12 @@ public sealed class TownMapPhysicsTests
     {
         var map = new GameMap();
         var nearby = new List<Obstacle>();
-        foreach (var building in map.Buildings)
+        foreach (var building in map.Buildings.Where(b => b.BlocksMovement))
         {
             Assert.That(map.IsMovementPositionBlocked(building.CollisionCenter.X, building.CollisionCenter.Y, playerRadius, nearby),
                 Is.True, building.Type);
         }
-        foreach (var obstacle in map.Obstacles)
+        foreach (var obstacle in map.Obstacles.Where(o => o.BlocksMovement))
         {
             Assert.That(map.IsMovementPositionBlocked(obstacle.Center.X, obstacle.Center.Y, playerRadius, nearby),
                 Is.True, obstacle.ImageFileName);
@@ -125,20 +121,19 @@ public sealed class TownMapPhysicsTests
     public void JailHoldingSlotsAreCenteredInsideTheArtworkAndDoNotOverlap(int playerCount)
     {
         const float playerRadius = 25f;
-        const float horizontalInsetRatio = 0.2f;
         var map = new GameMap();
         var positions = Enumerable.Range(0, playerCount)
             .Select(slot => map.GetJailHoldingPosition(slot, playerCount, playerRadius))
             .ToArray();
-        var safeLeft = map.Jail.LeftTop.X + map.Jail.Width * horizontalInsetRatio;
-        var safeRight = map.Jail.RightBottom.X - map.Jail.Width * horizontalInsetRatio;
+        var holding = GameMap.GetObstacleBounds(map.JailHoldingArea!);
 
         Assert.Multiple(() =>
         {
             Assert.That(positions.Average(position => position.X), Is.EqualTo(map.Jail.Center.X).Within(0.001f));
-            Assert.That(positions.All(position => MathF.Abs(position.Y - map.Jail.Center.Y) < 0.001f), Is.True);
-            Assert.That(positions.All(position => position.X - playerRadius >= safeLeft - 0.001f), Is.True);
-            Assert.That(positions.All(position => position.X + playerRadius <= safeRight + 0.001f), Is.True);
+            Assert.That(positions.All(position => position.X - playerRadius >= holding.Left), Is.True);
+            Assert.That(positions.All(position => position.X + playerRadius <= holding.Right), Is.True);
+            Assert.That(positions.All(position => position.Y - playerRadius >= holding.Top && position.Y + playerRadius <= holding.Bottom), Is.True);
+            Assert.That(positions.All(position => !map.IsMovementPositionBlocked(position.X, position.Y, playerRadius, [])), Is.True);
         });
 
         for (var first = 0; first < positions.Length; first++)
@@ -154,7 +149,59 @@ public sealed class TownMapPhysicsTests
         }
     }
 
-    private const float GridStep = 32f;
+    private const float GridStep = 16f;
+
+    [Test]
+    public void GroundIsThreeReusableTilesAndTheRoadNetworkIsConnected()
+    {
+        Assert.That(ChaseTownLayout.Columns * ChaseTownLayout.TileSize, Is.EqualTo(GameMap.WorldWidth));
+        Assert.That(ChaseTownLayout.Rows * ChaseTownLayout.TileSize, Is.EqualTo(GameMap.WorldHeight));
+        var roads = new HashSet<(int X, int Y)>();
+        var terrain = new HashSet<GroundTile>();
+        for (var y = 0; y < ChaseTownLayout.Rows; y++)
+        for (var x = 0; x < ChaseTownLayout.Columns; x++)
+        {
+            terrain.Add(ChaseTownLayout.Ground[x,y]);
+            if (ChaseTownLayout.Ground[x,y] == GroundTile.Road) roads.Add((x,y));
+        }
+        Assert.That(terrain.Count, Is.EqualTo(3));
+        var queue = new Queue<(int X, int Y)>();
+        queue.Enqueue(roads.First());
+        var seen = new HashSet<(int X, int Y)>();
+        while (queue.TryDequeue(out var p))
+        {
+            if (!roads.Contains(p) || !seen.Add(p)) continue;
+            queue.Enqueue((p.X-1,p.Y)); queue.Enqueue((p.X+1,p.Y));
+            queue.Enqueue((p.X,p.Y-1)); queue.Enqueue((p.X,p.Y+1));
+        }
+        Assert.That(seen.SetEquals(roads), Is.True);
+    }
+
+    [Test]
+    public void EveryHidingAreaCanBeEnteredFromTheTown()
+    {
+        var map = new GameMap();
+        var reachable = FloodWalkableGrid(map, map.GetSpawnPosition(PlayerRole.Robber, 0, 25), 25);
+        foreach (var bush in map.Obstacles.Where(o => o.IsHidingArea))
+        {
+            Assert.That(bush.BlocksMovement || bush.BlocksVision, Is.False);
+            Assert.That(map.FindBushContainingPoint(bush.Center.X, bush.Center.Y), Is.Not.Null);
+            Assert.That(map.IsMovementPositionBlocked(bush.Center.X, bush.Center.Y, 25, []), Is.False,
+                $"Hidden inside a solid: {bush.Center}");
+            AssertPointReachable(map, reachable, bush.Center, 25, "Hiding area");
+        }
+    }
+
+    [Test]
+    public void RescueTriggerIsOutsideTheBarsAndReachable()
+    {
+        var map = new GameMap();
+        var center = map.JailRescueArea!.Center;
+        Assert.That(GameMap.ContainsPoint(map.JailRescueArea, center.X, center.Y), Is.True);
+        Assert.That(map.IsMovementPositionBlocked(center.X, center.Y, 25, []), Is.False);
+        var reachable = FloodWalkableGrid(map, map.GetSpawnPosition(PlayerRole.Robber, 0, 25), 25);
+        AssertPointReachable(map, reachable, center, 25, "Rescue trigger");
+    }
 
     [TestCase(25f)]
     [TestCase(50f)]
@@ -163,7 +210,7 @@ public sealed class TownMapPhysicsTests
         var map = new GameMap();
         var reachable = FloodWalkableGrid(map, map.GetSpawnPosition(PlayerRole.Police, 0, playerRadius), playerRadius);
         var nearby = new List<Obstacle>();
-        foreach (var point in CanvaMapLayout.ChaseWaypoints)
+        foreach (var point in ChaseTownLayout.ChaseWaypoints)
         {
             Assert.That(map.IsMovementPositionBlocked(point.X, point.Y, playerRadius, nearby),
                 Is.False, $"Chase route is pinched shut at {point}.");
