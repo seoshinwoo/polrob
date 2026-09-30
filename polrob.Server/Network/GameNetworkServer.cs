@@ -82,10 +82,12 @@ public partial class GameNetworkServer : BackgroundService
         _udpBurstSize = Math.Max(
             1d,
             configuration.GetValue("GameNetwork:UdpBurstSize", 20d));
-        // 7777 for reliable TCP (Join, Leave, InitialState)
-        _tcpListener = new TcpListener(IPAddress.Any, 7777);
-        // 7778 for fast UDP (Movement)
-        _udpClient = new UdpClient(7778);
+        // Port 0 lets isolated tests use OS-assigned ports; deployed defaults stay unchanged.
+        _tcpListener = new TcpListener(
+            IPAddress.Any,
+            configuration.GetValue("GameNetwork:TcpPort", 7777));
+        _udpClient = new UdpClient(
+            configuration.GetValue("GameNetwork:UdpPort", 7778));
     }
 
     // 백그라운드 서비스가 시작될 때 TCP/UDP 수신 루프와 메트릭 타이머를 켭니다.
@@ -93,7 +95,9 @@ public partial class GameNetworkServer : BackgroundService
     {
         _tcpListener.Start(TcpListenBacklog);
         _logger.LogInformation(
-            "Game network server started. tcp=7777 udp=7778 room_queue_capacity={RoomCommandQueueCapacity} udp_rate={UdpPacketsPerSecond}/s burst={UdpBurstSize}",
+            "Game network server started. tcp={TcpPort} udp={UdpPort} room_queue_capacity={RoomCommandQueueCapacity} udp_rate={UdpPacketsPerSecond}/s burst={UdpBurstSize}",
+            ((IPEndPoint)_tcpListener.LocalEndpoint).Port,
+            ((IPEndPoint)_udpClient.Client.LocalEndPoint!).Port,
             _roomCommandQueueCapacity,
             _udpPacketsPerSecond,
             _udpBurstSize);

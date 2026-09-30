@@ -136,11 +136,8 @@ public partial class GameNetworkServer
         }
         finally
         {
-            if (_gameSessions.TryGetValue(roomId, out var currentSession)
-                && ReferenceEquals(currentSession, gameSession))
-            {
-                _gameSessions.TryRemove(roomId, out _);
-            }
+            var currentEntry = new KeyValuePair<string, GameSession>(roomId, gameSession);
+            ((ICollection<KeyValuePair<string, GameSession>>)_gameSessions).Remove(currentEntry);
 
             gameSession.Commands.Writer.TryComplete();
         }
@@ -168,10 +165,38 @@ public partial class GameNetworkServer
                 return false;
             }
 
-            gameSession.IsStopping = true;
-            if (!_gameSessions.TryRemove(roomId, out var removedSession)
-                || !ReferenceEquals(removedSession, gameSession))
+            if (!_gameSessions.TryGetValue(roomId, out var currentSession) ||
+                !ReferenceEquals(currentSession, gameSession))
             {
+                return false;
+            }
+
+            gameSession.IsStopping = true;
+            if (gameSession.GamePhase == GamePhase.Playing &&
+                !string.Equals(roomId, DefaultRoomId, StringComparison.Ordinal))
+            {
+                // No TCP player returned during the reconnect grace period. The room
+                // cannot finish its game tick with zero sessions, so release the
+                // still-active lobby room without creating a winner or game record.
+                // Keep this session in the dictionary while abandoning the lobby;
+                // a concurrent join then waits for IsStopping instead of creating
+                // a new room loop against a lobby about to be removed.
+                try
+                {
+                    _gameRoomService.AbandonGameAfterDisconnect(roomId);
+                }
+                catch (Exception ex)
+                {
+                    gameSession.IsStopping = false;
+                    _logger.LogError(ex, "Could not abandon disconnected game in room {RoomId}.", roomId);
+                    return false;
+                }
+            }
+
+            var currentEntry = new KeyValuePair<string, GameSession>(roomId, gameSession);
+            if (!((ICollection<KeyValuePair<string, GameSession>>)_gameSessions).Remove(currentEntry))
+            {
+                gameSession.IsStopping = false;
                 return false;
             }
 

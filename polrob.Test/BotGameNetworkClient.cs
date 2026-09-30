@@ -89,7 +89,14 @@ public sealed class BotGameNetworkClient : IAsyncDisposable
 
         lock (_writer)
         {
-            _writer.Write(payload.Length + 1);
+            var payloadByteLength = Encoding.UTF8.GetByteCount(payload);
+            var prefixByteLength = 1;
+            for (var remaining = payloadByteLength; remaining >= 128; remaining >>= 7)
+            {
+                prefixByteLength++;
+            }
+
+            _writer.Write(checked(1 + prefixByteLength + payloadByteLength));
             _writer.Write((byte)type);
             _writer.Write(payload);
         }

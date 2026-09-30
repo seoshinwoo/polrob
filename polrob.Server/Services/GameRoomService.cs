@@ -557,9 +557,14 @@ public class GameRoomService
             {
                 game.IsOnGame = false;
                 game.VoiceSessionId = string.Empty;
-                // 커스텀 게임은 같은 참가자와 방장을 유지한 채 재경기 로비로 돌아갑니다.
-                // 이후 실제로 나가거나 연결이 끊긴 참가자만 RemovePlayer에서 제거합니다.
                 game.EmptyRoomExpiresAtUtc = null;
+                // 참가자가 남아 있으면 재경기 로비를 유지합니다. 마지막 참가자의
+                // 퇴장이 완료 처리보다 먼저 도착했다면 빈 방을 즉시 정리합니다.
+                if (game.Players.Count == 0)
+                {
+                    game.HostUserId = string.Empty;
+                    Games.Remove(game);
+                }
                 response = CreateRoomStatusResponse(game, message: "게임이 종료되었습니다.");
             }
             else
@@ -576,6 +581,31 @@ public class GameRoomService
         }
 
         return response;
+    }
+
+    // 방 루프가 연결 재시도 유예 시간 뒤에도 비어 있을 때만 호출합니다.
+    // 승패가 정해지지 않은 게임을 완료 처리하거나 경기 기록으로 남기지 않습니다.
+    public bool AbandonGameAfterDisconnect(string roomId)
+    {
+        string voiceSessionId;
+        lock (_roomLock)
+        {
+            var game = Games.FirstOrDefault(candidate => candidate.Id == roomId);
+            if (game is not { IsOnGame: true })
+            {
+                return false;
+            }
+
+            voiceSessionId = game.VoiceSessionId;
+            Games.Remove(game);
+        }
+
+        if (_liveKitRoomAdminService != null && !string.IsNullOrWhiteSpace(voiceSessionId))
+        {
+            _ = _liveKitRoomAdminService.DeleteTeamRoomsAsync(roomId, voiceSessionId);
+        }
+
+        return true;
     }
 
     public void RemoveExpiredEmptyRooms()

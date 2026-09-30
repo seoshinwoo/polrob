@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Sockets;
+using System.Text;
 using System.Text.Json;
 using polrob.Server.Controllers;
 using polrob.Shared;
@@ -8,6 +9,10 @@ namespace polrob.Server.Network;
 
 public partial class GameNetworkServer
 {
+    private const int MaxInboundTcpPayloadBytes = 4096;
+    private const int MaxInboundUdpMovementBytes = 2048;
+    private static readonly UTF8Encoding StrictUtf8 = new(false, true);
+
     // TCP 접속을 계속 기다리다가 새 클라이언트마다 처리 작업을 시작합니다.
     private async Task AcceptTcpClientsAsync(CancellationToken stoppingToken)
     {
@@ -48,13 +53,12 @@ public partial class GameNetworkServer
         {
             while (client.Connected && !stoppingToken.IsCancellationRequested)
             {
-                // Simple binary protocol frame:
-                // [Int32 Payload Length]
-                // [Byte Packet Type]
-                // [String JSON Payload]
-                _ = reader.ReadInt32();
-                var type = (TcpMessageType)reader.ReadByte();
-                var json = reader.ReadString();
+                var (type, json) = ReadTcpFrame(reader);
+
+                if (type != TcpMessageType.Join && type != TcpMessageType.Heartbeat)
+                {
+                    throw new InvalidDataException("지원하지 않는 TCP 게임 패킷입니다.");
+                }
 
                 if (type == TcpMessageType.Join)
                 {
@@ -161,12 +165,101 @@ public partial class GameNetworkServer
         return Task.CompletedTask;
     }
 
+    // Frame format: [Int32 bytes after this field][Byte type][7-bit UTF-8 byte count][UTF-8 payload].
+    // Older clients declared 1 + UTF-16 character count instead of the actual byte count.
+    // Accept that legacy length while still bounding both lengths and checking consistency.
+    private static (TcpMessageType Type, string Payload) ReadTcpFrame(BinaryReader reader)
+    {
+        var declaredLength = reader.ReadInt32();
+        if (declaredLength < 1 || declaredLength > 1 + 5 + MaxInboundTcpPayloadBytes)
+        {
+            throw new InvalidDataException("TCP 프레임의 길이가 허용 범위를 벗어났습니다.");
+        }
+
+        var type = (TcpMessageType)reader.ReadByte();
+        var payloadByteLength = ReadSevenBitEncodedLength(reader, out var prefixByteLength);
+        if (payloadByteLength > MaxInboundTcpPayloadBytes)
+        {
+            throw new InvalidDataException("TCP payload가 최대 크기를 초과했습니다.");
+        }
+
+        var payloadBytes = reader.ReadBytes(payloadByteLength);
+        if (payloadBytes.Length != payloadByteLength)
+        {
+            throw new EndOfStreamException("TCP payload가 완전히 도착하지 않았습니다.");
+        }
+
+        string payload;
+        try
+        {
+            payload = StrictUtf8.GetString(payloadBytes);
+        }
+        catch (DecoderFallbackException ex)
+        {
+            throw new InvalidDataException("TCP payload가 유효한 UTF-8이 아닙니다.", ex);
+        }
+
+        var actualLength = 1 + prefixByteLength + payloadByteLength;
+        var legacyLength = 1 + payload.Length;
+        if (declaredLength != actualLength && declaredLength != legacyLength)
+        {
+            throw new InvalidDataException("TCP 프레임 길이와 payload 길이가 일치하지 않습니다.");
+        }
+
+        return (type, payload);
+    }
+
+    private static int ReadSevenBitEncodedLength(BinaryReader reader, out int prefixByteLength)
+    {
+        uint length = 0;
+        for (var index = 0; index < 5; index++)
+        {
+            var next = reader.ReadByte();
+            if (index == 4 && (next & 0xF8) != 0)
+            {
+                throw new InvalidDataException("TCP 문자열 길이 접두사가 유효하지 않습니다.");
+            }
+
+            length |= (uint)(next & 0x7F) << (index * 7);
+            if ((next & 0x80) == 0)
+            {
+                if (length > int.MaxValue)
+                {
+                    throw new InvalidDataException("TCP 문자열 길이 접두사가 허용 범위를 벗어났습니다.");
+                }
+
+                if (index > 0 && (next & 0x7F) == 0)
+                {
+                    throw new InvalidDataException("TCP 문자열 길이 접두사가 최소 형식이 아닙니다.");
+                }
+
+                prefixByteLength = index + 1;
+                return (int)length;
+            }
+        }
+
+        throw new InvalidDataException("TCP 문자열 길이 접두사가 너무 깁니다.");
+    }
+
+    private static int GetSevenBitEncodedLength(int value)
+    {
+        var count = 1;
+        while (value >= 128)
+        {
+            value >>= 7;
+            count++;
+        }
+
+        return count;
+    }
+
     // 타입과 JSON payload를 정해진 TCP 프레임 형식으로 전송합니다.
     private void SendTcp(BinaryWriter writer, TcpMessageType type, string payload)
     {
         lock (writer)
         {
-            writer.Write(payload.Length + 1);
+            var payloadByteLength = Encoding.UTF8.GetByteCount(payload);
+            writer.Write(checked(1 + GetSevenBitEncodedLength(payloadByteLength) + payloadByteLength));
             writer.Write((byte)type);
             writer.Write(payload);
             Interlocked.Increment(ref _tcpPacketsSentThisSecond);
@@ -367,7 +460,7 @@ public partial class GameNetworkServer
                 var result = await _udpClient.ReceiveAsync(stoppingToken);
                 Interlocked.Increment(ref _udpPacketsReceivedThisSecond);
                 Interlocked.Add(ref _udpBytesReceivedThisSecond, result.Buffer.Length);
-                var movement = JsonSerializer.Deserialize<PlayerMovementInput>(result.Buffer);
+                var movement = ParseUdpMovement(result.Buffer);
 
                 if (movement == null || !_playerRooms.TryGetValue(movement.Id, out var registration))
                 {
@@ -394,7 +487,7 @@ public partial class GameNetworkServer
 
                 TryWriteRoomCommand(gameSession, new MoveRoomCommand(movement, result.RemoteEndPoint));
             }
-            catch (JsonException ex)
+            catch (Exception ex) when (ex is JsonException or InvalidDataException)
             {
                 Interlocked.Increment(ref _udpPacketsInvalidThisSecond);
                 _logger.LogDebug(ex, "Ignored malformed UDP movement packet.");
@@ -416,6 +509,16 @@ public partial class GameNetworkServer
                 _logger.LogError(ex, "Unexpected UDP receive loop failure.");
             }
         }
+    }
+
+    private static PlayerMovementInput? ParseUdpMovement(byte[] datagram)
+    {
+        if (datagram.Length == 0 || datagram.Length > MaxInboundUdpMovementBytes)
+        {
+            throw new InvalidDataException("UDP 이동 패킷의 크기가 허용 범위를 벗어났습니다.");
+        }
+
+        return JsonSerializer.Deserialize<PlayerMovementInput>(datagram);
     }
 
     private static bool IsAuthorizedMovement(

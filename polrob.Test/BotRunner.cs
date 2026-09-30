@@ -60,7 +60,6 @@ public class BotRunner
         var expectedRoleRoomCount = roomSummaries.Count(room => room.Police == 2 && room.Robber == 4);
         var abnormalRooms = roomSummaries
             .Where(room => room.Total != 6 || room.Police != 2 || room.Robber != 4)
-            .Take(10)
             .ToList();
 
         Console.WriteLine(
@@ -68,10 +67,16 @@ public class BotRunner
         Console.WriteLine(
             $"랜덤 매칭 검증: 6명 방 {fullRoomCount}개, 경찰2/도둑4 방 {expectedRoleRoomCount}개");
 
-        foreach (var room in abnormalRooms)
+        foreach (var room in abnormalRooms.Take(10))
         {
             Console.WriteLine(
                 $"[매칭 이상] {room.RoomId}: total={room.Total}, police={room.Police}, robber={room.Robber}");
+        }
+
+        if (abnormalRooms.Count > 0)
+        {
+            throw new InvalidOperationException(
+                $"랜덤 매칭 결과 {abnormalRooms.Count}개 방의 인원 또는 역할 구성이 올바르지 않습니다.");
         }
     }
 
@@ -102,6 +107,9 @@ public class BotRunner
             {
                 Console.WriteLine($"[봇 실패] {failure}");
             }
+
+            throw new InvalidOperationException(
+                $"봇 게임 플레이 중 {failures.Count}개 실패가 발생했습니다.");
         }
 
         foreach (var roomResult in _botClients
