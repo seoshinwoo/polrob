@@ -4,6 +4,7 @@ using System.Net;
 using System.Net.Sockets;
 using System.Threading;
 using Microsoft.Extensions.Hosting;
+using polrob.Server.Controllers;
 using polrob.Shared;
 
 namespace polrob.Server.Network;
@@ -134,8 +135,22 @@ public partial class GameNetworkServer : BackgroundService
 
     private void HandleRoomJoin(string roomId, GameSession gameSession, JoinRoomCommand command)
     {
-        var player = command.Player;
-        var playerId = player.Id;
+        var playerId = command.Player.Id;
+
+        if (!AuthController.ValidateSession(command.SessionToken, out var currentUserId) ||
+            !string.Equals(currentUserId, playerId, StringComparison.Ordinal))
+        {
+            command.Client.Close();
+            return;
+        }
+
+        // TCP 읽기 시점과 방 큐 처리 시점 사이에 로비 참가 또는 역할이 바뀔 수 있습니다.
+        var player = _gameRoomService.GetAuthenticatedGamePlayer(roomId, playerId);
+        if (player == null)
+        {
+            command.Client.Close();
+            return;
+        }
 
         // 이동에 영향을 주는 값은 Join payload를 신뢰하지 않고 서버가 고정합니다.
         player.Speed = ServerPlayerSpeed;
@@ -149,6 +164,7 @@ public partial class GameNetworkServer : BackgroundService
         var playerSession = new PlayerSession
         {
             ConnectionId = command.ConnectionId,
+            SessionToken = command.SessionToken,
             Client = command.Client,
             Writer = command.Writer,
             PlayerState = player,
@@ -386,7 +402,9 @@ public partial class GameNetworkServer : BackgroundService
             return;
         }
 
-        if (!string.Equals(input.Token, session.MovementSessionToken, StringComparison.Ordinal))
+        if (!string.Equals(input.Token, session.MovementSessionToken, StringComparison.Ordinal) ||
+            !AuthController.ValidateSession(session.SessionToken, out var currentUserId) ||
+            !string.Equals(currentUserId, input.Id, StringComparison.Ordinal))
         {
             return;
         }

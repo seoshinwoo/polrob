@@ -51,7 +51,8 @@ public sealed record JoinRoomCommand(
     Player Player,
     TcpClient Client,
     BinaryWriter Writer,
-    string ConnectionId) : RoomCommand;
+    string ConnectionId,
+    string SessionToken) : RoomCommand;
 
 public sealed record LeaveRoomCommand(
     string PlayerId,
@@ -72,6 +73,7 @@ public class ArrestState
 public class PlayerSession
 {
     public string ConnectionId { get; init; } = string.Empty;
+    public string SessionToken { get; init; } = string.Empty;
     public TcpClient Client { get; set; } = null!;
     public BinaryWriter Writer { get; set; } = null!;
     public Player PlayerState { get; set; } = null!;

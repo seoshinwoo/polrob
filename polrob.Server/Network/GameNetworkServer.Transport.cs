@@ -1,3 +1,4 @@
+using System.Net;
 using System.Net.Sockets;
 using System.Text.Json;
 using polrob.Server.Controllers;
@@ -40,6 +41,7 @@ public partial class GameNetworkServer
         string? playerId = null;
         string? roomId = null;
         string? connectionId = null;
+        string? sessionToken = null;
         PlayerRole? playerRole = null;
 
         try
@@ -80,10 +82,11 @@ public partial class GameNetworkServer
                     if (!status.Success || !string.Equals(status.MapId, joinRequest.MapId, StringComparison.Ordinal))
                         throw new InvalidDataException("방의 맵과 클라이언트 맵이 일치하지 않습니다.");
                     playerId = authenticatedUserId;
+                    sessionToken = joinRequest.SessionToken;
                     connectionId = Guid.NewGuid().ToString("N");
                     playerRole = player.Role;
 
-                    var joinCommand = new JoinRoomCommand(player, client, writer, connectionId);
+                    var joinCommand = new JoinRoomCommand(player, client, writer, connectionId, sessionToken);
                     var gameSession = GetOrCreateGameSession(roomId, stoppingToken);
                     if (!TryWriteRoomCommand(gameSession, joinCommand))
                     {
@@ -94,11 +97,18 @@ public partial class GameNetworkServer
                          playerId != null &&
                          roomId != null &&
                          connectionId != null &&
+                         sessionToken != null &&
+                         AuthController.ValidateSession(sessionToken, out var currentUserId) &&
+                         string.Equals(currentUserId, playerId, StringComparison.Ordinal) &&
                          _activeGameParticipants.Refresh(roomId, playerId, connectionId))
                 {
                     // 현재 연결의 heartbeat만 승인합니다. 교체된 이전 소켓은
                     // 새 연결의 active lease를 되돌리거나 보이스 권한을 얻을 수 없습니다.
                     TrySendTcp(writer, TcpMessageType.HeartbeatAcknowledged, json);
+                }
+                else if (type == TcpMessageType.Heartbeat && playerId != null)
+                {
+                    throw new InvalidDataException("TCP 게임 연결의 로그인 세션이 더 이상 유효하지 않습니다.");
                 }
             }
         }
@@ -365,11 +375,16 @@ public partial class GameNetworkServer
                     continue;
                 }
 
-                if (!_gameSessions.TryGetValue(registration.RoomId, out var gameSession))
+                if (!_gameSessions.TryGetValue(registration.RoomId, out var gameSession) ||
+                    !gameSession.Sessions.TryGetValue(movement.Id, out var playerSession) ||
+                    !IsAuthorizedMovement(movement, result.RemoteEndPoint, registration, playerSession))
                 {
+                    Interlocked.Increment(ref _udpPacketsInvalidThisSecond);
                     continue;
                 }
 
+                // 사용자별 제한량은 인증된 패킷에만 차감합니다. ID만 아는 발신자가
+                // 다른 사용자의 이동 패킷을 속도 제한으로 밀어내지 못하게 합니다.
                 var rateLimiter = _udpRateLimits.GetOrAdd(movement.Id, _ => new UdpRateLimitState(_udpBurstSize));
                 if (!rateLimiter.TryConsume(DateTime.UtcNow, _udpPacketsPerSecond, _udpBurstSize))
                 {
@@ -401,6 +416,20 @@ public partial class GameNetworkServer
                 _logger.LogError(ex, "Unexpected UDP receive loop failure.");
             }
         }
+    }
+
+    private static bool IsAuthorizedMovement(
+        PlayerMovementInput movement,
+        IPEndPoint remoteEndPoint,
+        PlayerRoomRegistration registration,
+        PlayerSession playerSession)
+    {
+        return string.Equals(registration.ConnectionId, playerSession.ConnectionId, StringComparison.Ordinal) &&
+               !string.IsNullOrEmpty(playerSession.MovementSessionToken) &&
+               string.Equals(movement.Token, playerSession.MovementSessionToken, StringComparison.Ordinal) &&
+               (playerSession.UdpEndPoint == null || playerSession.UdpEndPoint.Equals(remoteEndPoint)) &&
+               AuthController.ValidateSession(playerSession.SessionToken, out var userId) &&
+               string.Equals(userId, movement.Id, StringComparison.Ordinal);
     }
 
     // 같은 역할과 현재 이동 플레이어를 보고 있는 상대의 UDP endpoint에 위치를 보냅니다.
