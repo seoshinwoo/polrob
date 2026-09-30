@@ -7,7 +7,7 @@
              Shell.NavBarIsVisible="False">
 
     <Grid>
-        <Image Source="gamejoin_background.png"
+        <Image Source="chasetown_ui_background.png"
                Aspect="AspectFill"
                HorizontalOptions="Fill"
                VerticalOptions="Fill"

@@ -93,7 +93,7 @@
 	</ItemGroup>
 
 	<ItemGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios'">
-		<BundleResource Include="Resources\Splash\splashpolrob_new.png" LogicalName="splashpolrob_native.png" />
+		<BundleResource Include="Resources\Splash\splashpolrob_new.png" LogicalName="splashpolrob_chasetown.png" />
 	</ItemGroup>
 
 	<ItemGroup>
