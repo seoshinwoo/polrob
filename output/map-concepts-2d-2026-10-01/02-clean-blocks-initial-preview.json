@@ -1,0 +1,46 @@
+{
+  "mapPath": "02-clean-blocks.png",
+  "outputPath": "02-clean-blocks-with-characters.png",
+  "worldWidth": 2560,
+  "characters": [
+    {
+      "kind": "police",
+      "x": 230,
+      "y": 362
+    },
+    {
+      "kind": "robber",
+      "x": 435,
+      "y": 369
+    },
+    {
+      "kind": "police",
+      "x": 350,
+      "y": 564
+    },
+    {
+      "kind": "robber",
+      "x": 303,
+      "y": 630
+    },
+    {
+      "kind": "robber",
+      "x": 574,
+      "y": 988
+    },
+    {
+      "kind": "robber",
+      "x": 594,
+      "y": 1219
+    }
+  ],
+  "crops": [
+    {
+      "x": 152,
+      "y": 416,
+      "width": 390,
+      "height": 280,
+      "outputPath": "02-clean-blocks-character-detail.png"
+    }
+  ]
+}

@@ -9,7 +9,7 @@ xcrun simctl boot 1789F7CF-143A-4A63-AE0B-7EE0C446A7A9 || true
 open -a Simulator
 dotnet build polrob.Client/polrob.Client.csproj -f net10.0-ios -r iossimulator-arm64
 xcrun simctl install 1789F7CF-143A-4A63-AE0B-7EE0C446A7A9 polrob.Client/bin/Debug/net10.0-ios/iossimulator-arm64/polrob.Client.app
-xcrun simctl launch 1789F7CF-143A-4A63-AE0B-7EE0C446A7A9 com.companyname.polrob.client &
+xcrun simctl launch 1789F7CF-143A-4A63-AE0B-7EE0C446A7A9 com.companyname.polrob &
 
 echo "📱 Launching Physical iOS Device (ShinWoo's iPhone)..."
 # 실제 기기에는 dotnet 커맨드를 사용해 배포합니다.
