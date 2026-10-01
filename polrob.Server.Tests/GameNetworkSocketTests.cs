@@ -115,6 +115,12 @@ public sealed class GameNetworkSocketTests
                 await AssertRemoteClosedAsync(unauthenticated);
             }
 
+            using (var heartbeatBeforeJoin = await ConnectAsync(port))
+            {
+                WriteFrame(heartbeatBeforeJoin, TcpMessageType.Heartbeat, "keep-alive-without-login");
+                await AssertRemoteClosedAsync(heartbeatBeforeJoin);
+            }
+
             Assert.That(GetGameSessions(server), Is.Empty);
             Assert.That(registry.IsActive("invented-room", "invented-player"), Is.False);
         }
@@ -185,16 +191,121 @@ public sealed class GameNetworkSocketTests
         }
     }
 
+    [Test]
+    public async Task ConnectionCapRejectsExcessClientsAndReleasesSlotsAfterDisconnect()
+    {
+        var service = new GameRoomService(null!, null!, NullLogger<GameRoomService>.Instance);
+        var server = CreateServer(service, new ActiveGameParticipantRegistry(), new()
+        { ["GameNetwork:MaxTcpConnections"] = "1" });
+        try
+        {
+            await server.StartAsync(CancellationToken.None);
+            var port = await WaitForTcpPortAsync(server);
+            using var first = await ConnectAsync(port);
+            await WaitUntilAsync(() => GetTcpConnectionCount(server) == 1, TimeSpan.FromSeconds(2));
+            using var excess = await ConnectAsync(port);
+            await AssertRemoteClosedAsync(excess);
+            Assert.That(GetTcpConnectionCount(server), Is.EqualTo(1));
+            first.Close();
+            await WaitUntilAsync(() => GetTcpConnectionCount(server) == 0, TimeSpan.FromSeconds(2));
+            using var replacement = await ConnectAsync(port);
+            await WaitUntilAsync(() => GetTcpConnectionCount(server) == 1, TimeSpan.FromSeconds(2));
+        }
+        finally { await StopAndDisposeAsync(server); }
+    }
+
+    [Test]
+    public async Task PartialFrameCannotKeepAnUnauthenticatedConnectionForever()
+    {
+        var server = CreateServer(new GameRoomService(null!, null!, NullLogger<GameRoomService>.Instance),
+            new ActiveGameParticipantRegistry(), new() { ["GameNetwork:TcpJoinTimeoutSeconds"] = "1" });
+        try
+        {
+            await server.StartAsync(CancellationToken.None);
+            using var client = await ConnectAsync(await WaitForTcpPortAsync(server));
+            await client.GetStream().WriteAsync(new byte[] { 1, 0 }); // half of the frame length
+            await AssertRemoteClosedAsync(client);
+            await WaitUntilAsync(() => GetTcpConnectionCount(server) == 0, TimeSpan.FromSeconds(2));
+            Assert.That(GetGameSessions(server), Is.Empty);
+        }
+        finally { await StopAndDisposeAsync(server); }
+    }
+
+    [Test]
+    public async Task ShutdownCancelsIdleReadsAndClosesAllConnections()
+    {
+        var server = CreateServer(new GameRoomService(null!, null!, NullLogger<GameRoomService>.Instance),
+            new ActiveGameParticipantRegistry(), new() { ["GameNetwork:TcpJoinTimeoutSeconds"] = "60" });
+        try
+        {
+            await server.StartAsync(CancellationToken.None);
+            using var client = await ConnectAsync(await WaitForTcpPortAsync(server));
+            await WaitUntilAsync(() => GetTcpConnectionCount(server) == 1, TimeSpan.FromSeconds(2));
+            using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+            await server.StopAsync(deadline.Token);
+            Assert.That(deadline.IsCancellationRequested, Is.False);
+            await AssertRemoteClosedAsync(client);
+            Assert.That(GetTcpConnectionCount(server), Is.Zero);
+        }
+        finally { server.Dispose(); }
+    }
+
+    [Test]
+    public async Task ShutdownAbandonsAnUnfinishedGameWithoutInventingAResult()
+    {
+        var identities = new BotIdentityService(NullLogger<BotIdentityService>.Instance);
+        var service = new GameRoomService(null!, identities, NullLogger<GameRoomService>.Instance);
+        var player = identities.Create("shutdown-player", PlayerRole.Police);
+        var created = await service.CreateRoom(player.Id);
+        var robber = identities.Create("shutdown-robber", PlayerRole.Robber);
+        await service.JoinCustomGame(robber.Id, created.RoomCode!);
+        service.StartGameIfMatched(created.RoomId!);
+        var token = CreateLoginSession(player.Id);
+        var records = new CountingGameRecordQueue();
+        var server = CreateServer(service, new ActiveGameParticipantRegistry(), queue: records);
+        try
+        {
+            await server.StartAsync(CancellationToken.None);
+            using var client = await ConnectAsync(await WaitForTcpPortAsync(server));
+            WriteFrame(client, TcpMessageType.Join, JsonSerializer.Serialize(new GameJoinRequest
+            { SessionToken = token, RoomId = created.RoomId!, MapId = MapRegistry.DefaultId }));
+            await ReadUntilTypeAsync(client, TcpMessageType.MovementSession);
+            var room = GetGameSessions(server)[created.RoomId!];
+            room.GamePhase = GamePhase.Playing;
+            room.GameStartedAtUtc = DateTime.UtcNow;
+            using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+            await server.StopAsync(deadline.Token);
+            Assert.Multiple(() =>
+            {
+                Assert.That(records.Count, Is.Zero);
+                Assert.That(GetGameSessions(server), Is.Empty);
+                Assert.That(service.IsGameInProgress(created.RoomId!), Is.False);
+                Assert.That(GetTcpConnectionCount(server), Is.Zero);
+            });
+        }
+        finally { server.Dispose(); Logout(token); }
+    }
+
+    private sealed class CountingGameRecordQueue : IGameRecordQueue
+    {
+        public int Count;
+        public bool TryEnqueue(CompletedGameRecord record) { Count++; return true; }
+    }
+
     private static GameNetworkServer CreateServer(
         GameRoomService roomService,
-        ActiveGameParticipantRegistry registry)
+        ActiveGameParticipantRegistry registry,
+        Dictionary<string, string?>? overrides = null,
+        IGameRecordQueue? queue = null)
     {
-        var configuration = new ConfigurationBuilder().AddInMemoryCollection(
-            new Dictionary<string, string?>
+        var values = new Dictionary<string, string?>
             {
                 ["GameNetwork:TcpPort"] = "0",
-                ["GameNetwork:UdpPort"] = "0"
-            }).Build();
+                ["GameNetwork:UdpPort"] = "0",
+                ["Operations:DrainSeconds"] = "0"
+            };
+        if (overrides != null) foreach (var entry in overrides) values[entry.Key] = entry.Value;
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(values).Build();
         var liveKit = new LiveKitRoomAdminService(
             Options.Create(new LiveKitOptions { Url = "invalid-url" }),
             NullLogger<LiveKitRoomAdminService>.Instance);
@@ -202,7 +313,7 @@ public sealed class GameNetworkSocketTests
             roomService,
             registry,
             liveKit,
-            new NoopGameRecordQueue(),
+            queue ?? new NoopGameRecordQueue(),
             configuration,
             NullLogger<GameNetworkServer>.Instance);
     }

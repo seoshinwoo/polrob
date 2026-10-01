@@ -247,6 +247,18 @@ public partial class GamePlay : ContentPage
         }
 
         _networkClient = new GameNetworkClient();
+        var connectedClient = _networkClient;
+        connectedClient.OnConnectionLost += async message =>
+        {
+            if (!ReferenceEquals(_networkClient, connectedClient) || _gamePhase == GamePhase.Ended) return;
+            StopGameClient();
+            await StopTeamVoiceAsync();
+            AuthSession.ClearLocalSession();
+            await DisplayAlertAsync("서버 연결 종료", message, "확인");
+            await Shell.Current.GoToAsync("//MainPage");
+            await Shell.Current.GoToAsync("Login");
+        };
+
 
         _networkClient.OnInitialStateReceived += (players) =>
         {

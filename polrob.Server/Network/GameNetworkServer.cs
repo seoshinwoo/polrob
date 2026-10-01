@@ -1,3 +1,4 @@
+using polrob.Server.Operations;
 using System.Collections.Concurrent;
 using System.Drawing;
 using System.Net;
@@ -11,6 +12,25 @@ namespace polrob.Server.Network;
 
 public partial class GameNetworkServer : BackgroundService
 {
+    private readonly ServerOperations? _operations;
+    private readonly ServerAdmission? _admission;
+    private readonly OperationalMetrics? _metrics;
+    private readonly ConcurrentDictionary<long, Task> _tcpClientTasks = new();
+    private readonly ConcurrentDictionary<BinaryWriter, TcpPeer> _tcpPeers = new();
+    private readonly int _maxTcpConnections;
+    private readonly int _tcpQueueCapacity;
+    private readonly int _tcpQueueBytes;
+    private readonly int _tcpJoinTimeoutSeconds;
+    private readonly int _tcpIdleTimeoutSeconds;
+    private readonly int _tcpSendTimeoutSeconds;
+    private readonly int _drainSeconds;
+    private long _nextTcpClientId;
+    private int _acceptedTcpConnections;
+    private int _draining;
+    private int _pendingUdpSends;
+    private readonly int _maxPendingUdpSends;
+    private readonly UdpRateLimitState _globalUdpRateLimit = new(20_000);
+    private readonly double _globalUdpPacketsPerSecond;
     private readonly TcpListener _tcpListener;
     private readonly UdpClient _udpClient;
     private readonly ConcurrentDictionary<string, GameSession> _gameSessions = new(); // Key : Game의 ID, Value : 해당 게임의 GameSession
@@ -66,13 +86,28 @@ public partial class GameNetworkServer : BackgroundService
         LiveKitRoomAdminService liveKitRoomAdminService,
         IGameRecordQueue gameRecordQueue,
         IConfiguration configuration,
-        ILogger<GameNetworkServer> logger)
+        ILogger<GameNetworkServer> logger,
+        ServerOperations? operations = null,
+        ServerAdmission? admission = null,
+        OperationalMetrics? metrics = null)
     {
         _gameRoomService = gameRoomService;
         _activeGameParticipants = activeGameParticipants;
         _liveKitRoomAdminService = liveKitRoomAdminService;
         _gameRecordQueue = gameRecordQueue;
         _logger = logger;
+        _operations = operations;
+        _admission = admission;
+        _metrics = metrics;
+        _maxTcpConnections = Math.Max(1, configuration.GetValue("GameNetwork:MaxTcpConnections", 2048));
+        _tcpQueueCapacity = Math.Max(1, configuration.GetValue("GameNetwork:TcpSendQueueCapacity", 64));
+        _tcpQueueBytes = Math.Max(1024, configuration.GetValue("GameNetwork:TcpSendQueueBytes", 262144));
+        _tcpJoinTimeoutSeconds = Math.Max(1, configuration.GetValue("GameNetwork:TcpJoinTimeoutSeconds", 10));
+        _tcpIdleTimeoutSeconds = Math.Max(1, configuration.GetValue("GameNetwork:TcpIdleTimeoutSeconds", 45));
+        _tcpSendTimeoutSeconds = Math.Max(1, configuration.GetValue("GameNetwork:TcpSendTimeoutSeconds", 5));
+        _drainSeconds = Math.Clamp(configuration.GetValue("Operations:DrainSeconds", 20), 0, 300);
+        _maxPendingUdpSends = Math.Max(1, configuration.GetValue("GameNetwork:MaxPendingUdpSends", 1024));
+        _globalUdpPacketsPerSecond = Math.Max(1, configuration.GetValue("GameNetwork:GlobalUdpPacketsPerSecond", 20000d));
         _roomCommandQueueCapacity = Math.Max(
             256,
             configuration.GetValue("GameNetwork:RoomCommandQueueCapacity", 4096));
@@ -94,6 +129,7 @@ public partial class GameNetworkServer : BackgroundService
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         _tcpListener.Start(TcpListenBacklog);
+        _operations?.MarkNetworkRunning(true);
         _logger.LogInformation(
             "Game network server started. tcp={TcpPort} udp={UdpPort} room_queue_capacity={RoomCommandQueueCapacity} udp_rate={UdpPacketsPerSecond}/s burst={UdpBurstSize}",
             ((IPEndPoint)_tcpListener.LocalEndpoint).Port,
@@ -113,6 +149,12 @@ public partial class GameNetworkServer : BackgroundService
         }
         finally
         {
+            while (!_tcpClientTasks.IsEmpty)
+            {
+                var clients = _tcpClientTasks.ToArray();
+                await Task.WhenAll(clients.Select(entry => entry.Value));
+                foreach (var entry in clients) _tcpClientTasks.TryRemove(entry.Key, out _);
+            }
             // Room loops are record producers. Do not let the hosted service finish
             // until they have observed cancellation and exited.
             while (!_roomLoopTasks.IsEmpty)
@@ -124,6 +166,7 @@ public partial class GameNetworkServer : BackgroundService
                     _roomLoopTasks.TryRemove(roomLoop.Key, out _);
                 }
             }
+            _operations?.MarkNetworkRunning(false);
         }
     }
 
@@ -139,6 +182,8 @@ public partial class GameNetworkServer : BackgroundService
 
     private void HandleRoomJoin(string roomId, GameSession gameSession, JoinRoomCommand command)
     {
+        // A queued join can outlive its TCP connection while the room is overloaded.
+        if (command.Client.Client is not { Connected: true }) return;
         var playerId = command.Player.Id;
 
         if (!AuthController.ValidateSession(command.SessionToken, out var currentUserId) ||
@@ -194,7 +239,11 @@ public partial class GameNetworkServer : BackgroundService
 
         Console.WriteLine($"Player Connected [TCP]: {playerId} / room {roomId}");
 
-        TrySendTcp(command.Writer, TcpMessageType.MovementSession, playerSession.MovementSessionToken);
+        if (!TrySendTcp(command.Writer, TcpMessageType.MovementSession, playerSession.MovementSessionToken))
+        {
+            HandleRoomLeave(roomId, gameSession, new LeaveRoomCommand(playerId, command.ConnectionId, player.Role));
+            return;
+        }
         TrySendTcp(command.Writer, TcpMessageType.InitialState, SerializeForMetrics(visiblePlayers));
         foreach (var arrest in gameSession.ActiveArrestsByRobberId.Values.OrderBy(a => a.RobberId))
         {

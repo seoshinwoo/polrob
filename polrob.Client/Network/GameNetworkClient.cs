@@ -16,12 +16,15 @@ public class GameNetworkClient
     private UdpClient? _udpClient;
     private BinaryReader? _reader;
     private BinaryWriter? _writer;
-    private bool _isDisconnected;
+    private volatile bool _isDisconnected;
+    private int _connectionFailureReported;
     private ulong _movementInputSequence;
     private string _movementSessionToken = string.Empty;
     private TaskCompletionSource _joinAcknowledged = CreateJoinAcknowledgementSource();
     private readonly ConcurrentDictionary<string, TaskCompletionSource> _heartbeatAcknowledgements = new();
     private CancellationTokenSource? _heartbeatCancellation;
+
+    public event Action<string>? OnConnectionLost;
 
     public event Action<List<Player>>? OnInitialStateReceived;
     public event Action<Player>? OnPlayerJoined;
@@ -42,6 +45,7 @@ public class GameNetworkClient
         string mapId = MapRegistry.DefaultId)
     {
         _isDisconnected = false;
+        Interlocked.Exchange(ref _connectionFailureReported, 0);
         _movementInputSequence = 0;
         _movementSessionToken = string.Empty;
         _joinAcknowledged = CreateJoinAcknowledgementSource();
@@ -257,10 +261,20 @@ public class GameNetworkClient
             if (!_isDisconnected)
             {
                 System.Diagnostics.Debug.WriteLine($"TCP Receive error: {ex.Message}");
-                _joinAcknowledged.TrySetException(
-                    new IOException("게임 서버가 입장을 승인하기 전에 연결이 종료되었습니다.", ex));
+                ReportConnectionLost(ex);
             }
         }
+    }
+
+    private void ReportConnectionLost(Exception exception)
+    {
+        if (_isDisconnected || Interlocked.Exchange(ref _connectionFailureReported, 1) != 0) return;
+        var hadJoined = _joinAcknowledged.Task.IsCompletedSuccessfully;
+        _joinAcknowledged.TrySetException(new IOException("게임 서버 연결이 종료되었습니다.", exception));
+        Disconnect();
+        if (hadJoined)
+            MainThread.BeginInvokeOnMainThread(() => OnConnectionLost?.Invoke(
+                "게임 서버 연결이 끊어졌습니다. 서버가 재시작된 경우 진행 중이던 경기는 재개되지 않습니다. 다시 로그인해 방에 참가해주세요."));
     }
 
     private static TaskCompletionSource CreateJoinAcknowledgementSource() =>
@@ -273,7 +287,7 @@ public class GameNetworkClient
             while (!cancellationToken.IsCancellationRequested)
             {
                 await Task.Delay(HeartbeatInterval, cancellationToken);
-                SendTcp(TcpMessageType.Heartbeat, string.Empty);
+                await RefreshServerRegistrationAsync(cancellationToken);
             }
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -282,6 +296,7 @@ public class GameNetworkClient
         catch (Exception exception) when (!_isDisconnected)
         {
             System.Diagnostics.Debug.WriteLine($"TCP heartbeat error: {exception.Message}");
+            ReportConnectionLost(exception);
         }
     }
 

@@ -1,0 +1,44 @@
+groups:
+  - name: polrob
+    rules:
+      - alert: PolrobMetricsUnavailable
+        expr: up{job="polrob"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: PolRob metrics endpoint is unreachable or rejected its key
+      - alert: PolrobNotReady
+        expr: polrob_ready == 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: PolRob is draining or cannot safely admit new games
+      - alert: PolrobRecordBacklog
+        expr: polrob_outbox_oldest_age_seconds > 300
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: Completed games have waited more than five minutes for persistence
+      - alert: PolrobRecordNeedsRepair
+        expr: polrob_outbox_quarantined > 0 or polrob_outbox_write_failed > 0
+        for: 30s
+        labels:
+          severity: critical
+        annotations:
+          summary: Game records require storage or quarantine repair
+      - alert: PolrobRoomFailures
+        expr: increase(polrob_room_loop_failures_total[5m]) > 0
+        labels:
+          severity: critical
+        annotations:
+          summary: A room loop stopped unexpectedly
+      - alert: PolrobOverload
+        expr: rate(polrob_room_commands_dropped_total[2m]) > 1 or rate(polrob_room_tick_overruns_total[2m]) > 5
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: PolRob is dropping room commands or missing tick budgets

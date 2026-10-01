@@ -3,6 +3,16 @@ name: Server tests
 on:
   push:
   pull_request:
+  workflow_dispatch:
+    inputs:
+      run_soak:
+        description: Run the 60-second room lifecycle soak test
+        type: boolean
+        default: false
+
+concurrency:
+  group: server-tests-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -10,10 +20,38 @@ permissions:
 jobs:
   server-tests:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+      DOTNET_NOLOGO: '1'
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: '10.0.x'
-      - name: Run server tests
-        run: dotnet test polrob.Server.Tests/polrob.Server.Tests.csproj --configuration Release --filter "TestCategory!=Soak"
+      - name: Restore
+        run: dotnet restore polrob.Server.Tests/polrob.Server.Tests.csproj
+      - name: Build server and tests
+        run: dotnet build polrob.Server.Tests/polrob.Server.Tests.csproj --configuration Release --no-restore --warnaserror
+      - name: Run server, socket and recovery tests
+        run: dotnet test polrob.Server.Tests/polrob.Server.Tests.csproj --configuration Release --no-build --filter "TestCategory!=Soak" --logger "trx;LogFileName=server-tests.trx" --results-directory TestResults
+      - name: Run optional soak test
+        if: github.event_name == 'workflow_dispatch' && inputs.run_soak
+        env:
+          POLROB_SOAK_SECONDS: '60'
+        run: dotnet test polrob.Server.Tests/polrob.Server.Tests.csproj --configuration Release --no-build --filter "TestCategory=Soak" --logger "trx;LogFileName=soak-tests.trx" --results-directory TestResults
+      - name: Publish server artifact
+        run: dotnet publish polrob.Server/polrob.Server.csproj --configuration Release --no-build --output artifacts/server
+      - name: Upload test evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: server-test-results
+          path: TestResults/*.trx
+          retention-days: 14
+      - name: Upload server build
+        uses: actions/upload-artifact@v7
+        with:
+          name: server-${{ github.sha }}
+          path: artifacts/server/
+          retention-days: 7

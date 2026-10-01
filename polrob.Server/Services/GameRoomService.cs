@@ -1,7 +1,9 @@
+using polrob.Server.Operations;
 using polrob.Shared;
 
 public class GameRoomService
 {
+    private readonly ServerAdmission? _admission;
     private readonly Lock _roomLock = new();
     private readonly List<Game> Games = new();
     private readonly UserDbService _userDbService;
@@ -13,8 +15,10 @@ public class GameRoomService
         UserDbService userDbService,
         BotIdentityService botIdentityService,
         ILogger<GameRoomService> logger,
-        LiveKitRoomAdminService? liveKitRoomAdminService = null)
+        LiveKitRoomAdminService? liveKitRoomAdminService = null,
+        ServerAdmission? admission = null)
     {
+        _admission = admission;
         _userDbService = userDbService;
         _botIdentityService = botIdentityService;
         _logger = logger;
@@ -48,8 +52,13 @@ public class GameRoomService
 
         lock (_roomLock) // 방 목록은 List<Game>으로 관리되고 있고, List<T>는 여러 요청이 동시에 읽고 수정하는 상황에 안전하지 않음.. 그래서 락을 거는 것..
         {
+            if (_admission?.CanAcceptNewGames == false)
+                return new ServerResponse { Success = false, Message = "서버가 새 경기를 준비할 수 없습니다. 잠시 후 다시 시도해주세요." };
+
             RemoveExpiredEmptyRoomsCore(DateTime.UtcNow);
 
+            if (Games.Count >= (_admission?.MaxRooms ?? int.MaxValue))
+                return new ServerResponse { Success = false, Message = "서버의 방이 가득 찼습니다." };
             var game = new Game(type, isPrivate)
             {
                 MapId = mapId,
@@ -92,6 +101,9 @@ public class GameRoomService
 
         lock (_roomLock)
         {
+            if (_admission?.CanAcceptNewGames == false)
+                return new ServerResponse { Success = false, Message = "서버가 새 경기를 준비할 수 없습니다. 잠시 후 다시 시도해주세요." };
+
             RemoveExpiredEmptyRoomsCore(DateTime.UtcNow);
 
             var normalizedCode = NormalizeRoomCode(roomCode);
@@ -163,6 +175,9 @@ public class GameRoomService
 
         lock (_roomLock)
         {
+            if (_admission?.CanAcceptNewGames == false)
+                return new ServerResponse { Success = false, Message = "서버가 새 경기를 준비할 수 없습니다. 잠시 후 다시 시도해주세요." };
+
             RemoveExpiredEmptyRoomsCore(DateTime.UtcNow);
 
             foreach (var game in Games)
@@ -482,6 +497,9 @@ public class GameRoomService
 
         lock (_roomLock)
         {
+            if (_admission?.CanAcceptNewGames == false)
+                return new ServerResponse { Success = false, Message = "서버가 새 경기를 준비할 수 없습니다. 잠시 후 다시 시도해주세요." };
+
             RemoveExpiredEmptyRoomsCore(DateTime.UtcNow);
 
             var game = Games.FirstOrDefault(g => g.Id == roomId);
@@ -640,6 +658,9 @@ public class GameRoomService
     {
         lock (_roomLock)
         {
+            if (_admission?.CanAcceptNewGames == false)
+                return new ServerResponse { Success = false, Message = "서버가 새 경기를 준비할 수 없습니다. 잠시 후 다시 시도해주세요." };
+
             RemoveExpiredEmptyRoomsCore(DateTime.UtcNow);
 
             var game = Games.FirstOrDefault(g => g.Id == roomId);
@@ -681,6 +702,8 @@ public class GameRoomService
 
     private ServerResponse CreateRandomRoom(User user, PlayerRole role)
     {
+        if (Games.Count >= (_admission?.MaxRooms ?? int.MaxValue))
+            return new ServerResponse { Success = false, Message = "서버의 방이 가득 찼습니다." };
         var game = new Game("random", isPrivate: false);
         var player = CreatePlayer(user, game.Id, role);
 

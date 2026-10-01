@@ -45,3 +45,9 @@ packages/
 *.jks
 *.p12
 *.mobileprovision
+
+# Durable server records and test artifacts (never commit user data)
+polrob.Server/data/
+data/game-record-outbox/
+TestResults/
+artifacts/

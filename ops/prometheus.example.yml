@@ -1,0 +1,15 @@
+# Copy this into your existing Prometheus configuration. Keep the key in a secret file.
+# This example uses a private network. Use HTTPS when traffic crosses an untrusted network.
+global:
+  scrape_interval: 15s
+rule_files:
+  - alerts.yml
+scrape_configs:
+  - job_name: polrob
+    metrics_path: /ops/metrics
+    http_headers:
+      X-Operations-Key:
+        files:
+          - /run/secrets/polrob-operations-key
+    static_configs:
+      - targets: ['polrob-server:5174']

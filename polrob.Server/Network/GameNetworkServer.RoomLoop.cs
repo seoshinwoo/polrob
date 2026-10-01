@@ -49,6 +49,11 @@ public partial class GameNetworkServer
         {
             await loopTask;
         }
+        catch (Exception ex)
+        {
+            _metrics?.Add("room_loop_failures_total");
+            _logger.LogError(ex, "Room loop cleanup failed for task {LoopId}.", loopId);
+        }
         finally
         {
             _roomLoopTasks.TryRemove(loopId, out _);
@@ -85,6 +90,7 @@ public partial class GameNetworkServer
         var udpBroadcastElapsed = TimeSpan.Zero;
         var ruleElapsed = TimeSpan.Zero;
         var stateElapsed = TimeSpan.Zero;
+        using var logScope = _logger.BeginScope(new Dictionary<string, object> { ["RoomId"] = roomId });
 
         try
         {
@@ -97,6 +103,7 @@ public partial class GameNetworkServer
                 ruleElapsed += elapsed;
                 stateElapsed += elapsed;
 
+                var tickStarted = System.Diagnostics.Stopwatch.GetTimestamp();
                 DrainRoomCommands(roomId, gameSession);
                 SimulateAuthoritativeMovement(gameSession, elapsed, now);
 
@@ -123,6 +130,10 @@ public partial class GameNetworkServer
                     return;
                 }
 
+                var tickMs = System.Diagnostics.Stopwatch.GetElapsedTime(tickStarted).TotalMilliseconds;
+                _metrics?.Add("room_ticks_total");
+                _metrics?.Add("room_tick_duration_seconds_total", tickMs / 1000);
+                if (tickMs > RoomTickInterval.TotalMilliseconds) _metrics?.Add("room_tick_overruns_total");
                 await Task.Delay(RoomTickInterval, stoppingToken);
             }
         }
@@ -132,20 +143,53 @@ public partial class GameNetworkServer
         }
         catch (Exception ex)
         {
+            _metrics?.Add("room_loop_failures_total");
             _logger.LogError(ex, "Room tick loop failed for room {RoomId}.", roomId);
         }
         finally
         {
-            var currentEntry = new KeyValuePair<string, GameSession>(roomId, gameSession);
-            ((ICollection<KeyValuePair<string, GameSession>>)_gameSessions).Remove(currentEntry);
+            lock (gameSession.CommandGate) gameSession.IsStopping = true;
+            try
+            {
+                if (gameSession.PendingGameRecord != null)
+                {
+                    if (TryEnqueueCompletedGameRecord(roomId, gameSession, gameSession.PendingGameRecord.EndedAtUtc))
+                        _gameRoomService.CompleteGame(roomId);
+                    else
+                        _logger.LogCritical("Game {GameRecordId} has NOT been durably accepted at shutdown; storage repair is required.",
+                            gameSession.GameRecordId);
+                }
+                if (gameSession.GamePhase is GamePhase.Playing or GamePhase.Countdown)
+                {
+                    _metrics?.Add("games_aborted_total");
+                    _logger.LogWarning("Aborted unfinished game in room {RoomId}; no win/loss record was created.", roomId);
+                    _gameRoomService.AbandonGameAfterDisconnect(roomId);
+                }
+            }
+            finally
+            {
+                foreach (var session in gameSession.Sessions.Values)
+                {
+                    RemovePlayerRoomRegistration(session.PlayerState.Id, session.ConnectionId);
+                    _udpRateLimits.TryRemove(session.PlayerState.Id, out _);
+                    session.Client.Close();
+                }
+                while (gameSession.Commands.Reader.TryRead(out var pending))
+                    if (pending is JoinRoomCommand join) join.Client.Close();
+                gameSession.Sessions.Clear();
+                gameSession.PendingLeaves.Clear();
+                var currentEntry = new KeyValuePair<string, GameSession>(roomId, gameSession);
+                ((ICollection<KeyValuePair<string, GameSession>>)_gameSessions).Remove(currentEntry);
 
-            gameSession.Commands.Writer.TryComplete();
+                gameSession.Commands.Writer.TryComplete();
+            }
         }
     }
 
     private bool TryStopRoomLoop(string roomId, GameSession gameSession, DateTime now)
     {
-        if (!gameSession.HasHadPlayers || gameSession.Sessions.Count > 0)
+        if (gameSession.PendingGameRecord != null || !gameSession.PendingLeaves.IsEmpty ||
+            gameSession.Sessions.Count > 0)
         {
             gameSession.EmptySinceUtc = null;
             return false;
@@ -213,7 +257,9 @@ public partial class GameNetworkServer
         // key : 플레이어ID, value : 최신 이동 명령
         Dictionary<string, MoveRoomCommand>? latestMoveByPlayerId = null;
 
-        while (gameSession.Commands.Reader.TryRead(out var command)) // 큐에 명령이 있으면 하나 꺼냄..
+        // Fixed work budget: continuous input must not starve simulation or shutdown.
+        var budget = 512;
+        while (budget-- > 0 && gameSession.Commands.Reader.TryRead(out var command))
         {
             Interlocked.Decrement(ref gameSession.QueuedCommandCount);
             switch (command)
@@ -230,12 +276,17 @@ public partial class GameNetworkServer
                     break;
                 case MoveRoomCommand move:
                     latestMoveByPlayerId ??= new Dictionary<string, MoveRoomCommand>();
-                    latestMoveByPlayerId[move.Input.Id] = move;
+                    if (!latestMoveByPlayerId.TryGetValue(move.Input.Id, out var previous) ||
+                        move.Input.Sequence > previous.Input.Sequence)
+                        latestMoveByPlayerId[move.Input.Id] = move;
                     break;
             }
         }
 
         FlushCoalescedMoves(roomId, gameSession, latestMoveByPlayerId);
+        foreach (var entry in gameSession.PendingLeaves)
+            if (gameSession.PendingLeaves.TryRemove(entry.Key, out var leave))
+                HandleRoomLeave(roomId, gameSession, leave);
     }
 
     // 모아 둔 최신 이동 입력들을 실제로 처리하는 함수..
@@ -275,6 +326,11 @@ public partial class GameNetworkServer
     {
         _gameRoomService.RemoveExpiredEmptyRooms();
 
+        if (gameSession.PendingGameRecord != null)
+        {
+            if (!TryEnqueueCompletedGameRecord(roomId, gameSession, gameSession.PendingGameRecord.EndedAtUtc)) return;
+            _gameRoomService.CompleteGame(roomId);
+        }
         if (gameSession.Sessions.Count == 0)
         {
             return;
@@ -282,7 +338,7 @@ public partial class GameNetworkServer
 
         if (gameSession.GamePhase == GamePhase.Waiting)
         {
-            if (IsRoomReadyForCountdown(roomId, gameSession))
+            if (CanStartNewGame() && IsRoomReadyForCountdown(roomId, gameSession))
             {
                 gameSession.GamePhase = GamePhase.Countdown;
                 gameSession.CountdownTime = 3;
@@ -297,9 +353,9 @@ public partial class GameNetworkServer
             if (gameSession.CountdownTime < 0)
             {
                 var isManagedRoom = !string.Equals(roomId, DefaultRoomId, StringComparison.Ordinal);
-                if (isManagedRoom &&
+                if (!CanStartNewGame() || (isManagedRoom &&
                     (!IsRoomReadyForCountdown(roomId, gameSession) ||
-                     !HasRequiredConnectedRoles(gameSession)))
+                     !HasRequiredConnectedRoles(gameSession))))
                 {
                     // A custom-room player can disconnect during the countdown. Wait
                     // for the full roster again instead of creating a one-sided result.
@@ -366,7 +422,7 @@ public partial class GameNetworkServer
                         0,
                         GameDurationSeconds)
                     : GameDurationSeconds - gameSession.GameTime;
-                TryEnqueueCompletedGameRecord(roomId, gameSession, endedAtUtc);
+                if (!TryEnqueueCompletedGameRecord(roomId, gameSession, endedAtUtc)) return;
                 _gameRoomService.CompleteGame(roomId);
             }
         }
@@ -389,59 +445,43 @@ public partial class GameNetworkServer
         BroadcastTcp(gameSession, TcpMessageType.GameState, SerializeForMetrics(syncData), null);
     }
 
-    private void TryEnqueueCompletedGameRecord(
-        string roomId,
-        GameSession gameSession,
-        DateTime endedAtUtc)
+    private bool CanStartNewGame() => Volatile.Read(ref _draining) == 0 &&
+        _operations?.IsDraining != true && _admission?.CanAcceptNewGames != false;
+
+    private bool TryEnqueueCompletedGameRecord(string roomId, GameSession gameSession, DateTime endedAtUtc)
     {
-        if (gameSession.GameRecordEnqueueAttempted)
-        {
-            return;
-        }
-
-        // The room loop is single-reader, but mark the attempt before calling the queue so
-        // an unexpected queue failure can never produce a duplicate record attempt.
-        gameSession.GameRecordEnqueueAttempted = true;
-
+        if (gameSession.GameRecordEnqueueAttempted) return true;
         if (string.IsNullOrWhiteSpace(gameSession.GameRecordId) ||
             gameSession.GameStartedAtUtc is not { } startedAtUtc ||
             gameSession.WinnerRole is not { } winnerRole)
         {
-            _logger.LogWarning(
-                "Skipped completed game record for room {RoomId} because its start or result snapshot was missing.",
-                roomId);
-            return;
+            // A programming/state corruption error must not produce a false Ended broadcast.
+            throw new InvalidOperationException($"Completed game in room {roomId} has no valid result snapshot.");
         }
-
+        gameSession.PendingGameRecord ??= new CompletedGameRecord(
+            gameSession.GameRecordId, roomId, winnerRole,
+            gameSession.StartingPolicePlayerIds, gameSession.StartingRobberPlayerIds,
+            startedAtUtc, endedAtUtc, gameSession.ElapsedGameTime);
         try
         {
-            var accepted = _gameRecordQueue.TryEnqueue(new CompletedGameRecord(
-                Id: gameSession.GameRecordId,
-                RoomId: roomId,
-                WinnerRole: winnerRole,
-                PolicePlayerIds: gameSession.StartingPolicePlayerIds,
-                RobberPlayerIds: gameSession.StartingRobberPlayerIds,
-                StartedAtUtc: startedAtUtc,
-                EndedAtUtc: endedAtUtc,
-                DurationSeconds: gameSession.ElapsedGameTime));
-
-            if (!accepted)
+            if (_gameRecordQueue.TryEnqueue(gameSession.PendingGameRecord))
             {
-                _logger.LogWarning(
-                    "Completed game record queue rejected game {GameRecordId} for room {RoomId}.",
-                    gameSession.GameRecordId,
-                    roomId);
+                gameSession.GameRecordEnqueueAttempted = true;
+                gameSession.PendingGameRecord = null;
+                _operations?.SetUnpersisted(gameSession.GameRecordId, false);
+                return true;
             }
         }
         catch (Exception ex)
         {
-            // Persistence must never prevent room cleanup or the final state broadcast.
-            _logger.LogError(
-                ex,
-                "Failed to enqueue completed game record {GameRecordId} for room {RoomId}.",
-                gameSession.GameRecordId,
-                roomId);
+            _logger.LogError(ex, "Could not persist game {GameRecordId} in room {RoomId}.",
+                gameSession.GameRecordId, roomId);
         }
+        _operations?.SetUnpersisted(gameSession.GameRecordId, true);
+        _metrics?.Add("game_result_acceptance_failures_total");
+        // Keep the immutable result in this bounded set of rooms, retry on the next state
+        // tick, and do not tell the client the match finished until persistence succeeds.
+        return false;
     }
 
     private bool IsRoomReadyForCountdown(string roomId, GameSession gameSession)

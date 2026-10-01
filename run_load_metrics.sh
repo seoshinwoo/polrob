@@ -223,6 +223,11 @@ for count in "${BOT_COUNTS[@]}"; do
     cd "$ROOT/polrob.Server"
     ASPNETCORE_ENVIRONMENT=Development \
     ASPNETCORE_URLS=http://0.0.0.0:5174 \
+    Limits__AuthRequestsPerMinute="${POLROB_LOAD_AUTH_REQUESTS_PER_MINUTE:-100000}" \
+    Limits__HttpRequestsPerMinute="${POLROB_LOAD_HTTP_REQUESTS_PER_MINUTE:-100000}" \
+    GameNetwork__GlobalUdpPacketsPerSecond="${POLROB_LOAD_GLOBAL_UDP_PPS:-60000}" \
+    GameRecords__Directory="$LOGDIR/outbox-$count" \
+    Operations__DrainSeconds=0 \
     dotnet bin/Debug/net10.0/polrob.Server.dll
   ) > "$server_log" 2>&1 &
   server_pid=$!

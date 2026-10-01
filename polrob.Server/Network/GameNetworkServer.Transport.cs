@@ -21,7 +21,19 @@ public partial class GameNetworkServer
             try
             {
                 var client = await _tcpListener.AcceptTcpClientAsync(stoppingToken);
-                _ = Task.Run(() => HandleTcpClientAsync(client, stoppingToken), stoppingToken);
+                var acceptedConnections = Interlocked.Increment(ref _acceptedTcpConnections);
+                if (Volatile.Read(ref _draining) != 0 || _operations?.IsDraining == true ||
+                    acceptedConnections > _maxTcpConnections)
+                {
+                    Interlocked.Decrement(ref _acceptedTcpConnections);
+                    client.Close();
+                    _metrics?.Add("tcp_connections_rejected_total");
+                    continue;
+                }
+                var id = Interlocked.Increment(ref _nextTcpClientId);
+                var task = HandleTcpClientAsync(client, stoppingToken);
+                _tcpClientTasks[id] = task;
+                _ = ObserveTcpClientAsync(id, task);
             }
             catch (Exception ex)
             {
@@ -36,11 +48,19 @@ public partial class GameNetworkServer
     }
 
     // TCP 클라이언트 하나의 입장 패킷과 연결 종료 정리를 담당합니다.
-    private Task HandleTcpClientAsync(TcpClient client, CancellationToken stoppingToken)
+    private async Task HandleTcpClientAsync(TcpClient client, CancellationToken stoppingToken)
     {
+        using var peerCancellation = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
         using var stream = client.GetStream();
-        using var reader = new BinaryReader(stream);
         using var writer = new BinaryWriter(stream);
+        var peer = new TcpPeer(client, _tcpQueueCapacity, _tcpQueueBytes,
+            TimeSpan.FromSeconds(_tcpSendTimeoutSeconds),
+            () => { Interlocked.Increment(ref _tcpSendFailuresThisSecond); _metrics?.Add("tcp_slow_or_failed_total"); },
+            () => Interlocked.Increment(ref _tcpPacketsSentThisSecond));
+        _tcpPeers[writer] = peer;
+        var sendTask = peer.RunAsync(peerCancellation.Token);
+        var frameLimiter = new UdpRateLimitState(10);
+        using var stopRegistration = stoppingToken.Register(client.Close);
         Interlocked.Increment(ref _currentTcpConnections);
 
         string? playerId = null;
@@ -53,11 +73,23 @@ public partial class GameNetworkServer
         {
             while (client.Connected && !stoppingToken.IsCancellationRequested)
             {
-                var (type, json) = ReadTcpFrame(reader);
+                using var frameDeadline = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
+                frameDeadline.CancelAfter(TimeSpan.FromSeconds(playerId == null
+                    ? _tcpJoinTimeoutSeconds : _tcpIdleTimeoutSeconds));
+                var (type, json) = await ReadTcpFrameAsync(stream, frameDeadline.Token);
+                if (!frameLimiter.TryConsume(DateTime.UtcNow, 5, 10))
+                {
+                    _metrics?.Add("tcp_rate_limited_total");
+                    throw new InvalidDataException("TCP request rate exceeded.");
+                }
 
                 if (type != TcpMessageType.Join && type != TcpMessageType.Heartbeat)
                 {
                     throw new InvalidDataException("지원하지 않는 TCP 게임 패킷입니다.");
+                }
+                if (playerId == null && type != TcpMessageType.Join)
+                {
+                    throw new InvalidDataException("TCP 게임 연결은 인증된 입장 패킷으로 시작해야 합니다.");
                 }
 
                 if (type == TcpMessageType.Join)
@@ -90,6 +122,9 @@ public partial class GameNetworkServer
                     connectionId = Guid.NewGuid().ToString("N");
                     playerRole = player.Role;
 
+                    if (Volatile.Read(ref _draining) != 0 || _operations?.IsDraining == true ||
+                        _admission?.CanAcceptNewGames == false)
+                        throw new InvalidOperationException("Game server is not accepting new participants.");
                     var joinCommand = new JoinRoomCommand(player, client, writer, connectionId, sessionToken);
                     var gameSession = GetOrCreateGameSession(roomId, stoppingToken);
                     if (!TryWriteRoomCommand(gameSession, joinCommand))
@@ -119,6 +154,11 @@ public partial class GameNetworkServer
         catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
         {
         }
+        catch (OperationCanceledException)
+        {
+            _metrics?.Add("tcp_read_timeouts_total");
+            _logger.LogDebug("TCP client exceeded join/frame deadline.");
+        }
         catch (Exception ex) when (ex is IOException or EndOfStreamException or ObjectDisposedException)
         {
             _logger.LogDebug(ex, "TCP client disconnected.");
@@ -140,6 +180,9 @@ public partial class GameNetworkServer
                         gameSession,
                         new LeaveRoomCommand(playerId, connectionId, playerRole.Value)))
                 {
+                    if (gameSession.Sessions.TryGetValue(playerId, out var session) &&
+                        session.ConnectionId == connectionId)
+                        gameSession.PendingLeaves[connectionId] = new LeaveRoomCommand(playerId, connectionId, playerRole.Value);
                     RemoveTeamVoiceParticipant(
                         roomId,
                         playerId,
@@ -158,11 +201,17 @@ public partial class GameNetworkServer
                 RemovePlayerRoomRegistration(playerId, connectionId);
             }
 
-            Interlocked.Decrement(ref _currentTcpConnections);
+            peer.Complete();
+            peerCancellation.Cancel();
             client.Close();
+            try { await sendTask; }
+            finally
+            {
+                _tcpPeers.TryRemove(writer, out _);
+                Interlocked.Decrement(ref _currentTcpConnections);
+                Interlocked.Decrement(ref _acceptedTcpConnections);
+            }
         }
-
-        return Task.CompletedTask;
     }
 
     // Frame format: [Int32 bytes after this field][Byte type][7-bit UTF-8 byte count][UTF-8 payload].
@@ -270,6 +319,8 @@ public partial class GameNetworkServer
     {
         try
         {
+            if (_tcpPeers != null && _tcpPeers.TryGetValue(writer, out var peer))
+                return peer.TrySend(type, payload);
             SendTcp(writer, type, payload);
             return true;
         }
@@ -460,6 +511,11 @@ public partial class GameNetworkServer
                 var result = await _udpClient.ReceiveAsync(stoppingToken);
                 Interlocked.Increment(ref _udpPacketsReceivedThisSecond);
                 Interlocked.Add(ref _udpBytesReceivedThisSecond, result.Buffer.Length);
+                if (!_globalUdpRateLimit.TryConsume(DateTime.UtcNow, _globalUdpPacketsPerSecond, _globalUdpPacketsPerSecond))
+                {
+                    _metrics?.Add("udp_global_rate_limited_total");
+                    continue;
+                }
                 var movement = ParseUdpMovement(result.Buffer);
 
                 if (movement == null || !_playerRooms.TryGetValue(movement.Id, out var registration))
@@ -552,11 +608,65 @@ public partial class GameNetworkServer
 
             if (recipient.UdpEndPoint != null)
             {
-                _ = _udpClient.SendAsync(buffer, buffer.Length, recipient.UdpEndPoint);
-                Interlocked.Increment(ref _udpPacketsSentThisSecond);
-                Interlocked.Add(ref _udpBytesSentThisSecond, buffer.Length);
+                if (Interlocked.Increment(ref _pendingUdpSends) > _maxPendingUdpSends)
+                {
+                    Interlocked.Decrement(ref _pendingUdpSends);
+                    _metrics?.Add("udp_send_dropped_total");
+                    continue;
+                }
+                _ = SendUdpObservedAsync(buffer, recipient.UdpEndPoint);
             }
         }
+    }
+
+    private async Task SendUdpObservedAsync(byte[] buffer, IPEndPoint endpoint)
+    {
+        try
+        {
+            await _udpClient.SendAsync(buffer, buffer.Length, endpoint);
+            Interlocked.Increment(ref _udpPacketsSentThisSecond);
+            Interlocked.Add(ref _udpBytesSentThisSecond, buffer.Length);
+        }
+        catch (Exception ex) when (ex is SocketException or ObjectDisposedException)
+        {
+            _metrics?.Add("udp_send_failures_total");
+            _logger.LogDebug(ex, "UDP send failed.");
+        }
+        finally { Interlocked.Decrement(ref _pendingUdpSends); }
+    }
+
+    // Read asynchronously with one deadline for the ENTIRE frame, preventing slow trickle clients.
+    private static async Task<(TcpMessageType Type, string Payload)> ReadTcpFrameAsync(
+        NetworkStream stream, CancellationToken cancellationToken)
+    {
+        var header = new byte[4];
+        await stream.ReadExactlyAsync(header, cancellationToken);
+        var declared = System.Buffers.Binary.BinaryPrimitives.ReadInt32LittleEndian(header);
+        if (declared < 1 || declared > 1 + 5 + MaxInboundTcpPayloadBytes)
+            throw new InvalidDataException("TCP frame length is outside the allowed range.");
+        using var frame = new MemoryStream();
+        frame.Write(header);
+        var single = new byte[1];
+        await stream.ReadExactlyAsync(single, cancellationToken);
+        frame.Write(single);
+        uint length = 0;
+        for (var i = 0; i < 5; i++)
+        {
+            await stream.ReadExactlyAsync(single, cancellationToken);
+            frame.Write(single);
+            var next = single[0];
+            if (i == 4 && (next & 0xF8) != 0) throw new InvalidDataException("Invalid length prefix.");
+            length |= (uint)(next & 0x7F) << (i * 7);
+            if ((next & 0x80) != 0) continue;
+            if (length > MaxInboundTcpPayloadBytes) throw new InvalidDataException("TCP payload too large.");
+            var body = new byte[(int)length];
+            await stream.ReadExactlyAsync(body, cancellationToken);
+            frame.Write(body);
+            frame.Position = 0;
+            using var reader = new BinaryReader(frame);
+            return ReadTcpFrame(reader);
+        }
+        throw new InvalidDataException("Invalid length prefix.");
     }
 
     // 비어 있는 roomId를 기본 방 ID로 보정합니다.

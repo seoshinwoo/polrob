@@ -11,6 +11,18 @@ namespace polrob.Server.Tests;
 public sealed class GameNetworkLifecycleTests
 {
     [Test]
+    public void RoomWithNoSuccessfulJoinStillExpires()
+    {
+        var server = CreateServerWithoutSockets();
+        var rooms = new ConcurrentDictionary<string, GameSession>();
+        SetField(server, "_gameSessions", rooms);
+        var room = new GameSession(8) { EmptySinceUtc = DateTime.UtcNow.AddSeconds(-3) };
+        rooms["never-joined"] = room;
+        Assert.That(Invoke<bool>(server, "TryStopRoomLoop", "never-joined", room, DateTime.UtcNow), Is.True);
+        Assert.That(rooms, Is.Empty);
+    }
+
+    [Test]
     public void LateLeaveCommandCannotRemoveReplacementGameSession()
     {
         var server = CreateServerWithoutSockets();

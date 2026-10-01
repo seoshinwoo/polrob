@@ -3,7 +3,7 @@ using Microsoft.Azure.Cosmos;
 using Microsoft.Extensions.Options;
 using polrob.Shared;
 
-public sealed class GameRecordDbService
+public sealed class GameRecordDbService : IGameRecordStore
 {
     private const string GameRecordPartitionKeyPath = "/id";
 

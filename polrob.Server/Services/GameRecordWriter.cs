@@ -1,158 +1,113 @@
 using System.Net;
-using System.Threading.Channels;
+using System.Text.Json;
 using Microsoft.Azure.Cosmos;
+using Microsoft.Extensions.Options;
+using polrob.Server.Operations;
 
 public sealed class GameRecordWriter : BackgroundService, IGameRecordQueue
 {
-    private static readonly TimeSpan InitialRetryDelay = TimeSpan.FromMilliseconds(250);
-    private static readonly TimeSpan MaxRetryDelay = TimeSpan.FromSeconds(30);
-
-    private readonly Channel<CompletedGameRecord> _records = Channel.CreateUnbounded<CompletedGameRecord>(
-        new UnboundedChannelOptions
-        {
-            SingleReader = true,
-            SingleWriter = false,
-            AllowSynchronousContinuations = false
-        });
-
-    private readonly GameRecordDbService _gameRecordDbService;
+    private readonly GameRecordOutbox _outbox;
+    private readonly IGameRecordStore _store;
+    private readonly GameRecordOutboxOptions _options;
+    private readonly OperationalMetrics _metrics;
     private readonly ILogger<GameRecordWriter> _logger;
-    private readonly CancellationTokenSource _abortWrites = new();
-    private int _disposed;
 
-    public GameRecordWriter(
-        GameRecordDbService gameRecordDbService,
+    public GameRecordWriter(GameRecordOutbox outbox, IGameRecordStore store,
+        IOptions<GameRecordOutboxOptions> options, OperationalMetrics metrics,
         ILogger<GameRecordWriter> logger)
     {
-        _gameRecordDbService = gameRecordDbService;
+        _outbox = outbox;
+        _store = store;
+        _options = options.Value;
+        _metrics = metrics;
         _logger = logger;
     }
 
-    public bool TryEnqueue(CompletedGameRecord gameRecord)
+    // true means a flushed local record exists, not merely that RAM accepted it.
+    public bool TryEnqueue(CompletedGameRecord record)
     {
-        ArgumentNullException.ThrowIfNull(gameRecord);
-
-        var snapshot = gameRecord with
-        {
-            PolicePlayerIds = gameRecord.PolicePlayerIds.ToArray(),
-            RobberPlayerIds = gameRecord.RobberPlayerIds.ToArray()
-        };
-
-        return _records.Writer.TryWrite(snapshot);
+        var accepted = _outbox.TryAppend(record);
+        _metrics.Add(accepted ? "record_accepted_total" : "record_rejected_total");
+        return accepted;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        using var stopRegistration = stoppingToken.Register(
-            () => _records.Writer.TryComplete());
-
         try
         {
-            // On a normal shutdown, finish records already accepted by the channel.
-            // This separate token is cancelled only if the shutdown grace period expires.
-            await foreach (var gameRecord in _records.Reader.ReadAllAsync(_abortWrites.Token))
+            while (!stoppingToken.IsCancellationRequested)
             {
-                await WriteWithRetryAsync(gameRecord, _abortWrites.Token);
+                try
+                {
+                    _outbox.ProbeWritable();
+                    await ProcessPendingAsync(stoppingToken);
+                    PublishMetrics();
+                }
+                catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { throw; }
+                catch (Exception ex)
+                {
+                    _metrics.Add("outbox_worker_failures_total");
+                    _logger.LogError(ex, "Outbox scan failed; persisted records will be retried.");
+                }
+                await Task.Delay(TimeSpan.FromSeconds(_options.RetrySeconds), stoppingToken);
             }
         }
-        catch (OperationCanceledException) when (_abortWrites.IsCancellationRequested)
-        {
-            // The host shutdown grace period expired.
-        }
+        catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { }
+        // Shutdown does not wait for an unavailable database. Files remain for the next boot.
     }
 
-    public override async Task StopAsync(CancellationToken cancellationToken)
+    public async Task ProcessPendingAsync(CancellationToken cancellationToken)
     {
-        _records.Writer.TryComplete();
-
-        try
+        foreach (var path in _outbox.PendingFiles().Take(64))
         {
-            await base.StopAsync(cancellationToken);
-        }
-        finally
-        {
-            if (cancellationToken.IsCancellationRequested)
+            cancellationToken.ThrowIfCancellationRequested();
+            CompletedGameRecord record;
+            try { record = _outbox.Read(path); }
+            catch (Exception ex) when (ex is JsonException or InvalidDataException)
             {
-                _abortWrites.Cancel();
+                _logger.LogError(ex, "Quarantining corrupt outbox file {FileName}.", Path.GetFileName(path));
+                _outbox.Quarantine(path);
+                _metrics.Add("record_quarantined_total");
+                continue;
             }
-        }
-    }
 
-    public override void Dispose()
-    {
-        if (Interlocked.Exchange(ref _disposed, 1) != 0)
-        {
-            return;
-        }
-
-        _records.Writer.TryComplete();
-        _abortWrites.Cancel();
-        _abortWrites.Dispose();
-        base.Dispose();
-    }
-
-    private async Task WriteWithRetryAsync(
-        CompletedGameRecord gameRecord,
-        CancellationToken stoppingToken)
-    {
-        for (var attempt = 1; ; attempt++)
-        {
+            using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            deadline.CancelAfter(TimeSpan.FromSeconds(_options.WriteTimeoutSeconds));
             try
             {
-                await _gameRecordDbService.SaveGameRecordAsync(gameRecord, stoppingToken);
-                _logger.LogInformation(
-                    "Saved completed game record {GameRecordId} for room {RoomId}.",
-                    gameRecord.Id,
-                    gameRecord.RoomId);
-                return;
+                await _store.SaveGameRecordAsync(record, deadline.Token);
+                _outbox.Acknowledge(path);
+                _metrics.Add("record_saved_total");
+                _logger.LogInformation("Saved game {GameRecordId} from durable outbox.", record.Id);
             }
-            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
+            catch (Exception ex) when (IsPermanentRecordError(ex))
             {
-                throw;
-            }
-            catch (Exception ex) when (IsTransient(ex))
-            {
-                var exponentialStep = Math.Min(attempt - 1, 7);
-                var retryDelay = TimeSpan.FromMilliseconds(Math.Min(
-                    MaxRetryDelay.TotalMilliseconds,
-                    InitialRetryDelay.TotalMilliseconds * Math.Pow(2, exponentialStep)));
-
-                _logger.LogWarning(
-                    ex,
-                    "Transient failure saving game record {GameRecordId}. Retrying in {RetryDelayMilliseconds} ms (attempt {Attempt}).",
-                    gameRecord.Id,
-                    retryDelay.TotalMilliseconds,
-                    attempt);
-
-                await Task.Delay(retryDelay, stoppingToken);
+                _outbox.Quarantine(path);
+                _metrics.Add("record_quarantined_total");
+                _logger.LogError(ex, "Game {GameRecordId} needs manual repair; preserved in quarantine.", record.Id);
             }
             catch (Exception ex)
             {
-                _logger.LogError(
-                    ex,
-                    "A permanent failure prevented saving game record {GameRecordId} on attempt {AttemptCount}.",
-                    gameRecord.Id,
-                    attempt);
-                return;
+                // Includes credentials/configuration errors: do not discard valid records.
+                _metrics.Add("record_retry_total");
+                _logger.LogWarning(ex, "Game {GameRecordId} remains on disk; retrying after {DelaySeconds}s.",
+                    record.Id, _options.RetrySeconds);
+                break; // One failing dependency attempt per cycle, avoiding a retry storm.
             }
         }
     }
 
-    private static bool IsTransient(Exception exception)
+    private static bool IsPermanentRecordError(Exception ex) => ex is ArgumentException ||
+        ex is CosmosException { StatusCode: HttpStatusCode.BadRequest or HttpStatusCode.RequestEntityTooLarge };
+
+    public void PublishMetrics()
     {
-        return exception switch
-        {
-            CosmosException cosmosException => cosmosException.StatusCode is
-                HttpStatusCode.RequestTimeout or
-                HttpStatusCode.TooManyRequests or
-                HttpStatusCode.InternalServerError or
-                HttpStatusCode.BadGateway or
-                HttpStatusCode.ServiceUnavailable or
-                HttpStatusCode.GatewayTimeout,
-            HttpRequestException => true,
-            TimeoutException => true,
-            OperationCanceledException => true,
-            _ => false
-        };
+        var state = _outbox.Snapshot();
+        _metrics.Set("outbox_pending", state.Pending);
+        _metrics.Set("outbox_quarantined", state.Quarantined);
+        _metrics.Set("outbox_bytes", state.Bytes);
+        _metrics.Set("outbox_oldest_age_seconds", state.OldestAgeSeconds);
+        _metrics.Set("outbox_write_failed", state.WriteFailed ? 1 : 0);
     }
 }

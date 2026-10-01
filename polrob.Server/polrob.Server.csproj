@@ -8,6 +8,8 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Content Remove="data/**" />
+    <None Remove="data/**" />
     <PackageReference Include="Livekit.Server.Sdk.Dotnet" Version="1.2.2" />
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.5" />
     <PackageReference Include="Microsoft.OpenApi" Version="2.12.2" />

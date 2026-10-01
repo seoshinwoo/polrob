@@ -5,8 +5,18 @@ namespace polrob.Server.Network;
 
 public partial class GameNetworkServer
 {
+    private int _samplingMetrics;
+
     // 부하 테스트에서 필요한 초당 패킷/직렬화 수와 현재 서버 상태를 터미널에 출력합니다.
     private void LogLoadMetricsCallback(object? state)
+    {
+        if (Interlocked.Exchange(ref _samplingMetrics, 1) != 0) return;
+        try { SampleLoadMetrics(); }
+        catch (Exception ex) { _logger.LogError(ex, "Runtime metric sampling failed."); }
+        finally { Volatile.Write(ref _samplingMetrics, 0); }
+    }
+
+    private void SampleLoadMetrics()
     {
         var udpReceived = Interlocked.Exchange(ref _udpPacketsReceivedThisSecond, 0);
         var udpSent = Interlocked.Exchange(ref _udpPacketsSentThisSecond, 0);
@@ -32,6 +42,22 @@ public partial class GameNetworkServer
         var endedRooms = gameSessions.Count(session => session.GamePhase == GamePhase.Ended);
         var roomLoad = _gameRoomService.GetLoadSnapshot();
         var runtimeMetrics = _runtimeMetrics.Sample();
+
+        _metrics?.Add("udp_received_total", udpReceived);
+        _metrics?.Add("udp_sent_total", udpSent);
+        _metrics?.Add("udp_rate_limited_total", udpRateLimited);
+        _metrics?.Add("udp_invalid_total", udpInvalid);
+        _metrics?.Add("udp_duplicate_or_late_total", udpDuplicateOrLate);
+        _metrics?.Add("room_commands_dropped_total", roomCommandsDropped);
+        _metrics?.Add("tcp_send_failures_total", tcpSendFailures);
+        _metrics?.Add("tcp_sent_total", tcpSent);
+        _metrics?.Set("tcp_connections", currentConnections);
+        _metrics?.Set("rooms", currentRooms);
+        _metrics?.Set("players", currentPlayers);
+        _metrics?.Set("room_command_queue", roomCommandQueueLength);
+        _metrics?.Set("playing_rooms", playingRooms);
+        _metrics?.Set("lobby_rooms", roomLoad.TotalRooms);
+        _metrics?.Set("udp_pending_sends", Volatile.Read(ref _pendingUdpSends));
 
         Console.WriteLine(
             "[LoadMetrics] " +
