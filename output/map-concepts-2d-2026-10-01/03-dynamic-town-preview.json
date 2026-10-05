@@ -1,0 +1,53 @@
+{
+  "mapPath": "03-dynamic-town.png",
+  "outputPath": "03-dynamic-town-with-characters.png",
+  "worldWidth": 2560,
+  "characters": [
+    {
+      "kind": "police",
+      "x": 226,
+      "y": 374
+    },
+    {
+      "kind": "robber",
+      "x": 451,
+      "y": 388
+    },
+    {
+      "kind": "police",
+      "x": 335,
+      "y": 594
+    },
+    {
+      "kind": "robber",
+      "x": 844,
+      "y": 681
+    },
+    {
+      "kind": "robber",
+      "x": 300,
+      "y": 1094
+    },
+    {
+      "kind": "robber",
+      "x": 790,
+      "y": 1190
+    }
+  ],
+  "crops": [
+    {
+      "x": 125,
+      "y": 415,
+      "width": 410,
+      "height": 310,
+      "outputPath": "03-dynamic-town-market-detail.png"
+    },
+    {
+      "x": 650,
+      "y": 528,
+      "width": 310,
+      "height": 320,
+      "outputPath": "03-dynamic-town-square-detail.png"
+    }
+  ]
+}

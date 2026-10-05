@@ -3,9 +3,10 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              x:Class="polrob.Client.GameJoin"
              BackgroundColor="#050B1D"
+             SafeAreaEdges="None"
              Shell.NavBarIsVisible="False">
 
-    <Grid>
+    <Grid SafeAreaEdges="None">
         <Image Source="chasetown_ui_background.png"
                Aspect="AspectFill"
                HorizontalOptions="Fill"
@@ -26,7 +27,8 @@
             </BoxView.Background>
         </BoxView>
 
-        <Grid Padding="18,22,18,24"
+        <Grid SafeAreaEdges="Container"
+              Padding="18,22,18,24"
               RowDefinitions="Auto,*">
 
             <!-- 상단 홈 / 프로필 -->

@@ -1,0 +1,37 @@
+{
+  "mapPath": "05-construction-left.png",
+  "outputPath": "05-construction-left-with-characters.png",
+  "worldWidth": 2560,
+  "characters": [
+    {
+      "kind": "police",
+      "x": 226,
+      "y": 374
+    },
+    {
+      "kind": "robber",
+      "x": 451,
+      "y": 388
+    },
+    {
+      "kind": "police",
+      "x": 335,
+      "y": 594
+    },
+    {
+      "kind": "robber",
+      "x": 878,
+      "y": 681
+    },
+    {
+      "kind": "robber",
+      "x": 321,
+      "y": 1138
+    },
+    {
+      "kind": "robber",
+      "x": 768,
+      "y": 1128
+    }
+  ]
+}

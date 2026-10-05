@@ -7,7 +7,8 @@ public partial class Login : ContentPage
 {
     private readonly HttpClient _httpClient = new()
     {
-        BaseAddress = new Uri(AuthSession.ApiBaseUrl)
+        BaseAddress = new Uri(AuthSession.ApiBaseUrl),
+        Timeout = TimeSpan.FromSeconds(10)
     };
 
     private bool _isSignUpMode;
@@ -94,7 +95,7 @@ public partial class Login : ContentPage
         {
             SetBusy(true);
 
-            var response = await _httpClient.PostAsJsonAsync(route, request);
+            using var response = await _httpClient.PostAsJsonAsync(route, request);
             if (!response.IsSuccessStatusCode)
             {
                 ShowStatus(await ReadErrorMessageAsync(response), isError: true);
@@ -115,6 +116,10 @@ public partial class Login : ContentPage
 
             ShowStatus($"{loginResponse.Name}님, 환영합니다.", isError: false);
             await Shell.Current.GoToAsync("//MainPage");
+        }
+        catch (OperationCanceledException)
+        {
+            ShowStatus("서버 응답 시간이 초과되었습니다. 네트워크 연결을 확인한 후 다시 시도해주세요.", isError: true);
         }
         catch (HttpRequestException)
         {

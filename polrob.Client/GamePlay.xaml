@@ -5,11 +5,13 @@
              x:Class="polrob.Client.GamePlay"
              x:Name="GamePage"
              Shell.NavBarIsVisible="False"
+             SafeAreaEdges="None"
              BackgroundColor="#555555">
 
-    <Grid x:Name="Container">
+    <Grid x:Name="Container" SafeAreaEdges="None">
         <!-- 런타임에서 SKGLView(기기) 또는 SKCanvasView(시뮬레이터) 를 추가합니다 -->
 
+        <Grid SafeAreaEdges="Container">
         <!-- LiveKit 오디오를 유지하는 보이지 않는 네이티브/WebRTC 브리지입니다. -->
         <HybridWebView x:Name="VoiceWebView"
                        HybridRoot="voice"
@@ -149,6 +151,7 @@
                HorizontalOptions="Center"
                VerticalOptions="Center"
                InputTransparent="True"/>
+        </Grid>
     </Grid>
 
 </ContentPage>

@@ -3,9 +3,10 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              x:Class="polrob.Client.GameOver"
              BackgroundColor="#050B1D"
+             SafeAreaEdges="None"
              Shell.NavBarIsVisible="False">
 
-    <Grid>
+    <Grid SafeAreaEdges="None">
         <Image Source="chasetown_ui_background.png"
                Aspect="AspectFill"
                HorizontalOptions="Fill"
@@ -26,6 +27,7 @@
             </BoxView.Background>
         </BoxView>
 
+        <Grid SafeAreaEdges="Container">
         <ScrollView x:Name="ContentScrollView">
             <VerticalStackLayout x:Name="GameOverContent"
                                  Padding="18,102,18,30"
@@ -368,6 +370,7 @@
                     </Grid>
                 </Border>
             </Border>
+        </Grid>
         </Grid>
     </Grid>
 </ContentPage>

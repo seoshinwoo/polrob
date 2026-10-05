@@ -4,9 +4,10 @@
              xmlns:skia="clr-namespace:SkiaSharp.Views.Maui.Controls;assembly=SkiaSharp.Views.Maui.Controls"
              x:Class="polrob.Client.GameMatching"
              BackgroundColor="#050B1D"
+             SafeAreaEdges="None"
              Shell.NavBarIsVisible="False">
 
-    <Grid>
+    <Grid SafeAreaEdges="None">
         <Image Source="chasetown_ui_background.png"
                Aspect="AspectFill"
                HorizontalOptions="Fill"
@@ -27,7 +28,8 @@
             </BoxView.Background>
         </BoxView>
 
-        <Grid Padding="20,30,20,34"
+        <Grid SafeAreaEdges="Container"
+              Padding="20,30,20,34"
               RowDefinitions="*,Auto,Auto,Auto,Auto"
               RowSpacing="8">
 

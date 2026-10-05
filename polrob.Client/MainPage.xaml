@@ -3,9 +3,10 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              x:Class="polrob.Client.MainPage"
              BackgroundColor="#050B1D"
+             SafeAreaEdges="None"
              Shell.NavBarIsVisible="False">
 
-    <Grid>
+    <Grid SafeAreaEdges="None">
         <!-- 배경과 캐릭터는 장식용 이미지로 두고, 모든 조작 UI는 MAUI 컨트롤로 올립니다. -->
         <Image Source="mainpage_background.png"
                Aspect="AspectFill"
@@ -28,7 +29,8 @@
             </BoxView.Background>
         </BoxView>
 
-        <Grid Padding="18,22,18,30"
+        <Grid SafeAreaEdges="Container"
+              Padding="18,22,18,30"
               RowDefinitions="Auto,*,Auto">
 
             <!-- 상단 메뉴 -->

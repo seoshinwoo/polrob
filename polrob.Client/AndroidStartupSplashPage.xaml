@@ -3,9 +3,10 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              x:Class="polrob.Client.AndroidStartupSplashPage"
              BackgroundColor="Black"
+             SafeAreaEdges="None"
              NavigationPage.HasNavigationBar="False"
              Shell.NavBarIsVisible="False">
-    <Grid>
+    <Grid SafeAreaEdges="None">
         <Image Source="splashpolrob_full.png"
                Aspect="AspectFill"
                HorizontalOptions="Fill"

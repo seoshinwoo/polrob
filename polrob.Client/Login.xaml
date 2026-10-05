@@ -3,9 +3,10 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              x:Class="polrob.Client.Login"
              BackgroundColor="#050B1D"
+             SafeAreaEdges="None"
              Shell.NavBarIsVisible="False">
 
-    <Grid>
+    <Grid SafeAreaEdges="None">
         <Image Source="chasetown_ui_background.png"
                Aspect="AspectFill"
                HorizontalOptions="Fill"
@@ -27,6 +28,7 @@
         </BoxView>
 
         <!-- 키보드가 올라오거나 화면 높이가 작아도 모든 입력 항목에 접근할 수 있습니다. -->
+        <Grid SafeAreaEdges="Container">
         <ScrollView>
             <VerticalStackLayout Padding="18,94,18,32"
                                  Spacing="14">
@@ -424,5 +426,6 @@
                        Aspect="AspectFit" />
             </Border>
         </Border>
+        </Grid>
     </Grid>
 </ContentPage>

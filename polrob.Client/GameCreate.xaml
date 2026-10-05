@@ -3,9 +3,11 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              x:Class="polrob.Client.GameCreate"
              BackgroundColor="#555555"
+             SafeAreaEdges="None"
              Shell.NavBarIsVisible="False">
 
-    <Grid>
+    <Grid SafeAreaEdges="None">
+    <Grid SafeAreaEdges="Container">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
@@ -81,6 +83,7 @@
                     CornerRadius="25"
                     Clicked="OnCustomClicked"/>
         </HorizontalStackLayout>
+    </Grid>
     </Grid>
 
 </ContentPage>

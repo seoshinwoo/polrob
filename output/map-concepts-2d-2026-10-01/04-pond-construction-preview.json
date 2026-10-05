@@ -1,0 +1,37 @@
+{
+  "mapPath": "04-pond-construction.png",
+  "outputPath": "04-pond-construction-with-characters.png",
+  "worldWidth": 2560,
+  "characters": [
+    {
+      "kind": "police",
+      "x": 226,
+      "y": 374
+    },
+    {
+      "kind": "robber",
+      "x": 451,
+      "y": 388
+    },
+    {
+      "kind": "police",
+      "x": 335,
+      "y": 594
+    },
+    {
+      "kind": "robber",
+      "x": 878,
+      "y": 681
+    },
+    {
+      "kind": "robber",
+      "x": 300,
+      "y": 1094
+    },
+    {
+      "kind": "robber",
+      "x": 789,
+      "y": 1135
+    }
+  ]
+}
